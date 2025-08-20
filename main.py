@@ -544,7 +544,7 @@ async def poweroff_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         return
     global_bot_status = False
     await context.bot.send_message(chat_id=update.effective_chat.id, text="The bot has been globally powered OFF.")
-    application.stop()
+    await context.application.stop()
 
 # --- Broadcast command for Owner only, preserving formatting ---
 async def broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
