@@ -218,7 +218,7 @@ async def get_bot_response(user_message: str, chat_id: int, bot_username: str, s
     date_time_patterns = [
         r'time kya hai', r'what is the time', r'samay kya hai', r'kitne baje hain',
         r'aaj ki date kya hai', r'aaj kya tarikh hai', r'what is the date',
-        r'laila abhi ka time batao', r'laila abhi ka time batao'
+        r'laila abhi ka time batao', r'laila abhi ka time batao',r'time',r'date'
     ]
     if any(re.search(pattern, user_message_lower) for pattern in date_time_patterns):
         current_kolkata_time = datetime.now(kolkata_tz)
