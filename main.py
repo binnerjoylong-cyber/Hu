@@ -15,7 +15,7 @@ import gspread
 from gspread import Client, WorksheetNotFound
 import google.generativeai as genai
 from telegram import Update, Bot, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes,CallbackQueryHandler
 from dotenv import load_dotenv
 import time
 import lyricsgenius as lg # <--- Naya Library Import Kiya Gaya Hai
