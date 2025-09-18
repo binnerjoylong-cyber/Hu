@@ -1,7 +1,11 @@
 python-telegram-bot[webhooks]>=22.3
-python-dotenv>=1.0.0
-google-generativeai>=0.5.0
-gspread==5.12.2
-psutil>=7.0.0
+gspread
+google-generativeai
+requests
+python-dotenv
 pytz
+psutil
 lyricsgenius
+uuid
+asyncio
+sqlite3
