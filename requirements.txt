@@ -8,3 +8,6 @@ psutil
 lyricsgenius
 uuid
 asyncio
+SpeechRecognition
+pydub
+
