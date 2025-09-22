@@ -105,7 +105,7 @@ current_api_key_index = 0
 active_api_key = GEMINI_API_KEYS[current_api_key_index]
 key_cooldown_until = defaultdict(lambda: 0)
 genai.configure(api_key=active_api_key)
-model_name = 'gemini-1.5-flash-latest' # Updated model name
+model_name = 'gemini-2.5-flash-latest' # Updated model name
 model = genai.GenerativeModel(model_name, system_instruction=LAILA_SYSTEM_PROMPT)
 
 # --- Fallback Responses (Static Memory) ---
