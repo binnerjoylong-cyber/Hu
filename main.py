@@ -879,7 +879,7 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         f"🧠 **RAM**: `{ram_usage}%`\n"
         f"💻 **CPU**: `{cpu_usage}%`\n"
         f"💾 **Disk**: `{disk_usage}%`\n\n"
-        "✨ by AdhyanXlive ✨"
+        "✨ by Adhyan ✨"
     )
     
     await msg.delete() # Delete "Calculating stats..." message
@@ -966,7 +966,7 @@ async def admin_stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         f" Total Messages: `{total_messages_processed}`\n\n"
         "**API Status**\n"
         f"{api_key_status_text}"
-        "\n\n✨ by AdhyanXlive ✨"
+        "\n\n✨ by Adhyan ✨"
     )
     await msg.delete()
     await context.bot.send_message(chat_id=chat_id, text=response_text, parse_mode='Markdown')
@@ -1171,7 +1171,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         "`/ban` - Kisi user ko ban karein (Reply karein).\n"
         "`/kick` - Kisi user ko kick karein (Reply karein).\n"
         "`/mute` - Kisi user ko mute karein (Reply karein).\n\n"
-        "✨ by AdhyanXlive ✨"
+        "✨ by Adhyan ✨"
     )
     await update.message.reply_text(help_text, parse_mode='Markdown')
     logger.info(f"[{update.effective_chat.id}] /help command used.")
@@ -1182,7 +1182,7 @@ async def about_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         "❤️ **About Laila** ❤️\n\n"
         "I am Laila, an AI assistant created by AdhyanXlive. My purpose is to chat with you and provide answers to your questions.\n\n"
         "My intelligence comes from a family of large language models, allowing me to provide helpful and accurate responses.\n\n"
-        "✨ **Creator**: @AdhyanXlive\n"
+        "✨ **Creator**: Adhyan\n"
         "✨ **Version**: 1.2\n\n"
     )
     await update.message.reply_text(about_text, parse_mode='Markdown')
