@@ -552,7 +552,7 @@ def sync_download_youtube(url: str):
     """Synchronous function to download a YouTube video to a buffer with better size handling."""
     buffer = io.BytesIO()
     try:
-        yt = YouTube(url)
+        yt = YouTube(url,use_po_token=True)
         # Filter for progressive streams (single file) and set a reasonable size limit
         # Max Telegram upload is 50MB
         MAX_SIZE = 50_000_000 
