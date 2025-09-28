@@ -26,7 +26,7 @@ import speech_recognition as sr
 from pydub import AudioSegment
 
 # --- NEW: Imports for YouTube Download ---
-from pytube import YouTube
+from pytubefix import YouTube
 import io
 import threading
 
