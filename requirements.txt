@@ -10,5 +10,6 @@ uuid
 asyncio
 SpeechRecognition
 pydub
-pytube
+pytube==15.0.0. 
+
 
