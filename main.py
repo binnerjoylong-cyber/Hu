@@ -18,6 +18,7 @@ import google.generativeai as genai
 from telegram import Update, Bot, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 from dotenv import load_dotenv
+from waifu_game import claim, daily, collection, marry, trade
 import time
 import lyricsgenius as lg
 
@@ -1273,7 +1274,11 @@ def main() -> None:
     application.add_handler(CommandHandler("img", img_command))
     application.add_handler(CommandHandler("lyrics", lyrics_command))
     application.add_handler(CommandHandler("couple", couple_command))
-    
+    application.add_handler(CommandHandler("claim", claim))
+    application.add_handler(CommandHandler("daily", daily))
+    application.add_handler(CommandHandler("collection", collection))
+    application.add_handler(CommandHandler("marry", marry))
+    application.add_handler(CommandHandler("trade", trade))
     # Admin Commands
     application.add_handler(CommandHandler("on", on_command))
     application.add_handler(CommandHandler("off", off_command))
