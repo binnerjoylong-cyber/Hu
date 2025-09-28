@@ -10,4 +10,5 @@ uuid
 asyncio
 SpeechRecognition
 pydub
+pytube
 
