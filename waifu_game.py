@@ -1,19 +1,33 @@
+import os
 import json
 import requests
 from datetime import datetime, timedelta, date
 from telegram import Update
 from telegram.ext import ContextTypes
 from gspread import WorksheetNotFound
+import gspread
 
-# yaha pe 'sh' spreadsheet object main.py se import karenge
-from main import sh
+# Google Sheets connect
+GOOGLE_SHEETS_CREDENTIALS = os.getenv("GOOGLE_SHEETS_CREDENTIALS")
+WAIFU_SHEET_URL = os.getenv("WAIFU_SHEET_URL")
 
+if not GOOGLE_SHEETS_CREDENTIALS or not WAIFU_SHEET_URL:
+    raise Exception("⚠️ Add GOOGLE_SHEETS_CREDENTIALS and WAIFU_SHEET_URL in .env")
+
+creds_dict = json.loads(GOOGLE_SHEETS_CREDENTIALS)
+gc = gspread.service_account_from_dict(creds_dict)
+sh = gc.open_by_url(WAIFU_SHEET_URL)
+
+# ---------- Helpers ----------
 def get_waifu_sheet():
     try:
         return sh.worksheet("waifu_data")
     except WorksheetNotFound:
-        ws = sh.add_worksheet("waifu_data", rows="1000", cols="6")
-        ws.append_row(["user_id", "username", "collection", "last_claim", "last_daily", "married_id"])
+        ws = sh.add_worksheet("waifu_data", rows="1000", cols="8")
+        ws.append_row([
+            "user_id", "username", "collection", "last_claim",
+            "last_daily", "married_id", "group_id", "last_drop"
+        ])
         return ws
 
 def get_or_create_user_row(ws, user_id: int, username: str):
@@ -22,7 +36,7 @@ def get_or_create_user_row(ws, user_id: int, username: str):
         row = col1.index(str(user_id)) + 1
         return row, ws.row_values(row)
     else:
-        ws.append_row([str(user_id), username, "[]", "", "", ""])
+        ws.append_row([str(user_id), username, "[]", "", "", "", "", ""])
         col1 = ws.col_values(1)
         row = col1.index(str(user_id)) + 1
         return row, ws.row_values(row)
@@ -40,7 +54,7 @@ def fetch_random_character():
     except Exception:
         return None
 
-# --- Commands ---
+# ---------- Commands ----------
 async def claim(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     username = update.effective_user.username or update.effective_user.first_name
@@ -72,11 +86,15 @@ async def claim(update: Update, context: ContextTypes.DEFAULT_TYPE):
     caption = f"🎉 You claimed **{char['name']}**!"
     if char.get("image_url"):
         try:
-            await context.bot.send_photo(chat_id=update.effective_chat.id, photo=char["image_url"], caption=caption, parse_mode="Markdown")
+            await context.bot.send_photo(chat_id=update.effective_chat.id,
+                                         photo=char["image_url"],
+                                         caption=caption,
+                                         parse_mode="Markdown")
             return
         except:
             pass
     await update.message.reply_text(caption, parse_mode="Markdown")
+
 
 async def daily(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -110,11 +128,15 @@ async def daily(update: Update, context: ContextTypes.DEFAULT_TYPE):
     caption = f"🌟 Daily pull: **{char['name']}**!"
     if char.get("image_url"):
         try:
-            await context.bot.send_photo(chat_id=update.effective_chat.id, photo=char["image_url"], caption=caption, parse_mode="Markdown")
+            await context.bot.send_photo(chat_id=update.effective_chat.id,
+                                         photo=char["image_url"],
+                                         caption=caption,
+                                         parse_mode="Markdown")
             return
         except:
             pass
     await update.message.reply_text(caption, parse_mode="Markdown")
+
 
 async def collection(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -144,6 +166,7 @@ async def collection(update: Update, context: ContextTypes.DEFAULT_TYPE):
             line += " 💖 (Married)"
         text += line + "\n"
     await update.message.reply_text(text, parse_mode="Markdown")
+
 
 async def marry(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -178,5 +201,27 @@ async def marry(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ws.update_cell(row, 6, str(spouse.get("id")))
     await update.message.reply_text(f"💍 Married to **{spouse.get('name')}**!", parse_mode="Markdown")
 
+
 async def trade(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("🔄 Trade system coming soon!")
+
+# ---------- Auto Drop ----------
+async def auto_drop(context: ContextTypes.DEFAULT_TYPE):
+    ws = get_waifu_sheet()
+    # sab groups ki list nikalo
+    group_ids = list(set(ws.col_values(7)))
+    for gid in group_ids:
+        if not gid or gid == "group_id":
+            continue
+        char = fetch_random_character()
+        if not char:
+            continue
+        caption = f"⚡ A wild waifu appeared: **{char['name']}**!\nType /claim to grab!"
+        try:
+            await context.bot.send_photo(chat_id=int(gid),
+                                         photo=char["image_url"],
+                                         caption=caption,
+                                         parse_mode="Markdown")
+        except:
+            await context.bot.send_message(chat_id=int(gid), text=caption, parse_mode="Markdown")
+    ws.update_cell(2, 8, datetime.utcnow().isoformat())  # last_drop time
