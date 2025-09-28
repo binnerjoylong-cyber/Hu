@@ -278,7 +278,7 @@ async def get_bot_response(user_message: str, chat_id: int, bot_username: str, s
             try:
                 logger.info(f"[{chat_id}] Using Gemma model (forced mode).")
                 genai.configure(api_key=GEMMA_API_KEY)
-                gemma_model = genai.GenerativeModel('gemma-7b-it', system_instruction=LAILA_SYSTEM_PROMPT)
+                gemma_model = genai.GenerativeModel('gemma-2-9b-it', system_instruction=LAILA_SYSTEM_PROMPT)
                 gemma_response = gemma_model.generate_content(full_prompt)
                 return gemma_response.text
             except Exception as e:
