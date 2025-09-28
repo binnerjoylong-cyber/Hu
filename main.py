@@ -18,9 +18,9 @@ import google.generativeai as genai
 from telegram import Update, Bot, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 from dotenv import load_dotenv
-from waifu_game import claim, daily, collection, marry, trade
 import time
 import lyricsgenius as lg
+from waifu_game import claim, daily, collection, marry, trade, auto_drop
 
 # --- NEW: Imports for Speech-to-Text ---
 import speech_recognition as sr
@@ -1306,7 +1306,9 @@ def main() -> None:
     application.add_handler(MessageHandler(filters.VOICE, handle_voice_message))
     
     application.add_error_handler(error_handler)
-    
+    # auto waifu drop har 1 ghante me
+    application.job_queue.run_repeating(auto_drop, interval=3600, first=30)
+
     if WEBHOOK_URL:
         PORT = int(os.getenv("PORT", "8000"))
         application.run_webhook(
