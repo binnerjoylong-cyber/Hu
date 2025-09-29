@@ -34,7 +34,7 @@ def calculate_rarity(favorites: int) -> str:
 
 # --- Database Management Functions ---
 
-async def init_db(db_url: str): # <<< FIX: Added db_url parameter here
+async def initialize_db(db_url: str): # <<< FIX: Added db_url parameter here
     """Initializes the database connection pool and creates tables if they don't exist."""
     global db_pool
     if db_pool:
