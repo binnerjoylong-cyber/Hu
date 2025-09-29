@@ -1530,12 +1530,12 @@ def main() -> None:
     
     application.add_error_handler(error_handler)
     def main() -> None:
-    application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
+        application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
 
     # Load all game data from the JSON file at startup
-    game_logic.load_data()
+        game_logic.load_data()
 
-    load_known_users()
+        load_known_users()
     # ... (rest of your main function)
     
     if WEBHOOK_URL:
