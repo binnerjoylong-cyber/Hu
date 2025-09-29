@@ -1498,12 +1498,15 @@ async def main() -> None:
     if WEBHOOK_URL:
         PORT = int(os.getenv("PORT", "8000"))
         await application.bot.set_webhook(url=f"{WEBHOOK_URL}/{TELEGRAM_BOT_TOKEN}")
-        # FIX APPLIED: Removed 'await application.start()' which caused the RuntimeError.
+        # FIX 1: Removed redundant 'await application.start()'
+        # await application.start() 
         await application.run_webhook(
             listen="0.0.0.0",
             port=PORT,
             url_path=TELEGRAM_BOT_TOKEN,
-            webhook_url=f"{WEBHOOK_URL}/{TELEGRAM_BOT_TOKEN}"
+            webhook_url=f"{WEBHOOK_URL}/{TELEGRAM_BOT_TOKEN}",
+            # FIX 1: Added close_loop=False to prevent loop conflicts
+            close_loop=False 
         )
         logger.info(f"Bot started with webhook on port {PORT}")
     else:
