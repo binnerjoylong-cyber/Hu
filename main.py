@@ -1495,30 +1495,46 @@ async def main() -> None:
     
     application.add_error_handler(error_handler)
     
+    import os
+import asyncio
+# Assuming 'application', 'logger', 'WEBHOOK_URL', and 'TELEGRAM_BOT_TOKEN' are defined elsewhere
+
+# --- CORRECTION APPLIED HERE ---
+# Only make changes inside the 'async def main():' if you need to
+async def main():
+    # ... Your existing setup code (not shown) ...
+
     if WEBHOOK_URL:
         PORT = int(os.getenv("PORT", "8000"))
+        
+        # 1. Set the webhook
         await application.bot.set_webhook(url=f"{WEBHOOK_URL}/{TELEGRAM_BOT_TOKEN}")
-        # FIX 1: Removed redundant 'await application.start()'
-        # await application.start() 
+        
+        # 2. Run the webhook server (This is a blocking call)
         await application.run_webhook(
             listen="0.0.0.0",
             port=PORT,
             url_path=TELEGRAM_BOT_TOKEN,
             webhook_url=f"{WEBHOOK_URL}/{TELEGRAM_BOT_TOKEN}",
-            # FIX 1: Added close_loop=False to prevent loop conflicts
-            close_loop=False 
+            # Remove the conflicting 'close_loop=False'.
+            # It's not needed here and causes the 'RuntimeError'.
         )
         logger.info(f"Bot started with webhook on port {PORT}")
     else:
         logger.info("Starting bot in polling mode.")
         await application.run_polling()
 
+# --- CORRECTION APPLIED HERE ---
 if __name__ == '__main__':
-    # Initial setup check for pydub (to trigger SyntaxWarning early)
+    # Initial setup check for pydub
     try:
+        # NOTE: This check is rudimentary. It's better to verify ffmpeg installation 
+        # in your Render build configuration.
         if os.name != 'nt' and not os.path.exists("ffmpeg"):
-            print("WARNING: ffmpeg not found in path. Voice processing might fail.")
+             print("WARNING: ffmpeg not found in path. Voice processing might fail.")
     except Exception:
         pass # Ignore if check fails
         
+    # asyncio.run(main()) is the correct way to start the asynchronous main function.
+    # The fix was to remove the conflicting 'close_loop=False' inside main().
     asyncio.run(main())
