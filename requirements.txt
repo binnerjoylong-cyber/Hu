@@ -11,6 +11,8 @@ asyncio
 SpeechRecognition
 pydub
 pytubefix
+asyncpg 
+aiohttp
 
 
 
