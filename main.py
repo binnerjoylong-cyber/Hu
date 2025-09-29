@@ -1431,46 +1431,14 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
 
 
 # --- Main Initialization Function ---
-async def main() -> None:
-    """Start the bot."""
-    if not TELEGRAM_BOT_TOKEN:
-        logger.critical("TELEGRAM_BOT_TOKEN is missing. Exiting.")
-        return
-
-    # Load known chats and sudo users from Google Sheets
-    load_known_users()
-    load_sudo_users()
-
-    # Create the Application and pass it your bot's token.
+def main():
     application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
-    
-    # Initialize the database connection for the waifu game
-    if game:
-        try:
-            # --- FIX APPLIED HERE ---
-            # The function `initialize_db` requires the DATABASE_URL to be passed to it.
-            # The previous code was calling it without any arguments, causing the crash.
-            if DATABASE_URL:
-                game.db_pool = await asyncpg.create_pool(DATABASE_URL)
-                await game.initialize_db() # Assuming initialize_db now uses the global db_pool
-                logger.info("Database connection established and tables verified.")
-            else:
-                logger.error("DATABASE_URL not set, cannot initialize waifu game database.")
 
-            # The feature to resume active spawns on restart is still commented out
-            # as it requires the `get_all_active_chats` function in `game_logic.py`.
-            # logger.info("Checking for active chats to resume auto-spawn...")
-            # active_chats = await game.get_all_active_chats()
-            # for chat_id in active_chats:
-            #     task = asyncio.create_task(
-            #         game.auto_spawn_loop(chat_id, application, spawn_and_send_waifu)
-            #     )
-            #     auto_spawn_tasks[chat_id] = task
-            #     logger.info(f"Resumed auto-spawn for chat {chat_id}.")
-            
-        except Exception as e:
-            logger.error(f"Error initializing database or waifu game: {e}", exc_info=True)
-    
+    # database init agar game use ho raha hai
+    if game and DATABASE_URL:
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(game.initialize_db(DATABASE_URL))
+
     # --- Register Handlers ---
     
     # Command handlers
@@ -1513,26 +1481,14 @@ async def main() -> None:
     # --- Start the Bot ---
     if WEBHOOK_URL:
         PORT = int(os.getenv("PORT", "8000"))
-        await application.bot.set_webhook(url=f"{WEBHOOK_URL}/{TELEGRAM_BOT_TOKEN}")
-        await application.run_webhook(
+        application.run_webhook(
             listen="0.0.0.0",
             port=PORT,
             url_path=TELEGRAM_BOT_TOKEN,
-            webhook_url=f"{WEBHOOK_URL}/{TELEGRAM_BOT_TOKEN}"
+            webhook_url=f"{WEBHOOK_URL}/{TELEGRAM_BOT_TOKEN}",
         )
-        logger.info(f"Bot started with webhook on port {PORT}")
     else:
-        logger.info("Starting bot in polling mode.")
-        await application.run_polling()
+        application.run_polling()
 
-if __name__ == '__main__':
-    # Initial setup check for pydub
-    try:
-        # NOTE: This check is rudimentary. It's better to verify ffmpeg installation 
-        # in your Render build configuration.
-        if os.name != 'nt' and not os.path.exists("ffmpeg"):
-             print("WARNING: ffmpeg not found in path. Voice processing might fail.")
-    except Exception:
-        pass # Ignore if check fails
-        
-    asyncio.run(main())
+if __name__ == "__main__":
+    main()
