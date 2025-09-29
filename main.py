@@ -70,9 +70,27 @@ YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY")
 
 # --- WAIFU GAME: Database URL ---
 # Make sure to add this to your .env file
+#DATABASE_URL = os.getenv("DATABASE_URL")
+#if game and not DATABASE_URL:
+   # logging.warning("DATABASE_URL not found in .env file. Waifu game features will fail.")
+# --- WAIFU GAME: Database URL ---
+# Make sure to add this to your .env file
 DATABASE_URL = os.getenv("DATABASE_URL")
-if game and not DATABASE_URL:
-    logging.warning("DATABASE_URL not found in .env file. Waifu game features will fail.")
+
+# 🔥 FIX: Critical Check and Logging (Yeh confirm karega ki variable load hua hai) 🔥
+if not DATABASE_URL:
+    # Agar variable nahi mila, to program ko exit kar de ya ek default value de
+    # Recommended: Exit karein taaki database connection fail hone par deploy na ho
+    logging.critical("CRITICAL ERROR: DATABASE_URL environment variable is NOT set. The bot will now exit.")
+    # Agar aap chahte hain ki bot database ke bina bhi chale (waifu game features disabled hon), to neeche ki line comment kar dein.
+    # raise SystemExit("DATABASE_URL is missing.")
+    # Agar aap sirf warning dena chahte hain:
+    if game:
+        logging.warning("DATABASE_URL not found. Waifu game features will fail.")
+else:
+    # Agar URL mili hai, to sirf confirmation message do
+    logging.info("DATABASE_URL successfully loaded.")
+# --------------------------------------------------------------------------------
 
 
 # --- Global Stats Variables ---
