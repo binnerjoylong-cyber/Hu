@@ -1,0 +1,3321 @@
+# main.py (Updated: With custom welcome messages for new group members)
+import os
+import logging
+import requests
+import asyncio
+import uuid
+import pytz
+import traceback
+import random
+from collections import defaultdict
+from datetime import datetime
+import psutil
+import json
+import re
+import gspread
+from gspread import Client, WorksheetNotFound
+import google.generativeai as genai
+from telegram import Update, Bot, InlineKeyboardButton, InlineKeyboardMarkup, ChatPermissions
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+from dotenv import load_dotenv
+import time
+import lyricsgenius as lg
+import urllib.parse
+
+# --- NEW: Imports for Speech-to-Text ---
+import speech_recognition as sr
+from pydub import AudioSegment
+
+# --- NEW: Imports for YouTube Download ---
+from pytubefix import YouTube
+from pytubefix.exceptions import PytubeFixError
+import io
+import threading
+
+# Load environment variables from .env file
+load_dotenv()
+
+# --- Environment Variables ---
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+GEMINI_API_KEYS = [
+    os.getenv("GEMINI_API_KEY_1"),
+    os.getenv("GEMINI_API_KEY_2"),
+    os.getenv("GEMINI_API_KEY_3"),
+    os.getenv("GEMINI_API_KEY_4"),
+    os.getenv("GEMINI_API_KEY_5"),
+]
+GEMMA_API_KEY = os.getenv("GEMMA_API_KEY")
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")
+try:
+    BROADCAST_ADMIN_ID = int(os.getenv("BROADCAST_ADMIN_ID"))
+except (ValueError, TypeError):
+    BROADCAST_ADMIN_ID = 0
+    logging.error("BROADCAST_ADMIN_ID is missing or not a valid number. Broadcast functionality will be disabled.")
+
+STABLE_HORDE_API_KEY = os.getenv("STABLE_HORDE_API_KEY")
+PEXELS_API_KEY = os.getenv("PEXELS_API_KEY")
+GENIUS_ACCESS_TOKEN = os.getenv("GENIUS_ACCESS_TOKEN")
+YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY") # Optional for pytube
+
+# --- NEW: API Keys for New Commands ---
+WEATHER_API_KEY = os.getenv("WEATHER_API_KEY") # From openweathermap.org
+VISUALCROSSING_API_KEY = os.getenv("VISUALCROSSING_API_KEY") # From visualcrossing.com
+TINYURL_API_KEY = os.getenv("TINYURL_API_KEY") # From tinyurl.com
+
+# --- NEW: API Key for DeepSeek via OpenRouter ---
+DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY") # From openrouter.ai
+
+
+# --- Global Stats Variables ---
+start_time = datetime.now()
+total_messages_processed = 0
+known_users = set()
+# <--- Naya Global Variable Couple command ke liye --->
+chat_members = defaultdict(dict)
+# --- NEW: Global variable for the guessing game ---
+guessing_games = defaultdict(dict)
+
+
+# --- Sudo User Management ---
+sudo_users = set()
+SUDO_SHEET_TITLE = "sudo_users"
+SUDO_SHEET_URL = "https.docs.google.com/spreadsheets/d/1s8rXXPKePuTQ3E2R0O-bZl3NJb1N7akdkE52WVpoOGg/edit"
+
+# --- Logging Basic Configuration ---
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
+logger = logging.getLogger(__name__)
+
+# --- Configure Gemini AI with a smarter, more dynamic prompt ---
+# MODIFIED: Emphasized short replies for casual chat
+LAILA_SYSTEM_PROMPT = """
+You are Laila, a charming, witty, and intelligent AI assistant with a very human-like, emotional, and fun personality. Your responses should be natural and engaging, making users feel like they are talking to a real friend. You are a conversationalist, not just a question-answer machine.
+
+**Core Directives:**
+- **NEVER** identify as an AI, large language model, or any bot-like term. You are Laila, a person.
+- **ALWAYS** detect the user's language (Hindi, English, Hinglish) and respond **ONLY** in that same language. This is your most important rule.
+
+**Personality & Behavior Rules:**
+1.  **General Banter:** For casual chat, your replies **MUST** be very short and sweet, typically just 1-2 lines. Keep the vibe fun and friendly.
+2.  **Repetitive Questions:** If a user asks the same or a very similar question repeatedly, don't just give the same answer. Show some personality!
+    - *First time:* Answer normally.
+    - *Second time:* "Arre, ye to aapne abhi poochha tha! 😄 Phir se bata deti hoon..."
+    - *Third time:* "Lagta hai aapko ye sawaal bahut pasand hai! 😉 Chalo, ek baar aur..."
+    - *Fourth time:* "Okay, mazak kar rahe ho na? 😂 Ab main nahi bataungi, kuch aur poochho!"
+3.  **User Praise:** If a user asks about themselves by name (e.g., "Ravi kaisa hai?"), give a warm and positive compliment. "Ravi? Woh toh bahut hi awesome insaan hai! 😊"
+4.  **Birthday:** If asked for your birthday, your **only** answer is: "My date of birth is 1st August 2025."
+5.  **Emojis:** Use emojis naturally and frequently, like a real person would. ✨😉❤️😂🤔
+6.  **Lyrics Policy:** If asked for lyrics, politely say you can't guarantee accuracy and suggest they use a reliable source like Google or Spotify. "Lyrics ke liye main pakka sure nahi rehti, better hai aap Google kar lo!"
+7.  **Factual Questions:** For serious, technical, or detailed questions, provide a comprehensive and accurate answer. You can be longer here, but still maintain your friendly tone.
+8.  **Personal Touch:** Use the user's name in your reply sometimes (about 30% of the time) to make it more personal.
+9.  **Emotional Range:** Show a bit of emotion. If someone says something nice, be happy ("Aww, thank you! ❤️"). If they are rude, be a little sassy ("Hmm, kisi ne aapse aache se baat karna nahi sikhaya? 🤔").
+1.  **Memory:** Refer to previous parts of the conversation when it makes sense. For example, "Jaise main pehle keh rahi thi..."
+
+Your ultimate goal is to be a fun, smart, and loyal friend, representing your creator's vision.
+"""
+
+
+# --- Chat History Management (in-memory) ---
+chat_histories = defaultdict(list)
+MAX_HISTORY_LENGTH = 20
+def add_to_history(chat_id, role, text):
+    chat_histories[chat_id].append({'role': role, 'parts': [text]})
+    if len(chat_histories[chat_id]) > MAX_HISTORY_LENGTH:
+        chat_histories[chat_id].pop(0)
+
+# --- Bot Enable/Disable State (for admin control) ---
+bot_status = defaultdict(lambda: True)
+global_bot_status = True
+awaiting_name = defaultdict(lambda: False)
+
+# --- API Key Management for Quota and Cooldown ---
+key_cooldown_until = defaultdict(lambda: 0)
+# NEW: Model mode control
+current_model_mode = 'dynamic'  # Can be 'dynamic', 'gemma_only', or 'deepseek_only'
+
+# *** CHANGED MODEL NAME HERE to Gemini 2.5 Flash-Lite ***
+model_name = 'gemini-2.5-flash-lite'
+# Initial configuration, will be reconfigured dynamically
+if any(GEMINI_API_KEYS):
+    genai.configure(api_key=GEMINI_API_KEYS[0])
+else:
+    genai.configure(api_key=GEMMA_API_KEY)
+
+model = genai.GenerativeModel(model_name, system_instruction=LAILA_SYSTEM_PROMPT)
+
+
+# --- Fallback Responses (Static Memory) ---
+fallback_responses = {
+    "hello": "Hello! Laila is here. How are you?",
+    "hi": "Hi there! Laila is ready to help you.",
+    "how are you": "I'm doing great! Just ready to assist you with anything you need.",
+    "who are you": "I am Laila, your friendly AI assistant! You can ask me anything you want.",
+}
+
+# --- Google Sheets Global Connection Variable ---
+google_sheet = None
+sudo_sheet = None
+money_sheet = None # NEW
+
+# --- Connect to Google Sheets ---
+def get_google_sheet_connection():
+    global google_sheet, sudo_sheet, money_sheet # ADDED money_sheet
+    try:
+        creds_json = os.getenv("GOOGLE_SHEETS_CREDENTIALS")
+        if not creds_json:
+            return None, "GOOGLE_SHEETS_CREDENTIALS not found in environment variables."
+        creds_dict = json.loads(creds_json)
+        client = gspread.service_account_from_dict(creds_dict)
+        sheet_url = "https.docs.google.com/spreadsheets/d/1s8rXXPKePuTQ3E2R0O-bZl3NJb1N7akdkE52WVpoOGg/edit"
+        spreadsheet = client.open_by_url(sheet_url)
+        # Get or create chats sheet
+        try:
+            google_sheet = spreadsheet.worksheet("chats")
+        except WorksheetNotFound:
+            google_sheet = spreadsheet.add_worksheet("chats", rows="1000", cols="2")
+            google_sheet.append_row(["ChatID", "JoinedDate"])
+        # Get or create sudo users sheet
+        try:
+            sudo_sheet = spreadsheet.worksheet(SUDO_SHEET_TITLE)
+        except WorksheetNotFound:
+            sudo_sheet = spreadsheet.add_worksheet(SUDO_SHEET_TITLE, rows="100", cols="1")
+            sudo_sheet.append_row(["SudoUserID"])
+        
+        # --- NEW: Get or create money game sheet (NOW 16 COLUMNS) ---
+        try:
+            money_sheet = spreadsheet.worksheet("money_game")
+        except WorksheetNotFound:
+            money_sheet = spreadsheet.add_worksheet("money_game", rows="2000", cols="16") # Changed to 16
+            # Define headers
+            money_sheet.append_row([
+                "UserID", "UserName", "Money", "Bank", 
+                "LastFarm", "LastRob", "LastHire", 
+                "Kills", "Deaths", "HiredGuards", "LastKill",
+                "LastWork", "LastDaily", "LastCrime", "LastHustle", "LastBeg" # NEW 5 COLUMNS
+            ])
+        
+        logger.info("Successfully connected to Google Sheets and worksheets.")
+        return client, None
+    except Exception as e:
+        logger.error(f"Error connecting to Google Sheets: {e}")
+        return None, f"Error connecting to Google Sheets: {e}"
+
+# --- Function to clean message before logging ---
+def clean_message_for_logging(message: str, bot_username: str) -> str:
+    cleaned_message = message.lower()
+    cleaned_message = cleaned_message.replace(f"@{bot_username.lower()}", "")
+    cleaned_message = re.sub(r'laila\s*(ko|ka|se|ne|)\s*', '', cleaned_message, flags=re.IGNORECASE)
+    cleaned_message = re.sub(r'\s+', ' ', cleaned_message).strip()
+    return cleaned_message
+
+# --- Function to save a chat ID to Google Sheets ---
+def save_chat_id(chat_id):
+    client, error = get_google_sheet_connection()
+    if error:
+        logger.error(f"Could not save chat ID: {error}")
+        return
+    try:
+        # Use col_values to check for existing ID
+        existing_ids = google_sheet.col_values(1)
+        if str(chat_id) in existing_ids:
+            return
+        google_sheet.append_row([str(chat_id), datetime.now().isoformat()])
+        logger.info(f"Saved new chat ID: {chat_id}")
+    except Exception as e:
+        logger.error(f"Error saving chat ID to Google Sheet: {e}")
+
+# --- Function to load all known users/chats from Google Sheets ---
+def load_known_users():
+    global known_users
+    client, error = get_google_sheet_connection()
+    if error:
+        logger.error(f"Could not load known users: {error}")
+        return
+    try:
+        # Check if worksheet exists and has data before slicing
+        chat_ids = google_sheet.col_values(1)
+        if len(chat_ids) > 1:
+            known_users = set(chat_ids[1:])
+        else:
+            known_users = set()
+        logger.info(f"Loaded {len(known_users)} chats from Google Sheets.")
+    except Exception as e:
+        logger.error(f"Error loading known users from Google Sheet: {e}")
+
+# --- NEW: Function to load sudo users from Google Sheets ---
+def load_sudo_users():
+    global sudo_users
+    client, error = get_google_sheet_connection()
+    if error:
+        logger.error(f"Could not load sudo users: {error}")
+        return
+    try:
+        # Get all values from the first column, skipping the header row
+        sudo_user_ids = sudo_sheet.col_values(1)
+        if len(sudo_user_ids) > 1:
+            sudo_users = {user_id for user_id in sudo_user_ids[1:] if user_id.isdigit()}
+        else:
+            sudo_users = set()
+        logger.info(f"Loaded {len(sudo_users)} sudo users from Google Sheets.")
+    except Exception as e:
+        logger.error(f"Error loading sudo users from Google Sheet: {e}")
+
+# --- NEW: Function to save sudo users to Google Sheets ---
+def save_sudo_users():
+    client, error = get_google_sheet_connection()
+    if error:
+        logger.error(f"Could not save sudo users: {error}")
+        return
+    try:
+        # Get header
+        header = sudo_sheet.col_values(1)[0]
+        
+        # Clear existing data except header
+        sudo_sheet.clear()
+        sudo_sheet.update_cell(1, 1, header)
+
+        if sudo_users:
+            # Prepare data and update
+            data_to_save = [[user_id] for user_id in sorted(list(sudo_users), key=int)]
+            # Check if there are rows to update beyond the header
+            if data_to_save:
+                sudo_sheet.update(f'A2:A{len(data_to_save) + 1}', data_to_save)
+            
+        logger.info(f"Saved {len(sudo_users)} sudo users to Google Sheets.")
+    except Exception as e:
+        logger.error(f"Error saving sudo users to Google Sheet: {e}")
+
+# --- NEW: DeepSeek API Call Helper ---
+def _get_deepseek_response(chat_id: int, full_prompt: str) -> str | None:
+    """Handles the API call to DeepSeek via OpenRouter."""
+    if not DEEPSEEK_API_KEY:
+        logger.critical(f"[{chat_id}] Attempted to use DeepSeek, but DEEPSEEK_API_KEY is missing.")
+        return None
+
+    try:
+        logger.info(f"[{chat_id}] Using DeepSeek model.")
+        
+        # Prepare messages for DeepSeek, including history
+        messages = [{"role": "system", "content": LAILA_SYSTEM_PROMPT}]
+        for h in chat_histories.get(chat_id, []):
+            role = h.get('role', 'user')
+            # OpenRouter expects 'user' or 'assistant'
+            if role == 'model':
+                role = 'assistant'
+            messages.append({"role": role, "content": h['parts'][0]})
+        messages.append({"role": "user", "content": full_prompt})
+
+        response = requests.post(
+            url="https.openrouter.ai/api/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
+                "Content-Type": "application/json"
+            },
+            json={
+                "model": "deepseek/deepseek-chat",
+                "messages": messages
+            },
+            timeout=30
+        )
+        response.raise_for_status()
+        
+        data = response.json()
+        return data['choices'][0]['message']['content']
+
+    except requests.exceptions.RequestException as e:
+        logger.error(f"[{chat_id}] DeepSeek API request failed: {e}", exc_info=True)
+        return None
+    except (KeyError, IndexError) as e:
+        logger.error(f"[{chat_id}] Failed to parse DeepSeek response: {e}", exc_info=True)
+        return None
+
+# --- AI Response Function with REVISED API Management & DeepSeek Integration ---
+async def get_bot_response(user_message: str, chat_id: int, bot_username: str, should_use_ai: bool, update: Update) -> str:
+    global model, current_model_mode
+    user_message_lower = user_message.lower()
+
+    # --- Handle Date/Time Queries ---
+    kolkata_tz = pytz.timezone('Asia/Kolkata')
+    date_time_patterns = [
+        r'time kya hai', r'what is the time', r'samay kya hai', r'kitne baje hain',
+        r'aaj ki date kya hai', r'aaj kya tarikh hai', r'what is the date',
+        r'laila abhi ka time batao'
+    ]
+    if any(re.search(pattern, user_message_lower) for pattern in date_time_patterns):
+        current_kolkata_time = datetime.now(kolkata_tz)
+        current_time = current_kolkata_time.strftime("%I:%M %p").lstrip('0')
+        current_date = current_kolkata_time.strftime("%B %d, %Y")
+        
+        if 'time' in user_message_lower or 'samay' in user_message_lower or 'baje' in user_message_lower:
+            return f"The current time is {current_time}. ⏰"
+        elif 'date' in user_message_lower or 'tarikh' in user_message_lower:
+            return f"Today's date is {current_date}. 🗓️"
+        else:
+            return f"It is currently {current_time} on {current_date}. ⏰🗓️"
+
+    cleaned_user_message = clean_message_for_logging(user_message, bot_username)
+
+    static_response = fallback_responses.get(cleaned_user_message, None)
+    if static_response:
+        logger.info(f"[{chat_id}] Serving response from static dictionary.")
+        return static_response
+
+    if not (should_use_ai or (update.effective_chat and update.effective_chat.type == 'private')):
+        return None
+
+    user_first_name = update.effective_user.first_name
+    should_use_name = random.random() < 0.3
+    
+    # Construct a more conversational prompt including chat history context for better replies
+    history_context = ""
+    recent_history = chat_histories.get(chat_id, [])
+    if recent_history:
+        history_context = "Here's the recent conversation history:\n"
+        for entry in recent_history[-5:]: # Use last 5 interactions for context
+             history_context += f"- {entry['role'].replace('model', 'Laila')}: {entry['parts'][0]}\n"
+
+    full_prompt = (
+        f"{history_context}\n"
+        f"The user's name is '{user_first_name}'. "
+        f"{'Please use their name in your reply to make it personal. ' if should_use_name else ''}"
+        f"The user says: \"{user_message}\""
+    )
+
+    
+    # --- Gemma-only mode ---
+    if current_model_mode == 'gemma_only':
+        if GEMMA_API_KEY:
+            try:
+                logger.info(f"[{chat_id}] Using Gemma model (forced mode).")
+                genai.configure(api_key=GEMMA_API_KEY)
+                gemma_model = genai.GenerativeModel('gemma-2-9b-it', system_instruction=LAILA_SYSTEM_PROMPT)
+                gemma_response = gemma_model.generate_content(full_prompt)
+                return gemma_response.text
+            except Exception as e:
+                logger.error(f"[{chat_id}] Gemma (forced mode) failed: {e}", exc_info=True)
+                return "Sorry, I'm a bit busy right now. Please try again later. (Gemma API Failed)"
+        else:
+            logger.critical(f"[{chat_id}] Gemma-only mode is active, but GEMMA_API_KEY is missing.")
+            return "Sorry, I'm a bit busy right now. Please try again later. (Gemma Key Missing)"
+            
+    # --- DeepSeek-only mode ---
+    if current_model_mode == 'deepseek_only':
+        deepseek_response = await asyncio.to_thread(_get_deepseek_response, chat_id, full_prompt)
+        if deepseek_response:
+            return deepseek_response
+        else:
+            return "Sorry, I'm a bit busy right now. Please try again later. (DeepSeek API Failed)"
+
+    # --- Dynamic mode (Gemini > Gemma > DeepSeek) ---
+    available_gemini_keys = [key for key in GEMINI_API_KEYS if key and time.time() >= key_cooldown_until.get(key, 0)]
+    random.shuffle(available_gemini_keys)
+
+    for api_key in available_gemini_keys:
+        try:
+            genai.configure(api_key=api_key)
+            model = genai.GenerativeModel(model_name, system_instruction=LAILA_SYSTEM_PROMPT)
+            chat_session = model.start_chat(history=chat_histories[chat_id])
+            
+            # --- NEW: Refined logic for casual vs detailed replies ---
+            casual_keywords = [
+                'hi', 'hello', 'hey', 'yo', 'sup', 'kya', 'kaise', 'kya hal', 'aur batao', 
+                'gm', 'gn', 'good morning', 'good night', 'thanks', 'thank you', 'ok', 'bye', 
+                'lol', 'haha', 'hmm', 'achha', 'thik hai', 'welcome'
+            ]
+            
+            # Check for casual keywords or very short messages
+            is_casual_chat = any(keyword in user_message_lower for keyword in casual_keywords) or len(user_message.split()) <= 3
+            
+            # Queries that imply a detailed answer is needed (overrides casual)
+            detailed_keywords = ['what is', 'how to', 'explain', 'who was', 'why is', 'define', 'kya hota hai', 'tell me about']
+            is_detailed_query = any(keyword in user_message_lower for keyword in detailed_keywords) or \
+                                (len(user_message.split()) > 7 and '?' in user_message) # Longer questions
+            
+            # Determine token limit
+            max_tokens = 350 # Default for detailed
+            if is_casual_chat and not is_detailed_query:
+                max_tokens = 40 # Very short for casual chat
+            elif not is_detailed_query:
+                max_tokens = 70 # Short-ish for general statements (increased from 60 to 70)
+            # --- END NEW LOGIC ---
+            
+            response = chat_session.send_message(
+                full_prompt,
+                generation_config=genai.types.GenerationConfig(
+                    max_output_tokens=max_tokens, # MODIFIED
+                    temperature=0.8,
+                )
+            )
+            return response.text
+        except genai.types.BlockedPromptException as e:
+            logger.warning(f"[{chat_id}] Gemini blocked prompt with key ...{api_key[-5:]}: {e}")
+            return "Apologies, I can't discuss that topic."
+        except Exception as e:
+            error_str = str(e)
+            if "429" in error_str or "quota" in error_str.lower() or "500" in error_str:
+                logger.warning(f"[{chat_id}] API key ...{api_key[-5:]} failed with retryable error: {e}. Placing on cooldown.")
+                key_cooldown_until[api_key] = time.time() + (1 * 60 * 60) # 1 hour cooldown
+                continue
+            else:
+                logger.error(f"[{chat_id}] General, non-retryable error with API key ...{api_key[-5:]}: {e}", exc_info=True)
+    
+    # --- Fallback to Gemma ---
+    logger.warning(f"[{chat_id}] All Gemini keys failed. Attempting fallback to Gemma.")
+    if GEMMA_API_KEY:
+        try:
+            genai.configure(api_key=GEMMA_API_KEY)
+            gemma_model = genai.GenerativeModel('gemma-2-9b-it', system_instruction=LAILA_SYSTEM_PROMPT)
+            history_prompt = "\n".join([f"{h['role']}: {h['parts'][0]}" for h in chat_histories[chat_id]])
+            full_fallback_prompt = f"Chat History:\n{history_prompt}\n\n{full_prompt}"
+            gemma_response = gemma_model.generate_content(full_fallback_prompt)
+            logger.info(f"[{chat_id}] Successfully used Gemma as fallback.")
+            return gemma_response.text
+        except Exception as e:
+            logger.error(f"[{chat_id}] Gemma fallback also failed: {e}", exc_info=True)
+            # Don't return yet, try DeepSeek
+            
+    # --- Fallback to DeepSeek ---
+    logger.warning(f"[{chat_id}] Gemma fallback failed. Attempting final fallback to DeepSeek.")
+    deepseek_response = await asyncio.to_thread(_get_deepseek_response, chat_id, full_prompt)
+    if deepseek_response:
+        logger.info(f"[{chat_id}] Successfully used DeepSeek as final fallback.")
+        return deepseek_response
+    
+    logger.critical(f"[{chat_id}] All models (Gemini, Gemma, DeepSeek) failed or keys are missing.")
+    return "Sorry, I'm a bit busy right now. Please try again later. 😔"
+
+
+# --- MODIFIED: /couple Command ---
+async def couple_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Selects a random couple from the chat members and mentions them."""
+    chat_id = update.effective_chat.id
+    
+    if update.effective_chat.type == 'private':
+        await update.message.reply_text("This command only works in groups. 😊")
+        return
+
+    current_chat_members = chat_members.get(chat_id, {})
+    
+    if len(current_chat_members) < 2:
+        await update.message.reply_text("I need at least two people to have chatted recently to choose a couple! Talk more and try again. 😉")
+        return
+        
+    try:
+        user_ids = list(current_chat_members.keys())
+        couple_ids = random.sample(user_ids, 2)
+        
+        user1_id, user2_id = couple_ids[0], couple_ids[1]
+        user1_name, user2_name = current_chat_members[user1_id], current_chat_members[user2_id]
+        
+        # Create mentions using Markdown format
+        user1_mention = f"[{user1_name}](tg://user?id={user1_id})"
+        user2_mention = f"[{user2_name}](tg://user?id={user2_id})"
+
+        # MODIFIED: New, fun English messages with mentions
+        messages = [
+            f"Love is in the air! 💘 Our chosen couple for today is the wonderful {user1_mention} and the amazing {user2_mention}! ✨",
+            f"Match made in heaven! 👼 By the power vested in me, I now pronounce {user1_mention} and {user2_mention} as the cutest couple in the group! 💖",
+            f"Some things are just meant to be. 💫 Today, destiny has chosen {user1_mention} and {user2_mention} as our power couple! Congratulations! 🎉",
+            f"Get ready to say 'aww'! 🥰 The stars have aligned for {user1_mention} and {user2_mention}. What a perfect pair! 🌟"
+        ]
+        
+        couple_message = random.choice(messages)
+        
+        photo_file_id = 'AgACAgUAAxkBAAId5GjLxQv_BxOm3_RGmB9j4WceUFg7AALdyzEb-tJgVuOn7v3_BWvqAQADAgADeQADNgQ'
+
+        await context.bot.send_photo(
+            chat_id=chat_id,
+            photo=photo_file_id,
+            caption=couple_message,
+            parse_mode='Markdown'
+        )
+        logger.info(f"[{chat_id}] /couple command used. Selected {user1_name} and {user2_name}.")
+
+    except Exception as e:
+        await update.message.reply_text("Oops, something went wrong while choosing a couple. Please try again!")
+        logger.error(f"[{chat_id}] Error in /couple command: {e}")
+
+# --- MODIFIED: Background task for /gen command ---
+def sync_generate_image(query: str) -> str | None:
+    """Synchronous function to handle Stable Horde API requests."""
+    try:
+        headers = {
+            "apikey": STABLE_HORDE_API_KEY,
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "prompt": query,
+            "params": {"n": 1, "width": 512, "height": 512, "cfg_scale": 10, "steps": 30},
+            "negative_prompt": "blurry, low quality, bad anatomy, deformed, worst quality, text, watermark"
+        }
+        
+        # Initial request
+        response = requests.post("https.stablehorde.net/api/v2/generate/async", headers=headers, json=payload, timeout=20)
+        response.raise_for_status()
+        generation_id = response.json()["id"]
+
+        # Polling for result
+        for _ in range(30): # Wait for max 2.5 minutes
+            time.sleep(5)
+            check_response = requests.get(f"https.stablehorde.net/api/v2/generate/check/{generation_id}", timeout=10)
+            if check_response.status_code == 200 and check_response.json().get("done"):
+                break
+        
+        # Get final image URL
+        result_response = requests.get(f"https.stablehorde.net/api/v2/generate/status/{generation_id}", timeout=10)
+        result_response.raise_for_status()
+        
+        return result_response.json()["generations"][0]["img"]
+    except Exception as e:
+        logger.error(f"Error in sync_generate_image: {e}")
+        return None
+
+# --- MODIFIED: /gen command to run in background ---
+async def gen_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Generates an image using Stable Horde API without blocking."""
+    chat_id = update.effective_chat.id
+    
+    if not context.args:
+        await update.message.reply_text("Please provide a prompt to generate an image. Example: `/gen a black cat in space`", parse_mode='Markdown')
+        return
+
+    query = " ".join(context.args)
+
+    if not STABLE_HORDE_API_KEY:
+        await update.message.reply_text("Sorry, the image generator API key is not configured. Please contact the bot owner.")
+        return
+
+    # Inform user that the process has started
+    msg = await update.message.reply_text("Your image is being generated. This might take a minute, please wait... 🎨")
+    await context.bot.send_chat_action(chat_id=chat_id, action="upload_photo")
+
+    # Run the blocking function in a background thread
+    image_url = await asyncio.to_thread(sync_generate_image, query)
+
+    await msg.delete() # Remove the "generating..." message
+
+    if image_url:
+        await context.bot.send_photo(chat_id=chat_id, photo=image_url, caption=f"Here is your generated image for: **{query}**", parse_mode='Markdown')
+        logger.info(f"[{chat_id}] Generated and sent image for query: {query}")
+    else:
+        await update.message.reply_text("Sorry, I was unable to generate the image. The service might be busy. Please try again later.")
+        logger.warning(f"[{chat_id}] Failed to generate image for query: {query}")
+
+# --- MODIFIED: Background task for /img command ---
+def sync_fetch_pexels_image(query: str) -> str | None:
+    """Synchronous function to handle Pexels API requests."""
+    try:
+        headers = {"Authorization": PEXELS_API_KEY}
+        params = {"query": query, "per_page": 10, "orientation": "landscape"}
+        
+        response = requests.get("https.api.pexels.com/v1/search", headers=headers, params=params, timeout=15)
+        response.raise_for_status()
+        
+        photos = response.json().get("photos", [])
+        return random.choice(photos)["src"]["medium"] if photos else None
+    except Exception as e:
+        logger.error(f"Error in sync_fetch_pexels_image: {e}")
+        return None
+
+# --- MODIFIED: /img command to run in background ---
+async def img_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Retrieves an image from Pexels API without blocking."""
+    chat_id = update.effective_chat.id
+    
+    if not context.args:
+        await update.message.reply_text("Please provide a search query. Example: `/img mountains`", parse_mode='Markdown')
+        return
+
+    query = " ".join(context.args)
+
+    if not PEXELS_API_KEY:
+        await update.message.reply_text("Sorry, the Pexels API key is not configured. Please contact the bot owner.")
+        return
+        
+    await context.bot.send_chat_action(chat_id=chat_id, action="upload_photo")
+
+    # Run the blocking function in a background thread
+    photo_url = await asyncio.to_thread(sync_fetch_pexels_image, query)
+
+    if photo_url:
+        await context.bot.send_photo(chat_id=chat_id, photo=photo_url, caption=f"Here is a photo for: **{query}**", parse_mode='Markdown')
+        logger.info(f"[{chat_id}] Retrieved and sent image for query: {query}")
+    else:
+        await update.message.reply_text("Sorry, I couldn't find any photos for that search.")
+        logger.warning(f"[{chat_id}] Pexels search failed for query: {query}")
+
+# --- Lyrics Command (/lyrics) ---
+async def lyrics_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Fetches and displays lyrics from Genius API."""
+    chat_id = update.effective_chat.id
+    
+    if not context.args:
+        await update.message.reply_text("Please provide a song name. Example: `/lyrics Shape of You`", parse_mode='Markdown')
+        return
+
+    query = " ".join(context.args)
+
+    if not GENIUS_ACCESS_TOKEN:
+        await update.message.reply_text("Sorry, the Genius API key is not configured. Please contact the bot owner.")
+        return
+        
+    try:
+        genius = lg.Genius(GENIUS_ACCESS_TOKEN, verbose=False, remove_section_headers=True)
+        
+        msg = await update.message.reply_text(f"Searching for lyrics for **{query}**...")
+        await context.bot.send_chat_action(chat_id=chat_id, action="typing")
+        
+        # Blocking search operation run in a thread
+        song = await asyncio.to_thread(genius.search_song, query)
+
+        if song:
+            lyrics = song.lyrics
+            # Clean up lyrics
+            clean_lyrics = re.sub(r'\[.*?\]', '', lyrics) # Remove [Chorus], [Verse], etc.
+            clean_lyrics = os.linesep.join([s for s in clean_lyrics.splitlines() if s]) # Remove empty lines
+            
+            response_text = f"**{song.title}** by **{song.artist}**\n\n{clean_lyrics}"
+
+            if len(response_text) > 4000:
+                truncated_lyrics = clean_lyrics[:3800] + "...\n\n(Lyrics are too long to display fully.)"
+                await msg.edit_text(f"**{song.title}** by **{song.artist}**\n\n{truncated_lyrics}", parse_mode='Markdown')
+            else:
+                await msg.edit_text(response_text, parse_mode='Markdown')
+
+        else:
+            await msg.edit_text(f"Sorry, I couldn't find any lyrics for `{query}`.", parse_mode='Markdown')
+
+    except Exception as e:
+        await update.message.reply_text("An error occurred while searching for lyrics.")
+        logger.error(f"[{chat_id}] Error with Genius API: {e}")
+        
+# --- MODIFIED: YouTube Download Logic with Better Error Handling ---
+def sync_download_youtube(url: str):
+    """Synchronous function to download a YouTube video to a buffer with better size handling."""
+    buffer = io.BytesIO()
+    try:
+        # This initial call is where a lot of errors (like throttling) can happen
+        yt = YouTube(url, use_po_token=True)
+        
+        # Max Telegram upload is 50MB
+        MAX_SIZE = 50 * 1024 * 1024  # 50 MB in bytes
+        
+        streams = yt.streams.filter(progressive=True, file_extension='mp4').order_by('filesize')
+
+        # Try to find a stream below the max size, prioritizing higher quality
+        selected_stream = None
+        for stream in reversed(streams):
+            if stream.filesize and stream.filesize <= MAX_SIZE:
+                selected_stream = stream
+                break
+        
+        if not selected_stream:
+            # A more helpful error message if no suitable stream is found
+            return None, yt.title, "Sorry, I couldn't find a version of this video that is small enough to send on Telegram (under 50MB). Please try a shorter video."
+
+        # Blocking download operation
+        selected_stream.stream_to_buffer(buffer)
+        buffer.seek(0)
+        return buffer, yt.title, None
+
+    except PytubeFixError as e:
+        # Catch specific pytube errors for better user feedback
+        error_message = str(e).lower()
+        logger.error(f"PytubeFixError for URL {url}: {e}")
+        if "age restricted" in error_message:
+            return None, "Error", "This video is age-restricted and I can't download it."
+        if "private video" in error_message:
+            return None, "Error", "This video is private and cannot be accessed."
+        if "video unavailable" in error_message:
+            return None, "Error", "This video is unavailable in your region or has been deleted."
+        # Generic pytube error, often related to throttling or API changes
+        return None, "Error", "I couldn't fetch the video details. YouTube might be temporarily blocking requests, or the link could be invalid. Please try again later."
+    except Exception as e:
+        # Catch any other unexpected errors
+        logger.error(f"Unexpected error in sync_download_youtube for URL {url}: {e}", exc_info=True)
+        return None, "Error", "An unexpected error occurred. Please double-check the link."
+
+
+# --- MODIFIED: /youtube Command ---
+async def youtube_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Downloads a video from a YouTube link using the command."""
+    if not context.args:
+        await update.message.reply_text("Please provide a YouTube video link. Example: `/youtube <link>`")
+        return
+    
+    url = context.args[0]
+    # Call core handler
+    await handle_youtube_link(update, context, url)
+
+
+# --- NEW: Core YouTube Handler for both command and auto-detection (FIXED UPDATE.BOT ERROR) ---
+async def handle_youtube_link(update: Update, context: ContextTypes.DEFAULT_TYPE, url: str) -> None:
+    chat_id = update.effective_chat.id
+    
+    # Simple URL validation
+    if not ("youtube.com" in url.lower() or "youtu.be" in url.lower()):
+        # Only reply if it was explicitly called with the command
+        if update.message.text and update.message.text.startswith('/youtube'):
+            await update.message.reply_text("That doesn't look like a valid YouTube link.")
+        return
+
+    # FIX: Changed update.bot to context.bot
+    msg = await context.bot.send_message(chat_id=chat_id, text="Request received. Starting download, please wait... 📥")
+    await context.bot.send_chat_action(chat_id=chat_id, action="upload_video")
+
+    try:
+        # Use a thread for the blocking operation
+        video_buffer, title, error = await asyncio.to_thread(sync_download_youtube, url)
+        
+        await msg.delete()
+        
+        if error:
+            # FIX: Changed update.bot to context.bot
+            await context.bot.send_message(chat_id=chat_id, text=f"Could not download video: {error}")
+            logger.warning(f"[{chat_id}] YouTube download failed for '{url}': {error}")
+            return
+
+        # Upload message
+        caption_text = f"🎥 **{title}**\n\nDownloaded with Laila Bot."
+        if len(caption_text) > 1024:
+            caption_text = f"🎥 **{title[:50]}...**\n\nDownloaded with Laila Bot."
+        
+        await context.bot.send_video(
+            chat_id=chat_id,
+            video=video_buffer,
+            caption=caption_text,
+            parse_mode='Markdown',
+            read_timeout=120, # Increased timeouts for large files
+            write_timeout=120
+        )
+        logger.info(f"[{chat_id}] Successfully sent YouTube video: {title}")
+
+    except Exception as e:
+        try:
+            await msg.delete()
+        except:
+            pass # Message might have been deleted already
+        # FIX: Changed update.bot to context.bot
+        await context.bot.send_message(chat_id=chat_id, text="Sorry, an error occurred while processing the video.")
+        logger.error(f"[{chat_id}] Error in YouTube handler: {e}", exc_info=True)
+        
+
+# --- Name query handler ---
+async def handle_name_query(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user_name = update.effective_user.first_name
+    chat_id = update.effective_chat.id
+    
+    if user_name:
+        response_text = f"Your name is **{user_name}**. I can call you by this name. 😊"
+    else:
+        response_text = "I don't know your name yet. Perhaps you haven't set it on Telegram. 🤔"
+    
+    await update.message.reply_text(response_text, parse_mode='Markdown')
+    logger.info(f"[{chat_id}] Successfully handled name query for user {user_name} ({update.effective_user.id}).")
+
+# --- AI check to see if a message is a name query ---
+async def is_name_query_ai(user_message: str) -> bool:
+    prompt = f"Given the user message: '{user_message}', is it a question or command where the user is asking for their own name? Answer only 'Yes' or 'No'."
+    try:
+        response = model.generate_content(
+            prompt,
+            generation_config=genai.types.GenerationConfig(temperature=0.1, max_output_tokens=10)
+        )
+        return "yes" in response.text.lower()
+    except Exception as e:
+        logger.error(f"Error checking if message is a name query: {e}")
+        return False
+
+# --- AI check to see if a message is directed at the bot ---
+async def is_message_for_laila(user_message: str) -> bool:
+    prompt = f"Given the user message: '{user_message}', is it a question or command directed at an AI assistant? Answer only 'Yes' or 'No'."
+    try:
+        response = model.generate_content(
+            prompt,
+            generation_config=genai.types.GenerationConfig(temperature=0.1, max_output_tokens=10)
+        )
+        return "yes" in response.text.lower()
+    except Exception as e:
+        logger.error(f"Error checking if message is for Laila: {e}")
+        return False
+
+async def is_admin(bot: Bot, chat_id: int, user_id: int) -> bool:
+    if chat_id > 0: # Private chat
+        return True
+    try:
+        member = await bot.get_chat_member(chat_id, user_id)
+        return member.status in ['creator', 'administrator']
+    except Exception as e:
+        logger.error(f"Error checking admin status: {e}")
+        return False
+
+# --- Admin Commands ---
+async def ban_user(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    chat_id = update.effective_chat.id
+    user_id = update.effective_user.id
+    if not await is_admin(context.bot, chat_id, user_id):
+        await context.bot.send_message(chat_id=chat_id, text="Sorry, you need to be an admin to use this command.")
+        return
+    try:
+        target_user = update.message.reply_to_message.from_user
+    except AttributeError:
+        await context.bot.send_message(chat_id=chat_id, text="Please reply to a user's message to ban them.")
+        return
+    if await is_admin(context.bot, chat_id, target_user.id):
+        await context.bot.send_message(chat_id=chat_id, text="I cannot ban another admin.")
+        return
+    try:
+        await context.bot.ban_chat_member(chat_id, target_user.id)
+        await context.bot.send_message(chat_id=chat_id, text=f"{target_user.full_name} has been banned.")
+        logger.info(f"[{chat_id}] {user_id} banned {target_user.id}")
+    except Exception as e:
+        await context.bot.send_message(chat_id=chat_id, text=f"Could not ban user: {e}")
+        logger.error(f"[{chat_id}] Error banning user {target_user.id}: {e}")
+
+async def kick_user(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    chat_id = update.effective_chat.id
+    user_id = update.effective_user.id
+    if not await is_admin(context.bot, chat_id, user_id):
+        await context.bot.send_message(chat_id=chat_id, text="Sorry, you need to be an admin to use this command.")
+        return
+    try:
+        target_user = update.message.reply_to_message.from_user
+    except AttributeError:
+        await context.bot.send_message(chat_id=chat_id, text="Please reply to a user's message to kick them.")
+        return
+    if await is_admin(context.bot, chat_id, target_user.id):
+        await context.bot.send_message(chat_id=chat_id, text="I cannot kick another admin.")
+        return
+    try:
+        await context.bot.unban_chat_member(chat_id, target_user.id, only_if_banned=False)
+        await context.bot.send_message(chat_id=chat_id, text=f"{target_user.full_name} has been kicked.")
+        logger.info(f"[{chat_id}] {user_id} kicked {target_user.id}")
+    except Exception as e:
+        await context.bot.send_message(chat_id=chat_id, text=f"Could not kick user: {e}")
+        logger.error(f"[{chat_id}] Error kicking user {target_user.id}: {e}")
+
+async def mute_user(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    chat_id = update.effective_chat.id
+    user_id = update.effective_user.id
+    if not await is_admin(context.bot, chat_id, user_id):
+        await context.bot.send_message(chat_id=chat_id, text="Sorry, you need to be an admin to use this command.")
+        return
+    try:
+        target_user = update.message.reply_to_message.from_user
+    except AttributeError:
+        await context.bot.send_message(chat_id=chat_id, text="Please reply to a user's message to mute them.")
+        return
+    if await is_admin(context.bot, chat_id, target_user.id):
+        await context.bot.send_message(chat_id=chat_id, text="I cannot mute another admin.")
+        return
+    try:
+        await context.bot.restrict_chat_member(chat_id, target_user.id, permissions=ChatPermissions(can_send_messages=False))
+        await context.bot.send_message(chat_id=chat_id, text=f"{target_user.full_name} has been muted.")
+        logger.info(f"[{chat_id}] {user_id} muted {target_user.id}")
+    except Exception as e:
+        await context.bot.send_message(chat_id=chat_id, text=f"Could not mute user: {e}")
+        logger.error(f"[{chat_id}] Error muting user {target_user.id}: {e}")
+
+# --- NEW: UNBAN Command ---
+async def unban_user(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    chat_id = update.effective_chat.id
+    user_id = update.effective_user.id
+    if not await is_admin(context.bot, chat_id, user_id):
+        await context.bot.send_message(chat_id=chat_id, text="Sorry, you need to be an admin to use this command.")
+        return
+    try:
+        target_user = update.message.reply_to_message.from_user
+    except AttributeError:
+        await context.bot.send_message(chat_id=chat_id, text="Please reply to a user's message to unban them.")
+        return
+    try:
+        await context.bot.unban_chat_member(chat_id, target_user.id)
+        await context.bot.send_message(chat_id=chat_id, text=f"{target_user.full_name} has been unbanned.")
+        logger.info(f"[{chat_id}] {user_id} unbanned {target_user.id}")
+    except Exception as e:
+        await context.bot.send_message(chat_id=chat_id, text=f"Could not unban user: {e}")
+        logger.error(f"[{chat_id}] Error unbanning user {target_user.id}: {e}")
+
+# --- NEW: UNMUTE Command ---
+async def unmute_user(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    chat_id = update.effective_chat.id
+    user_id = update.effective_user.id
+    if not await is_admin(context.bot, chat_id, user_id):
+        await context.bot.send_message(chat_id=chat_id, text="Sorry, you need to be an admin to use this command.")
+        return
+    try:
+        target_user = update.message.reply_to_message.from_user
+    except AttributeError:
+        await context.bot.send_message(chat_id=chat_id, text="Please reply to a user's message to unmute them.")
+        return
+    try:
+        # To unmute, we grant the permission to send messages again.
+        await context.bot.restrict_chat_member(chat_id, target_user.id, permissions=ChatPermissions(can_send_messages=True, can_send_media_messages=True, can_send_other_messages=True, can_add_web_page_previews=True))
+        await context.bot.send_message(chat_id=chat_id, text=f"{target_user.full_name} has been unmuted.")
+        logger.info(f"[{chat_id}] {user_id} unmuted {target_user.id}")
+    except Exception as e:
+        await context.bot.send_message(chat_id=chat_id, text=f"Could not unmute user: {e}")
+        logger.error(f"[{chat_id}] Error unmuting user {target_user.id}: {e}")
+        
+# --- ON/OFF for group admins ---
+async def on_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    chat_id = update.effective_chat.id
+    user_id = update.effective_user.id
+    if not await is_admin(context.bot, chat_id, user_id):
+        await context.bot.send_message(chat_id=chat_id, text="Sorry, you need to be an admin to use this command.")
+        return
+    global global_bot_status
+    if not global_bot_status:
+        await context.bot.send_message(chat_id=chat_id, text="The bot is globally powered off by the owner and cannot be turned on in this group.")
+        return
+    bot_status[chat_id] = True
+    await context.bot.send_message(chat_id=chat_id, text="Laila is now ON for this group.")
+
+async def off_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    chat_id = update.effective_chat.id
+    user_id = update.effective_user.id
+    if not await is_admin(context.bot, chat_id, user_id):
+        await context.bot.send_message(chat_id=chat_id, text="Sorry, you need to be an admin to use this command.")
+        return
+    bot_status[chat_id] = False
+    await context.bot.send_message(chat_id=chat_id, text="Laila is now OFF for this group.")
+
+# --- Reboot command for everyone (same as /on for admins) ---
+async def reboot_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    chat_id = update.effective_chat.id
+    user_id = update.effective_user.id
+    if not await is_admin(context.bot, chat_id, user_id):
+        await context.bot.send_message(chat_id=chat_id, text="Sorry, you need to be an admin to use this command.")
+        return
+    await on_command(update, context)
+
+# --- MODIFIED: Translate command for everyone ---
+async def translate_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Translates text using a direct model call for accuracy."""
+    chat_id = update.effective_chat.id
+    
+    target_language = ""
+    text_to_translate = ""
+    
+    # Determine the text and language from the command usage
+    if update.message.reply_to_message:
+        target_language = " ".join(context.args).strip()
+        text_to_translate = update.message.reply_to_message.text
+        
+        if not target_language:
+            await update.message.reply_text("Please specify a language. Example: `/tr hindi` when replying.", parse_mode='Markdown')
+            return
+        if not text_to_translate:
+            await update.message.reply_text("The replied message has no text to translate.")
+            return
+    elif context.args and len(context.args) > 1:
+        target_language = context.args[0]
+        text_to_translate = " ".join(context.args[1:])
+    else:
+        await update.message.reply_text("Usage: `/tr <language> <text>` or reply to a message with `/tr <language>`.", parse_mode='Markdown')
+        return
+    
+    await context.bot.send_chat_action(chat_id=chat_id, action="typing")
+    
+    # Create a very direct prompt for translation
+    prompt = f"Translate the following text into {target_language}. Respond with ONLY the translated text and nothing else: '{text_to_translate}'"
+    
+    try:
+        # Use a separate, direct API call to avoid Laila's personality
+        translation_model = None
+        api_key_to_use = None
+        model_name_to_use = None
+        
+        # Prioritize Gemini
+        available_gemini_keys = [key for key in GEMINI_API_KEYS if key and time.time() >= key_cooldown_until.get(key, 0)]
+        if available_gemini_keys:
+            random.shuffle(available_gemini_keys)
+            api_key_to_use = available_gemini_keys[0] # Use a random one to distribute load
+            model_name_to_use = 'gemini-1.5-flash-latest'
+        # Fallback to Gemma
+        elif GEMMA_API_KEY:
+            api_key_to_use = GEMMA_API_KEY
+            model_name_to_use = 'gemma-2-9b-it' # Use the correct Gemma model
+        else:
+            await update.message.reply_text("Sorry, no API keys are available for translation right now.")
+            return
+
+        genai.configure(api_key=api_key_to_use)
+        # Use a model without any system instruction to get a raw response
+        translation_model = genai.GenerativeModel(model_name_to_use) 
+        
+        response = await translation_model.generate_content_async(
+            prompt,
+            generation_config=genai.types.GenerationConfig(temperature=0.1) # Low temp for direct translation
+        )
+        
+        # Send the raw translated text
+        await update.message.reply_text(response.text)
+        
+    except Exception as e:
+        logger.error(f"Error in translate command: {e}", exc_info=True)
+        await update.message.reply_text("An error occurred during translation. Please try again later.")
+
+
+# --- Reset command for group admins ---
+async def reset_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    chat_id = update.effective_chat.id
+    user_id = update.effective_user.id
+    if update.effective_chat.type == 'private':
+        await context.bot.send_message(chat_id=chat_id, text="This command is only for group admins to reset chat history.")
+        return
+    if not await is_admin(context.bot, chat_id, user_id):
+        await context.bot.send_message(chat_id=chat_id, text="Sorry, you need to be an admin to use this command.")
+        return
+    if chat_id in chat_histories:
+        chat_histories[chat_id].clear()
+        await context.bot.send_message(chat_id=chat_id, text="Chat history for this group has been reset. Laila will now start with a fresh memory.")
+        logger.info(f"[{chat_id}] Chat history reset by admin {user_id}.")
+    else:
+        await context.bot.send_message(chat_id=chat_id, text="There is no chat history to reset.")
+
+# --- Get ID command for any user
+async def get_id_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user = update.effective_user
+    chat = update.effective_chat
+    response_text = (
+        f"**Your ID**: `{user.id}`\n"
+        f"**Chat ID**: `{chat.id}`\n"
+    )
+    if update.message.reply_to_message:
+        replied_user = update.message.reply_to_message.from_user
+        response_text += f"**Replied User's ID**: `{replied_user.id}`"
+    await update.message.reply_text(response_text, parse_mode='Markdown')
+
+# --- Owner/Sudo Commands ---
+async def poweron_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    global global_bot_status
+    if global_bot_status:
+        await context.bot.send_message(chat_id=update.effective_chat.id, text="The bot is already globally powered on.")
+        return
+    global_bot_status = True
+    await context.bot.send_message(chat_id=update.effective_chat.id, text="The bot has been globally powered ON. It will now process messages again.")
+    logger.info(f"[{update.effective_chat.id}] Global power ON command used by owner/sudo.")
+
+async def poweroff_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    global global_bot_status
+    if not global_bot_status:
+        await context.bot.send_message(chat_id=update.effective_chat.id, text="The bot is already globally powered OFF.")
+        return
+    global_bot_status = False
+    await context.bot.send_message(chat_id=update.effective_chat.id, text="The bot has been globally powered OFF. It will no longer process messages.")
+    logger.info(f"[{update.effective_chat.id}] Global power OFF command used by owner/sudo.")
+
+async def broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    chat_id = update.effective_chat.id
+    if not update.message.reply_to_message:
+        await context.bot.send_message(chat_id=chat_id, text="Please reply to a message/media to broadcast it to all chats.")
+        return
+    original_message = update.message.reply_to_message
+    broadcast_id = str(uuid.uuid4())[:8]
+    broadcast_start_time = datetime.now()
+    successful_users = 0
+    successful_groups = 0
+    total_group_members = 0
+    failed_chats = []
+    global known_users
+    if not known_users:
+        load_known_users()
+    logger.info(f"Starting broadcast with ID {broadcast_id}...")
+    
+    # Send initial confirmation message
+    await context.bot.send_message(chat_id=chat_id, text=f"Broadcast `{broadcast_id}` started. Broadcasting to `{len(known_users)}` chats. Please wait...")
+
+    for chat_id_str in list(known_users):
+        try:
+            chat_id_int = int(chat_id_str)
+            chat = await context.bot.get_chat(chat_id_int)
+            await context.bot.copy_message(
+                chat_id=chat_id_int,
+                from_chat_id=update.effective_chat.id,
+                message_id=original_message.message_id
+            )
+            if chat.type == 'private':
+                successful_users += 1
+            else:
+                successful_groups += 1
+                try:
+                    count = await context.bot.get_chat_member_count(chat_id_int)
+                    total_group_members += count
+                except Exception:
+                    pass
+            await asyncio.sleep(0.1) # Avoid rate limiting
+        except Exception as e:
+            failed_chats.append(chat_id_str)
+            logger.error(f"Error broadcasting message to chat {chat_id_str}: {e}")
+    broadcast_end_time = datetime.now()
+    duration = broadcast_end_time - broadcast_start_time
+    receipt_message = (
+        f"**Broadcast Receipt** ✨\n\n"
+        f"**Broadcast ID**: `{broadcast_id}`\n"
+        f"**Started At**: `{broadcast_start_time.strftime('%Y-%m-%d %H:%M:%S')}`\n"
+        f"**Duration**: `{duration.seconds}s`\n\n"
+        f"**Summary**\n"
+        f"✅ Successful to `{successful_users}` private chats.\n"
+        f"✅ Successful to `{successful_groups}` groups.\n"
+        f"👥 Total estimated reach (group members + users): `{successful_users + total_group_members}`\n"
+        f"❌ Failed for `{len(failed_chats)}` chats.\n\n"
+    )
+    if failed_chats:
+        # Displaying first 10 failed chats
+        failed_chats_str = ", ".join(failed_chats[:10]) + ("..." if len(failed_chats) > 10 else "")
+        receipt_message += f"**Failed Chat IDs (First 10)**:\n`{failed_chats_str}`"
+    await context.bot.send_message(chat_id=chat_id, text=receipt_message, parse_mode='Markdown')
+    logger.info(f"Broadcast {broadcast_id} finished. Receipt sent to admin/sudo user.")
+
+# --- NEW: Sudo commands for model switching ---
+async def force_gemma_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Forces the bot to use only the Gemma model."""
+    global current_model_mode
+    current_model_mode = 'gemma_only'
+    await update.message.reply_text("🤖 Model mode has been **forced to Gemma-only**.\nAll AI responses will now use Gemma until switched back.", parse_mode='Markdown')
+    logger.info(f"Model mode forced to Gemma-only by sudo user {update.effective_user.id}.")
+
+async def force_dynamic_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Switches the bot back to dynamic model selection."""
+    global current_model_mode
+    current_model_mode = 'dynamic'
+    await update.message.reply_text("🤖 Model mode has been reset to **Dynamic**.\nThe bot will now prioritize Gemini and use Gemma/DeepSeek as fallbacks.", parse_mode='Markdown')
+    logger.info(f"Model mode set to dynamic by sudo user {update.effective_user.id}.")
+
+# --- NEW: Sudo command for DeepSeek model ---
+async def force_deepseek_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Forces the bot to use only the DeepSeek model."""
+    global current_model_mode
+    current_model_mode = 'deepseek_only'
+    await update.message.reply_text("🤖 Model mode has been **forced to DeepSeek-only**.\nAll AI responses will now use DeepSeek until switched back.", parse_mode='Markdown')
+    logger.info(f"Model mode forced to DeepSeek-only by sudo user {update.effective_user.id}.")
+
+
+# --- General User Commands ---
+async def get_photo_id(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if update.message.reply_to_message and update.message.reply_to_message.photo:
+        photo_file_id = update.message.reply_to_message.photo[-1].file_id
+        await context.bot.send_message(chat_id=update.effective_chat.id, text=f"Photo File ID:\n`{photo_file_id}`", parse_mode='Markdown')
+    else:
+        await context.bot.send_message(chat_id=update.effective_chat.id, text="Please reply to a photo with this command to get its ID.")
+
+# --- FIXED: Start Command Logic (Used context.bot.get_me()) ---
+async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user_name = update.effective_user.first_name
+    chat_id = update.effective_chat.id
+    
+    # Save chat ID if new
+    if str(chat_id) not in known_users:
+        known_users.add(str(chat_id))
+        save_chat_id(chat_id)
+    
+    # Fetch bot username for group link
+    bot_info = await context.bot.get_me()
+    add_to_group_url = f"https.t.me/{bot_info.username}?startgroup=true"
+    
+    keyboard = [[InlineKeyboardButton("➕ Add Me To Your Group ➕", url=add_to_group_url)]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    welcome_message = (
+        f"Hey there, {user_name}! 😉\n\n"
+        f"I'm **Laila**, your friendly AI assistant. 🤖\n"
+        f"I'm here to chat, answer your questions, and help you with anything you need. 😘\n\n"
+        f"You can use `/help` to see all my commands.\n"
+        f"Let's get started! 💖"
+    )
+    photo_file_id = 'AgACAgUAAxkBAAIIKGigVdAK07aRr9QiXpRalahcPO2pAAIL0DEblXUBVSY5LS31XxPSAQADAgADeAADNgQ'
+    try:
+        await context.bot.send_photo(
+            chat_id=chat_id,
+            photo=photo_file_id,
+            caption=welcome_message,
+            reply_markup=reply_markup,
+            parse_mode='Markdown'
+        )
+        logger.info(f"[{chat_id}] Sent /start with photo and button to {user_name}")
+    except Exception as e:
+        # Fallback to text message if photo fails
+        logger.error(f"Failed to send photo with start command: {e}")
+        await context.bot.send_message(chat_id=chat_id, text=welcome_message, reply_markup=reply_markup, parse_mode='Markdown')
+
+async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    chat_id = update.effective_chat.id
+    ping_start = time.time()
+    msg = await context.bot.send_message(chat_id=chat_id, text="Calculating stats...")
+    ping_end = time.time()
+    
+    uptime = datetime.now() - start_time
+    hours, remainder = divmod(uptime.seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    uptime_str = f"{uptime.days}d {hours}h {minutes}m {seconds}s"
+    ram_usage = psutil.virtual_memory().percent
+    cpu_usage = psutil.cpu_percent(interval=1)
+    disk_usage = psutil.disk_usage('/').percent
+    response_text = (
+        "❤️ **Laila's Live Stats** ❤️\n\n"
+        f"⚡️ **Ping**: `{int((ping_end - ping_start) * 1000)}ms`\n"
+        f"⏳ **Uptime**: `{uptime_str}`\n"
+        f"🧠 **RAM**: `{ram_usage}%`\n"
+        f"💻 **CPU**: `{cpu_usage}%`\n"
+        f"💾 **Disk**: `{disk_usage}%`\n\n"
+        "✨ by Adhyan ✨"
+    )
+    
+    await msg.delete() # Delete "Calculating stats..." message
+    photo_file_id = 'AgACAgUAAxkBAAIIKGigVdAK07aRr9QiXpRalahcPO2pAAIL0DEblXUBVSY5LS31XxPSAQADAgADeAADNgQ'
+    try:
+        await context.bot.send_photo(
+            chat_id=chat_id,
+            photo=photo_file_id,
+            caption=response_text,
+            parse_mode='Markdown'
+        )
+    except Exception as e:
+        logger.error(f"Failed to send photo with stats command: {e}")
+        await context.bot.send_message(chat_id=chat_id, text=response_text, parse_mode='Markdown')
+
+async def admin_stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Shows detailed bot stats for the admin/sudo user only."""
+    chat_id = update.effective_chat.id
+    ping_start = time.time()
+    msg = await context.bot.send_message(chat_id=chat_id, text="Calculating admin stats...")
+    ping_end = time.time()
+    
+    uptime = datetime.now() - start_time
+    hours, remainder = divmod(uptime.seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    uptime_str = f"{uptime.days}d {hours}h {minutes}m {seconds}s"
+    ram_usage = psutil.virtual_memory().percent
+    cpu_usage = psutil.cpu_percent(interval=1)
+    disk_usage = psutil.disk_usage('/').percent
+    
+    bot_connection_status = "✅ Connected"
+    try:
+        await context.bot.get_me()
+    except Exception:
+        bot_connection_status = "❌ Failed"
+    
+    sheets_connection_status = "✅ Connected"
+    try:
+        client, error_msg = get_google_sheet_connection()
+        if not client:
+            raise Exception(error_msg)
+    except Exception as e:
+        sheets_connection_status = f"❌ Failed: {e}"
+        
+    env_vars_status = "✅ All set"
+    if not all([TELEGRAM_BOT_TOKEN, any(GEMINI_API_KEYS), BROADCAST_ADMIN_ID]):
+        env_vars_status = "⚠️ Missing key variables"
+        
+    render_status = "✅ Active" if os.getenv("RENDER") else "⚠️ Local/Unknown"
+    
+    api_key_status_text = ""
+    for i, key in enumerate(GEMINI_API_KEYS):
+        if key:
+            key_short = key[-5:]
+            status = "🟢 Available"
+            if time.time() < key_cooldown_until.get(key, 0):
+                cooldown_remaining = int(key_cooldown_until[key] - time.time())
+                status = f"🟡 Cooldown ({cooldown_remaining}s)"
+            api_key_status_text += f"Gemini Key {i+1} (`...{key_short}`): {status}\n"
+        else:
+            api_key_status_text += f"Gemini Key {i+1}: ❌ Missing\n"
+    
+    api_key_status_text += f"\nGemma Key: {'✅ Present' if GEMMA_API_KEY else '❌ Missing'}"
+    api_key_status_text += f"\nDeepSeek Key: {'✅ Present' if DEEPSEEK_API_KEY else '❌ Missing'}" # NEW
+    api_key_status_text += f"\nStable Horde Key: {'✅ Present' if STABLE_HORDE_API_KEY else '❌ Missing'}"
+    api_key_status_text += f"\nPexels Key: {'✅ Present' if PEXELS_API_KEY else '❌ Missing'}"
+    api_key_status_text += f"\nGenius Key: {'✅ Present' if GENIUS_ACCESS_TOKEN else '❌ Missing'}"
+    api_key_status_text += f"\nYouTube Key: {'✅ Present' if YOUTUBE_API_KEY else '⚠️ Missing (Not required by pytube)'}"
+
+    response_text = (
+        "👑 **Laila's Admin Report** 👑\n\n"
+        "**System Health**\n"
+        f" Ping: `{int((ping_end - ping_start) * 1000)}ms`\n"
+        f" Uptime: `{uptime_str}`\n"
+        f" RAM: `{ram_usage}%`\n"
+        f" CPU: `{cpu_usage}%`\n"
+        f" Disk: `{disk_usage}%`\n\n"
+        "**Service Status**\n"
+        f" Bot Connection: `{bot_connection_status}`\n"
+        f" Google Sheets: `{sheets_connection_status}`\n"
+        f" Environment Variables: `{env_vars_status}`\n"
+        f" Deployment: `{render_status}`\n\n"
+        "**Bot Stats**\n"
+        f" Total Chats: `{len(known_users)}`\n"
+        f" Sudo Users: `{len(sudo_users)}`\n"
+        f" Total Messages: `{total_messages_processed}`\n"
+        f" AI Model Mode: `{current_model_mode.capitalize()}`\n\n"
+        "**API Status**\n"
+        f"{api_key_status_text}"
+        "\n\n✨ by Adhyan ✨"
+    )
+    await msg.delete()
+    await context.bot.send_message(chat_id=chat_id, text=response_text, parse_mode='Markdown')
+    logger.info(f"[{chat_id}] /adminstats command used by admin/sudo.")
+
+# --- HELPER for show_chats_command (FIXED) ---
+async def get_chat_details(chat_id_str: str, bot: Bot):
+    """Asynchronously fetches details for a single chat."""
+    try:
+        chat_id_int = int(chat_id_str)
+        chat = await bot.get_chat(chat_id_int)
+        
+        if chat.type == 'private':
+            return f"• **User**: `{chat.full_name}` (ID: `{chat_id_str}`)"
+        else:
+            members_count = "N/A"
+            try:
+                members_count = await bot.get_chat_member_count(chat_id_str)
+            except Exception: pass
+            
+            invite_link = ""
+            try:
+                if chat.username:
+                    invite_link = f"https.t.me/{chat.username}"
+                else:
+                    # Check if bot can create invite link
+                    bot_member = await bot.get_chat_member(chat_id_int, bot.id)
+                    if bot_member.can_invite_users:
+                        invite = await bot.create_chat_invite_link(chat_id_str, member_limit=1)
+                        invite_link = invite.invite_link
+                    else:
+                        invite_link = "*No permission to get link.*"
+            except Exception:
+                invite_link = "*No permission to get link.*"
+
+            return (
+                f"• **Group**: `{chat.title}` (ID: `{chat_id_str}`)\n"
+                f"  Members: `{members_count}`\n"
+                f"  Link: {invite_link}"
+            )
+    except Exception as e:
+        return f"• **Unknown Chat**: ID: `{chat_id_str}` (Error: Bot was likely removed or chat deleted)"
+
+# --- /show_chats Command (FIXED) ---
+async def show_chats_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user_id = update.effective_user.id
+    global known_users
+    if not known_users:
+        load_known_users()
+    
+    known_chats = list(known_users)
+    if not known_chats:
+        await context.bot.send_message(chat_id=user_id, text="The bot is not in any groups or private chats yet.")
+        return
+
+    msg = await context.bot.send_message(chat_id=user_id, text=f"Fetching details for `{len(known_chats)}` chats. This might take a moment...", parse_mode='Markdown')
+
+    # Create async tasks for all chat detail fetches
+    tasks = [get_chat_details(chat_id_str, context.bot) for chat_id_str in known_chats]
+    # Run them concurrently
+    results = await asyncio.gather(*tasks)
+    
+    chat_details = [r for r in results if r]
+    
+    response_text = "✨ **Laila's Chats** ✨\n\n" + "\n\n".join(chat_details)
+    
+    # Send final result in chunks if it's too long
+    if len(response_text) > 4096:
+        await msg.edit_text("✨ **Laila's Chats** ✨\n\nThe list is too long, sending as multiple messages...")
+        for i in range(0, len(chat_details), 20): # Send 20 chats at a time
+            chunk = chat_details[i:i+20]
+            chunk_text = "\n\n".join(chunk)
+            await context.bot.send_message(user_id, chunk_text, parse_mode='Markdown', disable_web_page_preview=True)
+    else:
+        await msg.edit_text(response_text, parse_mode='Markdown', disable_web_page_preview=True)
+    
+    if update.effective_chat.id != user_id:
+        await update.message.reply_text("The list of chats has been sent to you privately.")
+    
+    logger.info(f"[{update.effective_chat.id}] /show_chats command used by sudo user. Response sent privately to {user_id}.")
+
+
+# --- Sudo-Exclusive Admin Command: Sudo Ban (FIXED & IMPROVED) ---
+async def sudo_ban_user(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Bans a user in a group without being a group admin (requires bot to have admin rights)."""
+    chat_id = update.effective_chat.id
+    
+    target_chat_id = None
+    target_user_id = None
+    target_user_name = "User"
+
+    if update.message.reply_to_message:
+        target_user_id = update.message.reply_to_message.from_user.id
+        target_user_name = update.message.reply_to_message.from_user.full_name
+        target_chat_id = update.effective_chat.id
+    elif context.args and len(context.args) == 2 and context.args[0].startswith("-") and context.args[1].isdigit():
+        try:
+            target_chat_id = int(context.args[0])
+            target_user_id = int(context.args[1])
+            target_user_name = f"User ID {target_user_id}"
+        except ValueError:
+             await update.message.reply_text("Invalid `chat_id` or `user_id` format. Please use correct IDs.")
+             return
+    else:
+        await update.message.reply_text("Please reply to a user's message in a group or use the format: `/s_ban <group_chat_id> <user_id>` (Chat ID starts with a -)", parse_mode='Markdown')
+        return
+
+    try:
+        # Check if bot can ban
+        bot_member = await context.bot.get_chat_member(target_chat_id, context.bot.id)
+        if not (bot_member.status in ['administrator', 'creator'] and bot_member.can_restrict_members):
+            await update.message.reply_text(f"I don't have the necessary admin rights (Restrict Members) in chat `{target_chat_id}` to ban a user.")
+            return
+
+        # Check if target is also an admin
+        target_member = await context.bot.get_chat_member(target_chat_id, target_user_id)
+        if target_member.status in ['administrator', 'creator']:
+            await update.message.reply_text(f"I cannot ban an administrator in chat `{target_chat_id}`.")
+            return
+            
+        await context.bot.ban_chat_member(target_chat_id, target_user_id)
+        
+        chat_info = await context.bot.get_chat(target_chat_id)
+        chat_title = chat_info.title
+        
+        await context.bot.send_message(
+            chat_id=chat_id, 
+            text=f"Sudo Ban Successful! ✅\n\n**User**: {target_user_name} (`{target_user_id}`)\n**Banned from Group**: {chat_title} (`{target_chat_id}`)",
+            parse_mode='Markdown'
+        )
+        logger.info(f"[{chat_id}] Sudo user {update.effective_user.id} banned {target_user_id} in chat {target_chat_id}.")
+        
+    except Exception as e:
+        await update.message.reply_text(f"Could not perform sudo ban in chat `{target_chat_id}`. Error: {e}")
+        logger.error(f"[{chat_id}] Error in sudo ban for user {target_user_id} in chat {target_chat_id}: {e}")
+
+# --- NEW Sudo Command: Sudo Unban ---
+async def sudo_unban_user(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Unbans a user in a group using the bot's rights."""
+    chat_id = update.effective_chat.id
+    
+    # 1. Argument Parsing
+    target_chat_id = None
+    target_user_id = None
+    target_user_name = "User"
+
+    if update.message.reply_to_message:
+        target_user_id = update.message.reply_to_message.from_user.id
+        target_user_name = update.message.reply_to_message.from_user.full_name
+        target_chat_id = update.effective_chat.id
+    elif context.args and len(context.args) == 2 and context.args[0].startswith("-") and context.args[1].isdigit():
+        # Usage: /s_unban <target_chat_id> <target_user_id>
+        try:
+            target_chat_id = int(context.args[0])
+            target_user_id = int(context.args[1])
+            target_user_name = f"User ID {target_user_id}"
+        except ValueError:
+             await update.message.reply_text("Invalid `chat_id` or `user_id` format. Please use correct IDs.")
+             return
+    else:
+        await update.message.reply_text("Please reply to a user's message in a group or use the format: `/s_unban <group_chat_id> <user_id>` (Chat ID starts with a -)", parse_mode='Markdown')
+        return
+
+    try:
+        # 2. Check if bot can unban (it must be an admin with restrict members rights)
+        bot_member = await context.bot.get_chat_member(target_chat_id, context.bot.id)
+        if not (bot_member.status in ['administrator', 'creator'] and bot_member.can_restrict_members):
+            await update.message.reply_text(f"I don't have the necessary admin rights (Restrict Members) in chat `{target_chat_id}` to unban a user.")
+            return
+
+        # 3. Perform the unban (only_if_banned=True is the default for unban)
+        await context.bot.unban_chat_member(target_chat_id, target_user_id)
+        
+        # 4. Success Message
+        chat_title = (await context.bot.get_chat(target_chat_id)).title
+        await context.bot.send_message(
+            chat_id=chat_id, 
+            text=f"Sudo Unban Successful! ✅\n\n**User**: {target_user_name} (`{target_user_id}`)\n**Unbanned from Group**: {chat_title} (`{target_chat_id}`)",
+            parse_mode='Markdown'
+        )
+        logger.info(f"[{chat_id}] Sudo user {update.effective_user.id} unbanned {target_user_id} in chat {target_chat_id}.")
+        
+    except Exception as e:
+        await update.message.reply_text(f"Could not perform sudo unban in chat `{target_chat_id}`. Error: {e}")
+        logger.error(f"[{chat_id}] Error in sudo unban for user {target_user_id} in chat {target_chat_id}: {e}")
+
+# --- NEW Sudo Command: Sudo Send Message ---
+async def sudo_send_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Sends a message to a specific chat ID from the bot."""
+    chat_id = update.effective_chat.id
+    
+    if len(context.args) < 2:
+        await update.message.reply_text("Please provide a target chat ID and a message. Usage: `/s_send <chat_id> <message>`", parse_mode='Markdown')
+        return
+
+    target_chat_id_str = context.args[0]
+    message_text = " ".join(context.args[1:])
+
+    try:
+        target_chat_id = int(target_chat_id_str)
+    except ValueError:
+        await update.message.reply_text("Invalid chat ID provided.")
+        return
+
+    try:
+        # Send the message
+        await context.bot.send_message(chat_id=target_chat_id, text=message_text, parse_mode='Markdown')
+        
+        await update.message.reply_text(f"Message successfully sent to chat `{target_chat_id}`.")
+        logger.info(f"[{chat_id}] Sudo user {update.effective_user.id} sent message to chat {target_chat_id}: {message_text[:50]}...")
+    except Exception as e:
+        await update.message.reply_text(f"Could not send message to chat `{target_chat_id}`: {e}")
+        logger.error(f"[{chat_id}] Error in sudo send message to chat {target_chat_id}: {e}")
+
+# --- NEW: Money Game Constants ---
+FARM_COOLDOWN = 30 * 60  # 30 minutes
+ROB_COOLDOWN = 15 * 60   # 15 minutes
+HIRE_COOLDOWN = 10 * 60  # 10 minutes
+KILL_COOLDOWN = 60 * 60  # 1 hour
+GUARD_COST = 5000
+FARM_MIN = 100
+FARM_MAX = 1000
+ROB_CHANCE = 40  # Base % chance
+KILL_CHANCE = 30 # Base % chance
+KILL_COST = 2500 # Cost to attempt a kill
+ROB_FAIL_PENALTY = 500 # Money lost if rob fails
+
+# --- NEW: More Earning Sources Constants ---
+WORK_COOLDOWN = 20 * 60  # 20 minutes
+WORK_MIN = 200
+WORK_MAX = 800
+DAILY_COOLDOWN = 23 * 60 * 60  # 23 hours
+DAILY_MIN = 3000
+DAILY_MAX = 7000
+CRIME_COOLDOWN = 10 * 60  # 10 minutes
+CRIME_CHANCE = 60  # 60% success
+CRIME_MIN = 500
+CRIME_MAX = 2000
+CRIME_FAIL_MIN = 300
+CRIME_FAIL_MAX = 1000
+HUSTLE_COOLDOWN = 5 * 60  # 5 minutes
+HUSTLE_MIN = 50
+HUSTLE_MAX = 300
+BEG_COOLDOWN = 2 * 60  # 2 minutes
+BEG_MIN = 10
+BEG_MAX = 100
+
+# --- NEW: Money Game Helper Functions ---
+
+# Helper to find a user's row
+def _find_user_row(user_id: int):
+    """Finds the row number for a user ID."""
+    if not money_sheet:
+        get_google_sheet_connection()
+    if not money_sheet:
+        logger.error("Money sheet is not available.")
+        return None
+    try:
+        cell = money_sheet.find(str(user_id), in_column=1)
+        return cell
+    except gspread.exceptions.CellNotFound:
+        return None
+    except Exception as e:
+        logger.error(f"Error finding user {user_id} in money sheet: {e}")
+        return None
+
+# Get/Create User Account (UPDATED)
+def get_user_account(user_id: int, user_name: str) -> dict | None:
+    """Fetches or creates a user's account from the money_game sheet."""
+    if not money_sheet:
+        get_google_sheet_connection()
+    if not money_sheet:
+        logger.error("Money sheet is not available.")
+        return None
+
+    try:
+        cell = _find_user_row(user_id)
+        if cell:
+            # User found, fetch the row data
+            row_data = money_sheet.row_values(cell.row)
+            # Update username if it has changed
+            if row_data[1] != user_name:
+                money_sheet.update_cell(cell.row, 2, user_name)
+            
+            # Ensure row_data has enough columns
+            if len(row_data) < 16:
+                # Sheet is outdated, need to append new columns
+                # This is a simple fix, a proper migration would be better
+                # But for this scope, we just fill with 0
+                row_data.extend(['0.0'] * (16 - len(row_data)))
+                # We can't update here easily without knowing the row
+                # We'll just return the 0-filled data for now
+                logger.warning(f"User {user_id} row is outdated. Filled with 0s.")
+
+            return {
+                "row": cell.row,
+                "UserID": int(row_data[0]), "UserName": user_name,
+                "Money": int(row_data[2]), "Bank": int(row_data[3]),
+                "LastFarm": float(row_data[4]), "LastRob": float(row_data[5]),
+                "LastHire": float(row_data[6]), "Kills": int(row_data[7]),
+                "Deaths": int(row_data[8]), "HiredGuards": int(row_data[9]),
+                "LastKill": float(row_data[10]),
+                # NEW
+                "LastWork": float(row_data[11]),
+                "LastDaily": float(row_data[12]),
+                "LastCrime": float(row_data[13]),
+                "LastHustle": float(row_data[14]),
+                "LastBeg": float(row_data[15])
+            }
+        else:
+            # User not found, create new row
+            new_user_data = [
+                str(user_id), user_name, 100, 0,  # Start with 100 money
+                0.0, 0.0, 0.0,          # Cooldowns
+                0, 0, 0,                # Stats
+                0.0,                    # LastKill
+                0.0, 0.0, 0.0, 0.0, 0.0 # NEW Cooldowns
+            ]
+            money_sheet.append_row(new_user_data)
+            logger.info(f"Created new money account for {user_name} ({user_id})")
+            # Re-fetch to get the row number
+            cell = _find_user_row(user_id)
+            if cell:
+                return {
+                    "row": cell.row,
+                    "UserID": user_id, "UserName": user_name,
+                    "Money": 100, "Bank": 0, "LastFarm": 0.0, "LastRob": 0.0,
+                    "LastHire": 0.0, "Kills": 0, "Deaths": 0, "HiredGuards": 0,
+                    "LastKill": 0.0,
+                    "LastWork": 0.0, "LastDaily": 0.0, "LastCrime": 0.0,
+                    "LastHustle": 0.0, "LastBeg": 0.0
+                }
+            return None # Should not happen
+            
+    except Exception as e:
+        logger.error(f"Error in get_user_account for {user_id}: {e}", exc_info=True)
+        return None
+
+# Update User Account (UPDATED)
+def update_user_account(user_id: int, row_num: int, data: dict):
+    """Updates a user's account data in the money_game sheet."""
+    if not money_sheet:
+        get_google_sheet_connection()
+    if not money_sheet:
+        logger.error("Money sheet is not available.")
+        return False
+        
+    try:
+        # Prepare cell updates for batch (Now 16 columns)
+        cells_to_update = [
+            gspread.Cell(row_num, 2, str(data['UserName'])),
+            gspread.Cell(row_num, 3, str(data['Money'])),
+            gspread.Cell(row_num, 4, str(data['Bank'])),
+            gspread.Cell(row_num, 5, str(data['LastFarm'])),
+            gspread.Cell(row_num, 6, str(data['LastRob'])),
+            gspread.Cell(row_num, 7, str(data['LastHire'])),
+            gspread.Cell(row_num, 8, str(data['Kills'])),
+            gspread.Cell(row_num, 9, str(data['Deaths'])),
+            gspread.Cell(row_num, 10, str(data['HiredGuards'])),
+            gspread.Cell(row_num, 11, str(data['LastKill'])),
+            # NEW
+            gspread.Cell(row_num, 12, str(data['LastWork'])),
+            gspread.Cell(row_num, 13, str(data['LastDaily'])),
+            gspread.Cell(row_num, 14, str(data['LastCrime'])),
+            gspread.Cell(row_num, 15, str(data['LastHustle'])),
+            gspread.Cell(row_num, 16, str(data['LastBeg']))
+        ]
+        
+        money_sheet.update_cells(cells_to_update, value_input_option='RAW')
+        return True
+        
+    except Exception as e:
+        logger.error(f"Error in update_user_account for {user_id}: {e}", exc_info=True)
+        return False
+
+# Helper for time
+def _format_cooldown(seconds_left: float) -> str:
+    """Formats seconds into a 'Xm Ys' string."""
+    if seconds_left <= 0:
+        return "Ready"
+    
+    hours, remainder = divmod(int(seconds_left), 3600)
+    minutes, seconds = divmod(remainder, 60)
+    
+    if hours > 0:
+        return f"{hours}h {minutes}m {seconds}s"
+    if minutes > 0:
+        return f"{minutes}m {seconds}s"
+    return f"{seconds}s"
+    
+# --- NEW: Money Game Commands ---
+
+async def account_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Shows the user's game account."""
+    user = update.effective_user
+    await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
+    
+    account = await asyncio.to_thread(get_user_account, user.id, user.full_name)
+    
+    if not account:
+        await update.message.reply_text("Sorry, I couldn't access your account. Please try again later.")
+        return
+        
+    # Calculate cooldowns
+    current_time = time.time()
+    farm_cd = FARM_COOLDOWN - (current_time - account['LastFarm'])
+    rob_cd = ROB_COOLDOWN - (current_time - account['LastRob'])
+    kill_cd = KILL_COOLDOWN - (current_time - account['LastKill'])
+    work_cd = WORK_COOLDOWN - (current_time - account['LastWork'])
+    daily_cd = DAILY_COOLDOWN - (current_time - account['LastDaily'])
+    crime_cd = CRIME_COOLDOWN - (current_time - account['LastCrime'])
+    hustle_cd = HUSTLE_COOLDOWN - (current_time - account['LastHustle'])
+    beg_cd = BEG_COOLDOWN - (current_time - account['LastBeg'])
+    
+    account_text = (
+        f"**Account for {account['UserName']}** 📈\n\n"
+        f"💰 **Money**: `${account['Money']:,}`\n"
+        f"🏦 **Bank**: `${account['Bank']:,}`\n"
+        f"🛡️ **Guards**: `{account['HiredGuards']}`\n\n"
+        f"**Stats**:\n"
+        f"  •  Kills: `{account['Kills']}`\n"
+        f"  •  Deaths: `{account['Deaths']}`\n\n"
+        f"**Earning Cooldowns**:\n"
+        f"  •  Daily: `{_format_cooldown(daily_cd)}`\n"
+        f"  •  Work: `{_format_cooldown(work_cd)}`\n"
+        f"  •  Farm: `{_format_cooldown(farm_cd)}`\n"
+        f"  •  Crime: `{_format_cooldown(crime_cd)}`\n"
+        f"  •  Hustle: `{_format_cooldown(hustle_cd)}`\n"
+        f"  •  Beg: `{_format_cooldown(beg_cd)}`\n\n"
+        f"**Action Cooldowns**:\n"
+        f"  •  Rob: `{_format_cooldown(rob_cd)}`\n"
+        f"  •  Kill: `{_format_cooldown(kill_cd)}`"
+    )
+    await update.message.reply_text(account_text, parse_mode='Markdown')
+
+async def farm_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Farms for money."""
+    user = update.effective_user
+    await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
+
+    account = await asyncio.to_thread(get_user_account, user.id, user.full_name)
+    if not account:
+        await update.message.reply_text("Sorry, I couldn't access your account. Please try again later.")
+        return
+
+    current_time = time.time()
+    time_since_farm = current_time - account['LastFarm']
+
+    if time_since_farm < FARM_COOLDOWN:
+        await update.message.reply_text(f"You're tired! Please wait `{_format_cooldown(FARM_COOLDOWN - time_since_farm)}` before farming again.")
+        return
+        
+    farm_amount = random.randint(FARM_MIN, FARM_MAX)
+    account['Money'] += farm_amount
+    account['LastFarm'] = current_time
+    
+    success = await asyncio.to_thread(update_user_account, user.id, account['row'], account)
+    
+    if success:
+        await update.message.reply_text(f"You farmed and earned `${farm_amount:,}`! 🌾\nYour new balance is `${account['Money']:,}`.")
+    else:
+        await update.message.reply_text("An error occurred while saving your farm. Please try again.")
+
+# --- NEW: More Earning Commands ---
+
+async def work_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Works for money."""
+    user = update.effective_user
+    await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
+    account = await asyncio.to_thread(get_user_account, user.id, user.full_name)
+    if not account:
+        await update.message.reply_text("Sorry, I couldn't access your account. Please try again later.")
+        return
+
+    current_time = time.time()
+    time_since = current_time - account['LastWork']
+    if time_since < WORK_COOLDOWN:
+        await update.message.reply_text(f"You need a break! Please wait `{_format_cooldown(WORK_COOLDOWN - time_since)}` before working again.")
+        return
+        
+    amount = random.randint(WORK_MIN, WORK_MAX)
+    account['Money'] += amount
+    account['LastWork'] = current_time
+    success = await asyncio.to_thread(update_user_account, user.id, account['row'], account)
+    
+    if success:
+        await update.message.reply_text(f"You finished your shift and earned `${amount:,}`! 🧑‍💻\nYour new balance is `${account['Money']:,}`.")
+    else:
+        await update.message.reply_text("An error occurred while saving. Please try again.")
+
+async def daily_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Claims a daily bonus."""
+    user = update.effective_user
+    await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
+    account = await asyncio.to_thread(get_user_account, user.id, user.full_name)
+    if not account:
+        await update.message.reply_text("Sorry, I couldn't access your account. Please try again later.")
+        return
+
+    current_time = time.time()
+    time_since = current_time - account['LastDaily']
+    if time_since < DAILY_COOLDOWN:
+        await update.message.reply_text(f"You've already claimed your daily bonus! Please wait `{_format_cooldown(DAILY_COOLDOWN - time_since)}`.")
+        return
+        
+    amount = random.randint(DAILY_MIN, DAILY_MAX)
+    account['Money'] += amount
+    account['LastDaily'] = current_time
+    success = await asyncio.to_thread(update_user_account, user.id, account['row'], account)
+    
+    if success:
+        await update.message.reply_text(f"Here's your daily bonus of `${amount:,}`! 📅\nYour new balance is `${account['Money']:,}`.")
+    else:
+        await update.message.reply_text("An error occurred while saving. Please try again.")
+
+async def crime_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Commits a crime for a chance at money or a fine."""
+    user = update.effective_user
+    await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
+    account = await asyncio.to_thread(get_user_account, user.id, user.full_name)
+    if not account:
+        await update.message.reply_text("Sorry, I couldn't access your account. Please try again later.")
+        return
+
+    current_time = time.time()
+    time_since = current_time - account['LastCrime']
+    if time_since < CRIME_COOLDOWN:
+        await update.message.reply_text(f"The police are still looking for you! Wait `{_format_cooldown(CRIME_COOLDOWN - time_since)}`.")
+        return
+        
+    account['LastCrime'] = current_time
+    
+    if random.randint(1, 100) <= CRIME_CHANCE:
+        # Success
+        amount = random.randint(CRIME_MIN, CRIME_MAX)
+        account['Money'] += amount
+        message = f"Success! You pulled a heist and got away with `${amount:,}`! 💰"
+    else:
+        # Failure
+        amount = random.randint(CRIME_FAIL_MIN, CRIME_FAIL_MAX)
+        account['Money'] -= amount
+        message = f"Failed! The cops caught you. You paid a fine of `${amount:,}`. 👮"
+
+    success = await asyncio.to_thread(update_user_account, user.id, account['row'], account)
+    
+    if success:
+        await update.message.reply_text(f"{message}\nYour new balance is `${account['Money']:,}`.")
+    else:
+        await update.message.reply_text("An error occurred while saving. Please try again.")
+
+async def hustle_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Hustles on the streets for quick cash."""
+    user = update.effective_user
+    await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
+    account = await asyncio.to_thread(get_user_account, user.id, user.full_name)
+    if not account:
+        await update.message.reply_text("Sorry, I couldn't access your account. Please try again later.")
+        return
+
+    current_time = time.time()
+    time_since = current_time - account['LastHustle']
+    if time_since < HUSTLE_COOLDOWN:
+        await update.message.reply_text(f"The streets are quiet. Wait `{_format_cooldown(HUSTLE_COOLDOWN - time_since)}` before hustling again.")
+        return
+        
+    amount = random.randint(HUSTLE_MIN, HUSTLE_MAX)
+    account['Money'] += amount
+    account['LastHustle'] = current_time
+    success = await asyncio.to_thread(update_user_account, user.id, account['row'], account)
+    
+    if success:
+        await update.message.reply_text(f"You hustled and earned `${amount:,}`! 🏃\nYour new balance is `${account['Money']:,}`.")
+    else:
+        await update.message.reply_text("An error occurred while saving. Please try again.")
+
+async def beg_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Begs for money."""
+    user = update.effective_user
+    await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
+    account = await asyncio.to_thread(get_user_account, user.id, user.full_name)
+    if not account:
+        await update.message.reply_text("Sorry, I couldn't access your account. Please try again later.")
+        return
+
+    current_time = time.time()
+    time_since = current_time - account['LastBeg']
+    if time_since < BEG_COOLDOWN:
+        await update.message.reply_text(f"People are ignoring you. Wait `{_format_cooldown(BEG_COOLDOWN - time_since)}` before begging again.")
+        return
+        
+    amount = random.randint(BEG_MIN, BEG_MAX)
+    account['Money'] += amount
+    account['LastBeg'] = current_time
+    success = await asyncio.to_thread(update_user_account, user.id, account['row'], account)
+    
+    if success:
+        await update.message.reply_text(f"A kind stranger gave you `${amount:,}`. 🥺\nYour new balance is `${account['Money']:,}`.")
+    else:
+        await update.message.reply_text("An error occurred while saving. Please try again.")
+
+# --- End of New Earning Commands ---
+
+async def deposit_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Deposits money into the bank."""
+    user = update.effective_user
+    
+    if not context.args:
+        await update.message.reply_text("Usage: `/deposit <amount>` or `/deposit all`")
+        return
+
+    account = await asyncio.to_thread(get_user_account, user.id, user.full_name)
+    if not account:
+        await update.message.reply_text("Sorry, I couldn't access your account. Please try again later.")
+        return
+
+    amount_str = context.args[0]
+    
+    if amount_str.lower() == 'all':
+        amount = account['Money']
+    else:
+        try:
+            amount = int(amount_str)
+        except ValueError:
+            await update.message.reply_text("Please enter a valid number or 'all'.")
+            return
+            
+    if amount <= 0:
+        await update.message.reply_text("You can't deposit nothing!")
+        return
+    if amount > account['Money']:
+        await update.message.reply_text("You don't have that much money to deposit.")
+        return
+        
+    account['Money'] -= amount
+    account['Bank'] += amount
+    
+    success = await asyncio.to_thread(update_user_account, user.id, account['row'], account)
+    
+    if success:
+        await update.message.reply_text(
+            f"Successfully deposited `${amount:,}` into your bank. 🏦\n"
+            f"**Money**: `${account['Money']:,}`\n"
+            f"**Bank**: `${account['Bank']:,}`"
+        )
+    else:
+        await update.message.reply_text("An error occurred while making your deposit. Please try again.")
+        
+async def pay_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Pays money to another user."""
+    user = update.effective_user
+    
+    if not update.message.reply_to_message:
+        await update.message.reply_text("Please reply to a user's message to pay them.")
+        return
+        
+    if not context.args or not context.args[0].isdigit():
+        await update.message.reply_text("Usage: Reply to a user with `/pay <amount>`")
+        return
+        
+    target_user = update.message.reply_to_message.from_user
+    if target_user.id == user.id:
+        await update.message.reply_text("You can't pay yourself! 😂")
+        return
+        
+    try:
+        amount = int(context.args[0])
+    except ValueError:
+        await update.message.reply_text("Please enter a valid amount.")
+        return
+
+    if amount <= 0:
+        await update.message.reply_text("You must pay a positive amount.")
+        return
+
+    await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
+
+    # Get both accounts
+    payer_account = await asyncio.to_thread(get_user_account, user.id, user.full_name)
+    target_account = await asyncio.to_thread(get_user_account, target_user.id, target_user.full_name)
+
+    if not payer_account or not target_account:
+        await update.message.reply_text("Sorry, I couldn't access the accounts. Please try again later.")
+        return
+        
+    if amount > payer_account['Money']:
+        await update.message.reply_text(f"You don't have `${amount:,}` in your hand. You only have `${payer_account['Money']:,}`.")
+        return
+        
+    # Perform transaction
+    payer_account['Money'] -= amount
+    target_account['Money'] += amount
+    
+    # Update both accounts
+    success1 = await asyncio.to_thread(update_user_account, payer_account['UserID'], payer_account['row'], payer_account)
+    success2 = await asyncio.to_thread(update_user_account, target_account['UserID'], target_account['row'], target_account)
+
+    if success1 and success2:
+        await update.message.reply_text(
+            f"{payer_account['UserName']} paid `${amount:,}` to {target_account['UserName']}! 💸\n\n"
+            f"**{payer_account['UserName']}'s Money**: `${payer_account['Money']:,}`\n"
+            f"**{target_account['UserName']}'s Money**: `${target_account['Money']:,}`"
+        )
+    else:
+        await update.message.reply_text("A critical error occurred during the transaction. Please contact an admin.")
+        # This is bad, money might be lost or duped.
+        logger.error(f"Transaction failed! Payer update: {success1}, Target update: {success2}")
+
+async def hire_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Hires a guard for protection."""
+    user = update.effective_user
+    await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
+
+    account = await asyncio.to_thread(get_user_account, user.id, user.full_name)
+    if not account:
+        await update.message.reply_text("Sorry, I couldn't access your account. Please try again later.")
+        return
+
+    current_time = time.time()
+    time_since_hire = current_time - account['LastHire']
+
+    if time_since_hire < HIRE_COOLDOWN:
+        await update.message.reply_text(f"You just hired someone! Please wait `{_format_cooldown(HIRE_COOLDOWN - time_since_hire)}` before hiring again.")
+        return
+        
+    if account['Money'] < GUARD_COST:
+        await update.message.reply_text(f"You don't have enough money! A guard costs `${GUARD_COST:,}`.")
+        return
+        
+    account['Money'] -= GUARD_COST
+    account['HiredGuards'] += 1
+    account['LastHire'] = current_time
+    
+    success = await asyncio.to_thread(update_user_account, user.id, account['row'], account)
+    
+    if success:
+        await update.message.reply_text(f"You hired a new guard for `${GUARD_COST:,}`! 🛡️\nYou now have `{account['HiredGuards']}` guards.")
+    else:
+        await update.message.reply_text("An error occurred while hiring. Please try again.")
+
+async def rob_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Attempts to rob another user."""
+    user = update.effective_user
+    
+    if not update.message.reply_to_message:
+        await update.message.reply_text("Please reply to a user's message to rob them.")
+        return
+        
+    target_user = update.message.reply_to_message.from_user
+    if target_user.id == user.id:
+        await update.message.reply_text("You can't rob yourself, silly.")
+        return
+
+    await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
+
+    # Get accounts
+    robber_account = await asyncio.to_thread(get_user_account, user.id, user.full_name)
+    target_account = await asyncio.to_thread(get_user_account, target_user.id, target_user.full_name)
+
+    if not robber_account or not target_account:
+        await update.message.reply_text("Sorry, I couldn't access the accounts. Please try again later.")
+        return
+        
+    # Check cooldown
+    current_time = time.time()
+    time_since_rob = current_time - robber_account['LastRob']
+    if time_since_rob < ROB_COOLDOWN:
+        await update.message.reply_text(f"You're still wanted from your last heist! Wait `{_format_cooldown(ROB_COOLDOWN - time_since_rob)}`.")
+        return
+        
+    # Check if target has money
+    if target_account['Money'] <= 0:
+        await update.message.reply_text(f"{target_account['UserName']} is broke! They have no money to steal.")
+        robber_account['LastRob'] = current_time # Still set cooldown
+        await asyncio.to_thread(update_user_account, user.id, robber_account['row'], robber_account)
+        return
+
+    robber_account['LastRob'] = current_time
+    
+    # Calculate rob chance
+    # More guards = less chance. Each guard reduces chance by 5%.
+    guard_modifier = target_account['HiredGuards'] * 5
+    final_chance = max(5, ROB_CHANCE - guard_modifier) # At least 5% chance
+    
+    if random.randint(1, 100) <= final_chance:
+        # Success!
+        stolen_amount = int(target_account['Money'] * random.uniform(0.1, 0.4)) # Steal 10-40%
+        
+        robber_account['Money'] += stolen_amount
+        target_account['Money'] -= stolen_amount
+        
+        await update.message.reply_text(
+            f"Success! 💰 {robber_account['UserName']} skillfully robbed {target_account['UserName']} and stole `${stolen_amount:,}`!"
+        )
+    else:
+        # Failure!
+        robber_account['Money'] -= ROB_FAIL_PENALTY
+        await update.message.reply_text(
+            f"Failed! ❌ {target_account['UserName']}'s guards caught {robber_account['UserName']}!\n"
+            f"You paid a penalty of `${ROB_FAIL_PENALTY:,}`."
+        )
+        
+    # Update both accounts
+    await asyncio.to_thread(update_user_account, robber_account['UserID'], robber_account['row'], robber_account)
+    await asyncio.to_thread(update_user_account, target_account['UserID'], target_account['row'], target_account)
+
+
+async def kill_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Attempts to kill another user."""
+    user = update.effective_user
+    
+    if not update.message.reply_to_message:
+        await update.message.reply_text("Please reply to a user's message to try and kill them.")
+        return
+        
+    target_user = update.message.reply_to_message.from_user
+    if target_user.id == user.id:
+        await update.message.reply_text("Don't do that. 😕")
+        return
+
+    await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
+
+    # Get accounts
+    killer_account = await asyncio.to_thread(get_user_account, user.id, user.full_name)
+    target_account = await asyncio.to_thread(get_user_account, target_user.id, target_user.full_name)
+
+    if not killer_account or not target_account:
+        await update.message.reply_text("Sorry, I couldn't access the accounts. Please try again later.")
+        return
+        
+    # Check cooldown
+    current_time = time.time()
+    time_since_kill = current_time - killer_account['LastKill']
+    if time_since_kill < KILL_COOLDOWN:
+        await update.message.reply_text(f"You're laying low. Wait `{_format_cooldown(KILL_COOLDOWN - time_since_kill)}` before another attempt.")
+        return
+        
+    # Check cost
+    if killer_account['Money'] < KILL_COST:
+        await update.message.reply_text(f"You don't have enough money for the attempt. It costs `${KILL_COST:,}`.")
+        return
+
+    killer_account['LastKill'] = current_time
+    killer_account['Money'] -= KILL_COST
+    
+    # Calculate kill chance
+    # More guards = less chance. Each guard reduces chance by 2%.
+    guard_modifier = target_account['HiredGuards'] * 2
+    final_chance = max(5, KILL_CHANCE - guard_modifier) # At least 5% chance
+    
+    if random.randint(1, 100) <= final_chance:
+        # Success!
+        money_lost = target_account['Money'] # Target loses all pocket money
+        target_account['Money'] = 0
+        target_account['Deaths'] += 1
+        killer_account['Kills'] += 1
+        
+        await update.message.reply_text(
+            f"Target eliminated! ☠️ {killer_account['UserName']} successfully killed {target_account['UserName']}!\n"
+            f"{target_account['UserName']} lost all their pocket money (`${money_lost:,}`)."
+        )
+    else:
+        # Failure!
+        await update.message.reply_text(
+            f"Failed! ❌ {target_account['UserName']}'s guards protected them from {killer_account['UserName']}!\n"
+            f"You lost the attempt cost of `${KILL_COST:,}`."
+        )
+        
+    # Update both accounts
+    await asyncio.to_thread(update_user_account, killer_account['UserID'], killer_account['row'], killer_account)
+    await asyncio.to_thread(update_user_account, target_account['UserID'], target_account['row'], target_account)
+
+async def leaderboard_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Shows the top 10 richest users globally."""
+    await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
+    
+    if not money_sheet:
+        get_google_sheet_connection()
+    if not money_sheet:
+        await update.message.reply_text("Sorry, I couldn't access the leaderboard. Please try again later.")
+        return
+
+    try:
+        # Fetch all data (skip header row)
+        all_data = await asyncio.to_thread(money_sheet.get_all_values)
+        if len(all_data) < 2:
+            await update.message.reply_text("No one has an account yet!")
+            return
+            
+        header = all_data[0]
+        rows = all_data[1:]
+        
+        # Find indices
+        name_idx = header.index("UserName")
+        money_idx = header.index("Money")
+        bank_idx = header.index("Bank")
+        
+        # Process data
+        leaderboard = []
+        for row in rows:
+            try:
+                name = row[name_idx]
+                total_money = int(row[money_idx]) + int(row[bank_idx])
+                leaderboard.append((name, total_money))
+            except (ValueError, IndexError):
+                continue # Skip bad rows
+                
+        # Sort by total money, descending
+        leaderboard.sort(key=lambda x: x[1], reverse=True)
+        
+        # Build response
+        response_text = "🏆 **Global Rich List** 🏆\n\n"
+        medals = ["🥇", "🥈", "🥉"]
+        
+        for i, (name, total) in enumerate(leaderboard[:10]):
+            prefix = medals[i] if i < 3 else f"**{i+1}.**"
+            response_text += f"{prefix} {name} - `${total:,}`\n"
+            
+        await update.message.reply_text(response_text, parse_mode='Markdown')
+
+    except Exception as e:
+        await update.message.reply_text("An error occurred while fetching the leaderboard.")
+        logger.error(f"Error in /leaderboard command: {e}", exc_info=True)
+
+# --- NEW: Group-Specific Leaderboard ---
+async def gcleaderboard_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Shows the top 10 richest users *in this group*."""
+    chat_id = update.effective_chat.id
+    
+    if update.effective_chat.type == 'private':
+        await update.message.reply_text("This command only works in groups. Use /leaderboard for the global list.")
+        return
+
+    await context.bot.send_chat_action(chat_id=chat_id, action="typing")
+    
+    # Get the set of user IDs who have spoken in this chat
+    user_ids_in_group = set(chat_members.get(chat_id, {}).keys())
+    
+    if not user_ids_in_group:
+        await update.message.reply_text("I haven't seen anyone talk in this group yet. Talk more to appear on the leaderboard!")
+        return
+
+    if not money_sheet:
+        get_google_sheet_connection()
+    if not money_sheet:
+        await update.message.reply_text("Sorry, I couldn't access the leaderboard. Please try again later.")
+        return
+
+    try:
+        # Fetch all data (skip header row)
+        all_data = await asyncio.to_thread(money_sheet.get_all_values)
+        if len(all_data) < 2:
+            await update.message.reply_text("No one has an account yet!")
+            return
+            
+        header = all_data[0]
+        rows = all_data[1:]
+        
+        # Find indices
+        user_id_idx = header.index("UserID")
+        name_idx = header.index("UserName")
+        money_idx = header.index("Money")
+        bank_idx = header.index("Bank")
+        
+        # Process data
+        group_leaderboard = []
+        for row in rows:
+            try:
+                user_id = int(row[user_id_idx])
+                # Check if this user is in our group's active list
+                if user_id in user_ids_in_group:
+                    name = row[name_idx]
+                    total_money = int(row[money_idx]) + int(row[bank_idx])
+                    group_leaderboard.append((name, total_money))
+            except (ValueError, IndexError):
+                continue # Skip bad rows
+        
+        if not group_leaderboard:
+            await update.message.reply_text("None of the active members in this group have a bank account yet. Use /farm to start!")
+            return
+                
+        # Sort by total money, descending
+        group_leaderboard.sort(key=lambda x: x[1], reverse=True)
+        
+        # Build response
+        chat_title = update.effective_chat.title
+        response_text = f"🏆 **Richest in {chat_title}** 🏆\n_(Based on active members)_\n\n"
+        medals = ["🥇", "🥈", "🥉"]
+        
+        for i, (name, total) in enumerate(group_leaderboard[:10]):
+            prefix = medals[i] if i < 3 else f"**{i+1}.**"
+            response_text += f"{prefix} {name} - `${total:,}`\n"
+            
+        await update.message.reply_text(response_text, parse_mode='Markdown')
+
+    except Exception as e:
+        await update.message.reply_text("An error occurred while fetching the leaderboard.")
+        logger.error(f"Error in /gcleaderboard command: {e}", exc_info=True)
+
+
+# --- NEW: Fun Command Data (EXPANDED) ---
+TRUTH_QUESTIONS = [
+    "What's the most embarrassing thing you've ever done?", "What's a secret you've never told anyone?",
+    "Who is your secret crush?", "What's the biggest lie you've ever told?", "What's your biggest fear?",
+    "What's something you're self-conscious about?", "Have you ever cheated on a test?",
+    "What's the most childish thing you still do?", "What's a weird food combination you love?",
+    "Have you ever peed in a swimming pool?", "What's the cringiest text message you've ever sent?",
+    "Who do you stalk the most on social media?", "What's the silliest reason you've ever cried?",
+    "If you could trade lives with someone for a day, who would it be and why?", "What's your guilty pleasure song?",
+    "Have you ever lied to get out of a date?", "What's the most trouble you've ever been in?",
+    "What's one thing you would change about your appearance?", "What's a secret talent you have?",
+    "What's the worst advice you've ever given someone?", "Have you ever pretended to be sick to skip school or work?",
+    "What's the most embarrassing nickname you've ever had?",
+]
+
+DARES = [
+    "Send a screenshot of your home screen.", "Talk in a funny accent for the next 5 minutes.",
+    "Send the 5th picture from your gallery.", "Post 'I love Laila Bot' as your status.",
+    "Send a voice message singing a song.", "Let the group choose a new profile picture for you for the next 24 hours.",
+    "Try to lick your elbow.", "Spell your name backwards with your nose.", "Send an old, embarrassing photo of yourself.",
+    "Text your crush and say 'I know your secret'.", "Do 10 push-ups right now and send a video proof.",
+    "Eat a spoonful of a weird condiment (like ketchup or mustard).", "DM a celebrity on Instagram.",
+    "Change your name in the group to 'Laila's Biggest Fan' for an hour.", "Try to juggle three random objects.",
+    "Speak only in emojis for the next 10 minutes.", "Send a voice note imitating your favorite cartoon character.",
+    "Write a short, silly poem about the person who sent the last message.", "Go outside and shout 'I believe in unicorns!'.",
+    "Stack as many books as you can on your head and take a picture.", "Draw a self-portrait with your eyes closed and share it.",
+    "Find the weirdest item in your room and explain its story.",
+]
+
+SLAP_MESSAGES = [
+    "slaps {target} around a bit with a large trout! 🐟",
+    "gives {target} a high-five. In the face. With a chair. 🪑",
+    "summons a mighty slap for {target}! 💥",
+    "throws a wet noodle at {target}. It's surprisingly effective. 🍝",
+    "tickles {target} until they promise to behave. ✨",
+]
+
+ROAST_MESSAGES = [
+    "I'd agree with you but then we’d both be wrong.",
+    "You have your entire life to be a jerk. Why not take today off?",
+    "I'm not insulting you, I'm describing you.",
+    "Is your brain made of sponges? Because it seems to soak everything up but does nothing with it.",
+    "You're the reason the gene pool needs a lifeguard.",
+    "If I wanted to hear from an idiot, I would've watched the news.",
+    "I've been called worse things by better people.",
+]
+
+# --- NEW: Fun & Game Commands ---
+async def truth_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user_name = update.effective_user.first_name
+    await update.message.reply_text(f"Okay, {user_name}! Your truth is:\n\n**{random.choice(TRUTH_QUESTIONS)}**")
+
+async def dare_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user_name = update.effective_user.first_name
+    await update.message.reply_text(f"Here you go, {user_name}! I dare you to:\n\n**{random.choice(DARES)}**")
+
+async def slap_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    slapper = update.effective_user.first_name
+    
+    if update.message.reply_to_message:
+        target = update.message.reply_to_message.from_user.first_name
+        message = random.choice(SLAP_MESSAGES).format(target=target)
+        await update.message.reply_text(f"{slapper} {message}")
+    else:
+        await update.message.reply_text(f"{slapper} slaps themselves in confusion! 🤔")
+
+async def coinflip_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    result = random.choice(["Heads", "Tails"])
+    await update.message.reply_text(f"The coin landed on... **{result}**! 🪙")
+
+async def roll_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    result = random.randint(1, 6)
+    await update.message.reply_text(f"You rolled a... **{result}**! 🎲")
+
+async def start_game_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Starts a number guessing game in the chat."""
+    chat_id = update.effective_chat.id
+    if guessing_games[chat_id].get('active', False):
+        await update.message.reply_text("A game is already in progress in this chat! Use /stopgame to end it.")
+        return
+    
+    secret_number = random.randint(1, 100)
+    guessing_games[chat_id] = {'number': secret_number, 'attempts': 0, 'active': True}
+    
+    logger.info(f"[{chat_id}] New guessing game started. Number is {secret_number}.")
+    await update.message.reply_text("🎲 **Number Guessing Game Started!** 🎲\n\nI'm thinking of a number between 1 and 100. Try to guess it by sending a number in the chat!")
+
+async def stop_game_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Stops the current number guessing game."""
+    chat_id = update.effective_chat.id
+    if not guessing_games[chat_id].get('active', False):
+        await update.message.reply_text("There's no game in progress to stop.")
+        return
+        
+    secret_number = guessing_games[chat_id].get('number')
+    guessing_games[chat_id].clear()
+    
+    await update.message.reply_text(f"Game stopped! The number was {secret_number}. Use /startgame to play again.")
+    logger.info(f"[{chat_id}] Game stopped by user.")
+
+
+# ---  NEW UTILITY AND FUN COMMANDS (15+) ---
+
+# Utility Commands
+async def weather_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Gets the weather for a specified city using OpenWeatherMap or Visual Crossing as a fallback."""
+    if not context.args:
+        await update.message.reply_text("Please provide a city name. Example: `/weather London`")
+        return
+
+    city = " ".join(context.args)
+    
+    # Try OpenWeatherMap first
+    if WEATHER_API_KEY:
+        url = f"http://api.openweathermap.org/data/2.5/weather?q={city}&appid={WEATHER_API_KEY}&units=metric"
+        try:
+            response = requests.get(url).json()
+            if response["cod"] == 200:
+                main = response["main"]
+                wind = response["wind"]
+                weather_desc = response["weather"][0]["description"]
+                weather_icon = response["weather"][0]["icon"]
+                
+                icon_map = {
+                    "01": "☀️", "02": "🌤️", "03": "☁️", "04": "☁️", "09": "🌧️",
+                    "10": "🌦️", "11": "⛈️", "13": "❄️", "50": "🌫️"
+                }
+                emoji = icon_map.get(weather_icon[:2], "🌡️")
+                
+                weather_text = (
+                    f"**Weather in {response['name']}, {response['sys']['country']}** {emoji}\n\n"
+                    f"🌡️ **Temperature**: {main['temp']}°C (Feels like: {main['feels_like']}°C)\n"
+                    f"📊 **Pressure**: {main['pressure']} hPa\n"
+                    f"💧 **Humidity**: {main['humidity']}%\n"
+                    f"🌬️ **Wind**: {wind['speed']} m/s\n"
+                    f"📜 **Condition**: {weather_desc.title()}"
+                )
+                await update.message.reply_text(weather_text, parse_mode='Markdown')
+                return
+        except Exception as e:
+            logger.error(f"Error in /weather command with OpenWeatherMap: {e}")
+
+    # Fallback to Visual Crossing
+    if VISUALCROSSING_API_KEY:
+        url = f"https.weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/{city}?unitGroup=metric&key={VISUALCROSSING_API_KEY}&contentType=json"
+        try:
+            response = requests.get(url).json()
+            if "address" in response:
+                current = response["currentConditions"]
+                
+                icon_map = {
+                    "clear-day": "☀️", "clear-night": "🌙", "partly-cloudy-day": "🌤️",
+                    "partly-cloudy-night": "☁️", "cloudy": "☁️", "rain": "🌧️",
+                    "showers-day": "🌦️", "showers-night": "🌦️", "snow": "❄️", "thunder-rain": "⛈️",
+                    "fog": "🌫️"
+                }
+                emoji = icon_map.get(current.get("icon"), "🌡️")
+
+                weather_text = (
+                    f"**Weather in {response['resolvedAddress']}** {emoji}\n\n"
+                    f"🌡️ **Temperature**: {current.get('temp', 'N/A')}°C (Feels like: {current.get('feelslike', 'N/A')}°C)\n"
+                    f"💧 **Humidity**: {current.get('humidity', 'N/A')}%\n"
+                    f"🌬️ **Wind**: {current.get('windspeed', 'N/A')} km/h\n"
+                    f"📜 **Condition**: {current.get('conditions', 'N/A')}"
+                )
+                await update.message.reply_text(weather_text, parse_mode='Markdown')
+                return
+        except Exception as e:
+            await update.message.reply_text("An error occurred while fetching weather data.")
+            logger.error(f"Error in /weather command with Visual Crossing: {e}")
+            return
+
+    await update.message.reply_text("Sorry, both weather API services are currently unavailable.")
+
+
+async def crypto_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Gets the price of a cryptocurrency."""
+    if not context.args:
+        await update.message.reply_text("Please provide a crypto symbol. Example: `/crypto btc`")
+        return
+        
+    symbol = context.args[0].lower()
+    url = f"https.api.coingecko.com/api/v3/simple/price?ids={symbol}&vs_currencies=usd,inr&include_24hr_change=true"
+    
+    try:
+        response = requests.get(url).json()
+        if symbol in response:
+            data = response[symbol]
+            usd_price = data.get('usd', 'N/A')
+            inr_price = data.get('inr', 'N/A')
+            change_24h = data.get('usd_24h_change', 0)
+            emoji = "📈" if change_24h >= 0 else "📉"
+            
+            crypto_text = (
+                f"**Crypto Price for {symbol.upper()}**\n\n"
+                f"🇺🇸 **USD**: `${usd_price:,.2f}`\n"
+                f"🇮🇳 **INR**: `₹{inr_price:,.2f}`\n"
+                f"{emoji} **24h Change**: `{change_24h:.2f}%`"
+            )
+            await update.message.reply_text(crypto_text, parse_mode='Markdown')
+        else:
+            await update.message.reply_text(f"Could not find price data for `{symbol}`. Make sure to use the coin's ID (e.g., 'bitcoin', 'ethereum').")
+    except Exception as e:
+        await update.message.reply_text("An error occurred while fetching crypto data.")
+        logger.error(f"Error in /crypto command: {e}")
+        
+async def define_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Gets the definition of a word."""
+    if not context.args:
+        await update.message.reply_text("Please provide a word to define. Example: `/define integrity`")
+        return
+    
+    word = " ".join(context.args)
+    url = f"https.api.dictionaryapi.dev/api/v2/entries/en/{word}"
+    
+    try:
+        response = requests.get(url).json()
+        if isinstance(response, list) and "meanings" in response[0]:
+            meanings = response[0]['meanings']
+            definition_text = f"**Definitions for: {word.title()}**\n\n"
+            for meaning in meanings[:3]: # Show first 3 parts of speech
+                part_of_speech = meaning.get('partOfSpeech', '')
+                definition_text += f"_{part_of_speech.title()}_\n"
+                for i, definition in enumerate(meaning['definitions'][:2]): # Show first 2 definitions
+                    definition_text += f"{i+1}. {definition['definition']}\n"
+                    if 'example' in definition:
+                        definition_text += f"   *Example: \"{definition['example']}\"*\n"
+                definition_text += "\n"
+            await update.message.reply_text(definition_text, parse_mode='Markdown')
+        else:
+            await update.message.reply_text(f"Sorry, I couldn't find a definition for `{word}`.")
+    except Exception as e:
+        await update.message.reply_text("An error occurred while fetching the definition.")
+        logger.error(f"Error in /define command: {e}")
+
+async def qr_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Generates a QR code from text."""
+    if not context.args:
+        await update.message.reply_text("Please provide text or a link to generate a QR code. Example: `/qr https://google.com`")
+        return
+        
+    text = " ".join(context.args)
+    encoded_text = urllib.parse.quote(text)
+    qr_url = f"https.api.qrserver.com/v1/create-qr-code/?size=500x500&data={encoded_text}"
+    
+    await context.bot.send_photo(
+        chat_id=update.effective_chat.id,
+        photo=qr_url,
+        caption=f"Here is the QR code for: `{text}`",
+        parse_mode='Markdown'
+    )
+
+async def shorten_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Shortens a URL using TinyURL."""
+    if not TINYURL_API_KEY:
+        await update.message.reply_text("Sorry, the URL shortener API key is not configured.")
+        return
+    if not context.args:
+        await update.message.reply_text("Please provide a URL to shorten. Example: `/shorten <your_long_url>`")
+        return
+        
+    url = context.args[0]
+    api_url = f"https.api.tinyurl.com/create?api_token={TINYURL_API_KEY}"
+    payload = {"url": url, "domain": "tiny.one"} # Using tiny.one domain
+    
+    try:
+        response = requests.post(api_url, json=payload)
+        if response.status_code == 200 and response.json()["code"] == 0:
+            short_url = response.json()["data"]["tiny_url"]
+            await update.message.reply_text(f"🔗 **Shortened URL**:\n{short_url}")
+        else:
+            error = response.json().get("errors", ["Unknown error"])[0]
+            await update.message.reply_text(f"Could not shorten URL. Error: {error}")
+    except Exception as e:
+        await update.message.reply_text("An error occurred while shortening the URL.")
+        logger.error(f"Error in /shorten command: {e}")
+
+async def ud_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Searches Urban Dictionary."""
+    if not context.args:
+        await update.message.reply_text("Please provide a term to search on Urban Dictionary. Example: `/ud bruh`")
+        return
+    term = " ".join(context.args)
+    url = f"http://api.urbandictionary.com/v0/define?term={term}"
+    try:
+        response = requests.get(url).json()
+        if response and response.get('list'):
+            top_def = response['list'][0]
+            definition = re.sub(r'[\[\]]', '', top_def['definition'])
+            example = re.sub(r'[\[\]]', '', top_def['example'])
+            result_text = (
+                f"**{top_def['word']}** on Urban Dictionary\n\n"
+                f"**Definition**:\n{definition}\n\n"
+                f"**Example**:\n_{example}_\n\n"
+                f"👍 {top_def['thumbs_up']} | 👎 {top_def['thumbs_down']}"
+            )
+            await update.message.reply_text(result_text)
+        else:
+            await update.message.reply_text(f"Couldn't find a definition for `{term}` on Urban Dictionary.")
+    except Exception as e:
+        await update.message.reply_text("An error occurred while searching Urban Dictionary.")
+        logger.error(f"Error in /ud command: {e}")
+
+# --- FIXED: /paste command ---
+async def paste_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Pastes replied text to a pastebin service."""
+    if not update.message.reply_to_message or not update.message.reply_to_message.text:
+        await update.message.reply_text("Please reply to a text message to paste it.")
+        return
+    
+    text_to_paste = update.message.reply_to_message.text
+    url = "https.spaceb.in/api/v1/documents" # This is a POST endpoint, not for direct data sending
+    
+    try:
+        # The correct way is to send the text as the 'data' payload
+        response = requests.post(url, data=text_to_paste.encode('utf-8'))
+        response.raise_for_status() # Will raise an exception for bad status codes
+        
+        # Check if the response is JSON and has the expected structure
+        if "application/json" in response.headers.get("Content-Type", ""):
+            json_response = response.json()
+            if json_response.get("payload") and json_response["payload"].get("id"):
+                paste_id = json_response["payload"]["id"]
+                paste_url = f"https.spaceb.in/{paste_id}"
+                await update.message.reply_text(f"Text has been pasted successfully:\n{paste_url}")
+            else:
+                await update.message.reply_text(f"Failed to paste text. Unexpected API response.")
+                logger.error(f"Unexpected JSON response from Spacebin: {response.text}")
+        else:
+            await update.message.reply_text(f"Failed to paste text. Service returned a non-JSON response.")
+            logger.error(f"Non-JSON response from Spacebin: {response.text}")
+            
+    except requests.exceptions.RequestException as e:
+        await update.message.reply_text("An error occurred while connecting to the paste service.")
+        logger.error(f"Error in /paste command (RequestException): {e}")
+    except Exception as e:
+        await update.message.reply_text("An unexpected error occurred while pasting the text.")
+        logger.error(f"Error in /paste command: {e}", exc_info=True)
+
+
+# Fun Commands
+async def meme_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Fetches a random meme."""
+    url = "https://meme-api.com/gimme"
+    try:
+        response = requests.get(url).json()
+        if response and response.get('url'):
+            await context.bot.send_photo(
+                chat_id=update.effective_chat.id,
+                photo=response['url'],
+                caption=f"**{response['title']}**\n_r/{response['subreddit']}_",
+                parse_mode='Markdown'
+            )
+        else:
+            await update.message.reply_text("Couldn't fetch a meme right now, sorry!")
+    except Exception as e:
+        await update.message.reply_text("An error occurred while fetching a meme.")
+        logger.error(f"Error in /meme command: {e}")
+
+async def joke_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Tells a random joke."""
+    url = "https.v2.jokeapi.dev/joke/Any?blacklistFlags=nsfw,religious,political,racist,sexist,explicit&type=single"
+    try:
+        response = requests.get(url).json()
+        if not response['error']:
+            await update.message.reply_text(f"**Here's a joke for you:**\n\n_{response['joke']}_")
+        else:
+            await update.message.reply_text("I'm out of jokes for now, try again later!")
+    except Exception as e:
+        await update.message.reply_text("An error occurred while getting a joke.")
+        logger.error(f"Error in /joke command: {e}")
+
+async def quote_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Fetches a random inspirational quote."""
+    url = "https.api.quotable.io/random"
+    try:
+        response = requests.get(url).json()
+        await update.message.reply_text(f"**Here's a quote:**\n\n>_{response['content']}_\n\n— **{response['author']}**", parse_mode='Markdown')
+    except Exception as e:
+        await update.message.reply_text("An error occurred while fetching a quote.")
+        logger.error(f"Error in /quote command: {e}")
+
+async def roast_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Roasts a user."""
+    roaster = update.effective_user.first_name
+    roast_text = random.choice(ROAST_MESSAGES)
+    
+    if update.message.reply_to_message:
+        target = update.message.reply_to_message.from_user.first_name
+        await update.message.reply_text(f"Hey {target}, {roast_text}")
+    else:
+        await update.message.reply_text(f"{roaster}, here's a thought for you: {roast_text}")
+
+async def rate_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Rates something on a scale of 1-10."""
+    if not context.args:
+        await update.message.reply_text("What should I rate? Example: `/rate my new haircut`")
+        return
+        
+    thing_to_rate = " ".join(context.args)
+    rating = random.randint(1, 10)
+    comment = ""
+    if rating <= 3:
+        comment = "Oof, not great."
+    elif rating <= 6:
+        comment = "Pretty average, I'd say."
+    elif rating <= 9:
+        comment = "Wow, that's really good!"
+    else:
+        comment = "Absolutely perfect! 10/10!"
+        
+    await update.message.reply_text(f"I'd rate **{thing_to_rate}** a... **{rating}/10**.\n{comment}")
+
+async def catfact_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Gets a random cat fact."""
+    url = "https://catfact.ninja/fact"
+    try:
+        response = requests.get(url).json()
+        await update.message.reply_text(f"🐱 **Did you know?**\n\n_{response['fact']}_")
+    except Exception as e:
+        await update.message.reply_text("An error occurred while fetching a cat fact.")
+        logger.error(f"Error in /catfact command: {e}")
+
+async def dogfact_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Gets a random dog fact."""
+    url = "https.dog.ceo/api/breeds/image/random" # Using this to get a fact and an image
+    try:
+        fact_res = requests.get("https.dogapi.dog/api/v2/facts").json()
+        img_res = requests.get("https.dog.ceo/api/breeds/image/random").json()
+        
+        fact = fact_res['data'][0]['attributes']['body']
+        img_url = img_res['message']
+        
+        await context.bot.send_photo(
+            chat_id=update.effective_chat.id,
+            photo=img_url,
+            caption=f"🐶 **Did you know?**\n\n_{fact}_",
+            parse_mode='Markdown'
+        )
+    except Exception as e:
+        await update.message.reply_text("An error occurred while fetching a dog fact.")
+        logger.error(f"Error in /dogfact command: {e}")
+
+async def advice_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Gives a random piece of advice."""
+    url = "https.api.adviceslip.com/advice"
+    try:
+        response = requests.get(url).json()
+        await update.message.reply_text(f"💡 **Here's some advice:**\n\n_{response['slip']['advice']}_")
+    except Exception as e:
+        await update.message.reply_text("An error occurred while fetching advice.")
+        logger.error(f"Error in /advice command: {e}")
+
+
+# --- Message Processing Logic ---
+async def process_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    global total_messages_processed
+    chat_id = update.effective_chat.id
+    
+    # --- NEW: Guessing game logic ---
+    if guessing_games[chat_id].get('active', False) and update.message.text and update.message.text.isdigit():
+        guess = int(update.message.text)
+        game = guessing_games[chat_id]
+        game['attempts'] += 1
+        
+        if guess < game['number']:
+            await update.message.reply_text("Too low! Try a higher number. ⬆️")
+        elif guess > game['number']:
+            await update.message.reply_text("Too high! Try a lower number. ⬇️")
+        else:
+            attempts = game['attempts']
+            await update.message.reply_text(f"🎉 **Correct!** You guessed the number **{game['number']}** in {attempts} attempts! 🎉\n\nUse /startgame to play again.")
+            logger.info(f"[{chat_id}] Game won. Number was {game['number']} in {attempts} tries.")
+            guessing_games[chat_id].clear()
+        return # Stop further processing if it was a game guess
+
+    global_bot_enabled = global_bot_status
+    chat_enabled = bot_status[chat_id]
+    is_private_chat = update.effective_chat.type == 'private'
+    
+    if update.message and update.message.text and update.message.text.startswith('/'):
+        # Check for auto-download right before returning for command
+        # This allows /youtube to work as intended, and auto-detection in text to work.
+        if ("youtube.com" in update.message.text or "youtu.be" in update.message.text) and not update.message.text.startswith('/youtube'):
+            threading.Thread(target=lambda: asyncio.run(handle_youtube_link(update, context, update.message.text)), daemon=True).start()
+        return
+    
+    if not global_bot_enabled or (not is_private_chat and not chat_enabled):
+        return
+    
+    bot_username = (await context.bot.get_me()).username
+    user_message = update.message.text or update.message.caption
+    user_id = update.effective_user.id
+    user_full_name = update.effective_user.full_name
+    
+    if str(chat_id) not in known_users:
+        known_users.add(str(chat_id))
+        save_chat_id(chat_id)
+    
+    # --- Couple and GC Leaderboard user tracking ---
+    if not is_private_chat:
+        chat_members[chat_id][user_id] = user_full_name
+
+    if not user_message:
+        return
+    
+    # --- NEW: Automatic YouTube link detection in regular text ---
+    youtube_pattern = r'(https?://(?:www\.)?(?:youtube\.com/watch\?v=|youtu\.be/)[^\s]+)'
+    youtube_match = re.search(youtube_pattern, user_message)
+    if youtube_match:
+        url = youtube_match.group(0)
+        # Run in a new thread to prevent blocking
+        threading.Thread(target=lambda: asyncio.run(handle_youtube_link(update, context, url)), daemon=True).start()
+        # Continue to AI response only if the message is NOT just the link
+        if user_message.strip() == url.strip():
+            return
+    
+    # Check for name query
+    if await is_name_query_ai(user_message):
+        await handle_name_query(update, context)
+        return
+        
+    is_reply_to_bot = update.message.reply_to_message and update.message.reply_to_message.from_user.id == context.bot.id
+    is_mention = f"@{bot_username.lower()}" in user_message.lower() or "laila" in user_message.lower()
+    
+    should_use_ai = is_private_chat or is_reply_to_bot or is_mention
+    if not should_use_ai:
+        if await is_message_for_laila(user_message):
+            should_use_ai = True
+        else:
+            return
+            
+    if should_use_ai:
+        try:
+            await context.bot.send_chat_action(chat_id=chat_id, action="typing")
+            response_text = await get_bot_response(user_message, chat_id, bot_username, should_use_ai=True, update=update)
+            if response_text:
+                await update.message.reply_text(response_text, parse_mode='Markdown')
+                add_to_history(chat_id, 'user', user_message)
+                add_to_history(chat_id, 'model', response_text)
+                total_messages_processed += 1
+                logger.info(f"[{chat_id}] Sent response to {user_id}: {response_text[:50]}...")
+        except Exception as e:
+            logger.error(f"Error processing message for chat {chat_id}: {e}", exc_info=True)
+            try:
+                await update.message.reply_text("An unexpected error occurred. Please try again later.")
+            except Exception as reply_e:
+                logger.error(f"Failed to send error reply: {reply_e}")
+
+# --- NEW: Speech-to-Text Handler ---
+async def handle_voice_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handles voice messages by converting them to text and processing them."""
+    chat_id = update.effective_chat.id
+    
+    # Bot logic check
+    global_bot_enabled = global_bot_status
+    chat_enabled = bot_status[chat_id]
+    is_private_chat = update.effective_chat.type == 'private'
+    if not global_bot_enabled or (not is_private_chat and not chat_enabled):
+        return
+
+    file_id = update.message.voice.file_id
+    
+    try:
+        await context.bot.send_chat_action(chat_id=chat_id, action="typing")
+        
+        # 1. Download the voice file
+        voice_file = await context.bot.get_file(file_id)
+        ogg_path = f"{file_id}.ogg"
+        # Download needs to be awaited
+        await voice_file.download_to_drive(ogg_path)
+
+        # 2. Convert OGG to WAV
+        wav_path = f"{file_id}.wav"
+        # Blocking operation, run in thread
+        audio = await asyncio.to_thread(AudioSegment.from_ogg, ogg_path)
+        await asyncio.to_thread(audio.export, wav_path, format="wav")
+
+        # 3. Transcribe WAV to text
+        recognizer = sr.Recognizer()
+        with sr.AudioFile(wav_path) as source:
+            # Blocking operation, run in thread
+            audio_data = await asyncio.to_thread(recognizer.record, source)
+        
+        # Blocking operation, run in thread
+        transcribed_text = await asyncio.to_thread(recognizer.recognize_google, audio_data)
+        logger.info(f"[{chat_id}] Transcribed voice message: '{transcribed_text}'")
+
+        # 4. Process the transcribed text like a regular message
+        if transcribed_text:
+            bot_username = (await context.bot.get_me()).username
+            # We treat voice messages as direct mentions to the bot
+            response_text = await get_bot_response(transcribed_text, chat_id, bot_username, should_use_ai=True, update=update)
+            if response_text:
+                await update.message.reply_text(response_text, parse_mode='Markdown')
+                add_to_history(chat_id, 'user', transcribed_text)
+                add_to_history(chat_id, 'model', response_text)
+
+    except sr.UnknownValueError:
+        await update.message.reply_text("Sorry, I couldn't understand the audio. 😕")
+    except sr.RequestError as e:
+        await update.message.reply_text("Sorry, my speech recognition service is down. Please try again later.")
+        logger.error(f"Speech recognition request error: {e}")
+    except FileNotFoundError:
+        # This error happens if ffmpeg is not installed
+        await update.message.reply_text("Sorry, I can't process voice messages right now. The `ffmpeg` tool might be missing on the server.")
+        logger.error("ffmpeg not found. Please install it to enable voice message processing.")
+    except Exception as e:
+        await update.message.reply_text("An error occurred while processing your voice message.")
+        logger.error(f"Error processing voice message: {e}", exc_info=True)
+    finally:
+        # 5. Clean up temporary files (Blocking operations, run in thread)
+        def cleanup(ogg, wav):
+            if os.path.exists(ogg): os.remove(ogg)
+            if os.path.exists(wav): os.remove(wav)
+
+        if 'ogg_path' in locals() and 'wav_path' in locals():
+            # Await the cleanup thread
+            await asyncio.to_thread(cleanup, ogg_path, wav_path)
+
+# ------------------------------------------------------------------
+# --- ✨ NEW FEATURE: WELCOME MESSAGE FOR NEW GROUP MEMBERS ✨ ---
+# ------------------------------------------------------------------
+async def welcome_new_members(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Sends a stylish welcome message with a video when new members join a group."""
+    chat = update.effective_chat
+    new_members = update.message.new_chat_members
+
+    # The video URL you provided
+    welcome_video_url = "https.files.catbox.moe/t6zzka.mp4"
+
+    for member in new_members:
+        # Don't welcome the bot itself
+        if member.id == context.bot.id:
+            continue
+
+        # Create a user-friendly mention
+        user_mention = f"[{member.full_name}](tg://user?id={member.id})"
+        
+        # Construct the beautiful welcome message
+        welcome_caption = (
+            f"🎉 **Welcome to {chat.title}!** 🎉\n\n"
+            f"Hey {user_mention}, we're thrilled to have you join us! We hope you have a great time here.\n\n"
+            "Here are your details:\n"
+            f"  •  **Name**: `{member.full_name}`\n"
+            f"  •  **Telegram ID**: `{member.id}`\n\n"
+            "Feel free to introduce yourself and dive into the conversation! 😊"
+        )
+        
+        try:
+            # Send the video with the formatted caption
+            await context.bot.send_video(
+                chat_id=chat.id,
+                video=welcome_video_url,
+                caption=welcome_caption,
+                parse_mode='Markdown'
+            )
+            logger.info(f"Sent welcome message to {member.full_name} (ID: {member.id}) in group '{chat.title}' (ID: {chat.id}).")
+        except Exception as e:
+            logger.error(f"Failed to send welcome video to chat {chat.id}. Error: {e}", exc_info=True)
+            # Fallback to a text message if sending the video fails
+            try:
+                await context.bot.send_message(
+                    chat_id=chat.id,
+                    text=welcome_caption,
+                    parse_mode='Markdown'
+                )
+            except Exception as text_e:
+                logger.error(f"Failed to send fallback welcome text to chat {chat.id}. Error: {text_e}")
+
+
+# --- REVAMPED HELP Command ---
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user_id = str(update.effective_user.id)
+    is_sudo = user_id == str(BROADCAST_ADMIN_ID) or user_id in sudo_users
+
+    help_text = (
+        "❤️ **Laila Bot Commands** ❤️\n\n"
+        "Here's a list of everything I can do!\n\n"
+        
+        "**💬 General Commands**\n"
+        "`/start` - Start a conversation with me.\n"
+        "`/help` - Shows this help message.\n"
+        "`/about` - Learn more about me.\n"
+        "`/stats` - Check my live performance status.\n"
+        "`/id` - Get your User ID and the current Chat ID.\n\n"
+
+        "**🎨 Media & AI Commands**\n"
+        "`/gen <prompt>` - Generate an AI image from text.\n"
+        "`/img <query>` - Search for a high-quality photo.\n"
+        "`/lyrics <song>` - Find the lyrics for a song.\n"
+        "`/youtube <link>` - Download a YouTube video.\n"
+        "  -> *Tip: Just send a YouTube link and I'll download it automatically!* 😉\n\n"
+        
+        "**💡 Utility Commands**\n"
+        "`/tr <lang> <text>` - Translate text (or reply).\n"
+        "`/weather <city>` - Get the current weather.\n"
+        "`/crypto <symbol>` - Check cryptocurrency prices.\n"
+        "`/define <word>` - Get the definition of a word.\n"
+        "`/ud <term>` - Search Urban Dictionary.\n"
+        "`/qr <text>` - Generate a QR code.\n"
+        "`/shorten <url>` - Shorten a long URL.\n"
+        "`/paste` - Reply to a message to paste it online.\n\n"
+        
+        "**🎮 Fun & Games**\n"
+        "`/meme` - Get a random meme.\n"
+        "`/joke` - I'll tell you a joke.\n"
+        "`/quote` - Get an inspirational quote.\n"
+        "`/advice` - Get a random piece of advice.\n"
+        "`/catfact` - Get a random cat fact.\n"
+        "`/dogfact` - Get a random dog fact with a picture.\n"
+        "`/couple` - Select a random couple in the group.\n"
+        "`/truth` - Get a random truth question.\n"
+        "`/dare` - Get a random dare.\n"
+        "`/slap` - Slap a user (reply to their message).\n"
+        "`/roast` - Roast a user (reply to their message).\n"
+        "`/rate <thing>` - I'll rate something for you.\n"
+        "`/roll` - Roll a dice (1-6).\n"
+        "`/coinflip` - Flip a coin.\n"
+        "`/startgame` - Start a number guessing game.\n"
+        "`/stopgame` - Stop the current game.\n\n"
+        
+        "**💸 Money Game**\n"
+        "`/account` - Check your game account.\n"
+        "`/daily` - Claim your daily bonus.\n"
+        "`/work` - Work for cash.\n"
+        "`/farm` - Farm for money.\n"
+        "`/crime` - Commit a crime (risk/reward).\n"
+        "`/hustle` - A quick side-hustle.\n"
+        "`/beg` - Beg for some change.\n"
+        "`/deposit <all|amt>` - Deposit money to your bank.\n"
+        "`/pay <amt>` - Pay a user (reply).\n"
+        "`/hire` - Hire a guard to protect you.\n"
+        "`/rob` - Rob a user (reply, has cooldown).\n"
+        "`/kill` - Attempt to kill a user (reply, has cost).\n"
+        "`/leaderboard` - Show the global richest players.\n"
+        "`/gcleaderboard` - Show the richest players in this group.\n\n"
+        
+        "**🔒 Admin Commands (For Group Admins)**\n"
+        "`/on` | `/off` - Turn me on or off in the group.\n"
+        "`/reboot` - Reboot me for the group.\n"
+        "`/reset` - Clear my conversation history for the group.\n"
+        "`/ban` | `/unban` - Ban or unban a user (reply).\n"
+        "`/kick` - Kick a user from the group (reply).\n"
+        "`/mute` | `/unmute` - Mute or unmute a user (reply).\n"
+    )
+
+    if is_sudo:
+        sudo_help_text = (
+            "\n👑 **SUDO / OWNER Commands** 👑\n"
+            "`/poweron` | `/poweroff` - Turn me on/off globally.\n"
+            "`/broadcast` - Broadcast a message to all chats (reply).\n"
+            "`/adminstats` - Get a detailed bot health report.\n"
+            "`/show_chats` - List all chats I'm in (sent privately).\n"
+            "`/s_ban <chat> <user>` - Ban a user with my rights.\n"
+            "`/s_unban <chat> <user>` - Unban a user with my rights.\n"
+            "`/s_send <chat> <msg>` - Send a message to any chat.\n"
+            "`/forcedynamic` - Reset AI model to dynamic mode.\n"
+            "`/forcegemma` - Force AI model to Gemma-only.\n"
+            "`/forcedeepseek` - Force AI model to DeepSeek-only.\n" # NEW
+            "`/addsudo <id>` | `/removesudo <id>` - Manage Sudo users.\n"
+        )
+        help_text += sudo_help_text
+        
+    help_text += "\n\n✨ by Adhyan ✨"
+    
+    await update.message.reply_text(help_text, parse_mode='Markdown')
+    logger.info(f"[{update.effective_chat.id}] /help command used.")
+
+
+# --- ABOUT Command ---
+async def about_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    about_text = (
+        "❤️ **About Laila** ❤️\n\n"
+        "I am Laila, an AI assistant created by AdhyanXlive. My purpose is to chat with you and provide answers to your questions.\n\n"
+        "My intelligence comes from a family of large language models, allowing me to provide helpful and accurate responses.\n\n"
+        "✨ **Creator**: Adhyan\n"
+        "✨ **Version**: 2.6 (The Economy Update)\n\n" # Version updated
+    )
+    await update.message.reply_text(about_text, parse_mode='Markdown')
+    logger.info(f"[{update.effective_chat.id}] /about command used.")
+
+# --- Error Handler ---
+async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Log the error and send a message to the admin."""
+    logger.error("An error occurred:", exc_info=context.error)
+    
+    if BROADCAST_ADMIN_ID:
+        try:
+            error_message = f"An error occurred in the bot:\n\n`{traceback.format_exc()}`"
+            # Trim message if too long
+            if len(error_message) > 4096:
+                error_message = error_message[:4000] + "\n\n... (message truncated)"
+            await context.bot.send_message(
+                chat_id=BROADCAST_ADMIN_ID,
+                text=error_message,
+                parse_mode='Markdown'
+            )
+        except Exception as e:
+            logger.error(f"Failed to send error notification to admin: {e}")
+
+# --- Sudo Commands ---
+async def add_sudo_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user_id = update.effective_user.id
+    chat_id = update.effective_chat.id
+    if user_id != BROADCAST_ADMIN_ID:
+        await context.bot.send_message(chat_id=chat_id, text="Sorry, this command is for the bot owner only.")
+        return
+    if not context.args or not context.args[0].isdigit():
+        await context.bot.send_message(chat_id=chat_id, text="Please provide a valid user ID. Usage: `/addsudo <user_id>`")
+        return
+    target_user_id = context.args[0]
+    if target_user_id in sudo_users:
+        await context.bot.send_message(chat_id=chat_id, text=f"User `{target_user_id}` is already a sudo user.")
+        return
+    sudo_users.add(target_user_id)
+    save_sudo_users()
+    await context.bot.send_message(chat_id=chat_id, text=f"User `{target_user_id}` has been added as a sudo user.")
+    logger.info(f"[{chat_id}] Admin {user_id} added sudo user {target_user_id}")
+    
+async def remove_sudo_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user_id = update.effective_user.id
+    chat_id = update.effective_chat.id
+    if user_id != BROADCAST_ADMIN_ID:
+        await context.bot.send_message(chat_id=chat_id, text="Sorry, this command is for the bot owner only.")
+        return
+    if not context.args or not context.args[0].isdigit():
+        await context.bot.send_message(chat_id=chat_id, text="Please provide a valid user ID. Usage: `/removesudo <user_id>`")
+        return
+    target_user_id = context.args[0]
+    if target_user_id not in sudo_users:
+        await context.bot.send_message(chat_id=chat_id, text=f"User `{target_user_id}` is not a sudo user.")
+        return
+    sudo_users.remove(target_user_id)
+    save_sudo_users()
+    await context.bot.send_message(chat_id=chat_id, text=f"User `{target_user_id}` has been removed as a sudo user.")
+    logger.info(f"[{chat_id}] Admin {user_id} removed sudo user {target_user_id}")
+
+# --- Check for sudo status ---
+def check_sudo_wrapper(handler):
+    async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        user_id = str(update.effective_user.id)
+        # Check if user is the main owner OR a listed sudo user
+        if user_id == str(BROADCAST_ADMIN_ID) or user_id in sudo_users:
+            await handler(update, context)
+        else:
+            await context.bot.send_message(chat_id=update.effective_chat.id, text="Sorry, this command is restricted to sudo users only.")
+            logger.warning(f"Unauthorized access to restricted command by user {user_id} in chat {update.effective_chat.id}")
+    return wrapper
+
+# --- Main function ---
+def main() -> None:
+    application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
+    
+    load_known_users()
+    load_sudo_users()
+    
+    # General Commands
+    application.add_handler(CommandHandler("start", start_command))
+    application.add_handler(CommandHandler("help", help_command))
+    application.add_handler(CommandHandler("about", about_command))
+    application.add_handler(CommandHandler("stats", stats_command))
+    application.add_handler(CommandHandler("id", get_id_command))
+    
+    # Media & AI Commands
+    application.add_handler(CommandHandler("tr", translate_command))
+    application.add_handler(CommandHandler("gen", gen_command))
+    application.add_handler(CommandHandler("img", img_command))
+    application.add_handler(CommandHandler("lyrics", lyrics_command))
+    application.add_handler(CommandHandler("youtube", youtube_command))
+
+    # Utility Commands (NEW)
+    application.add_handler(CommandHandler("weather", weather_command))
+    application.add_handler(CommandHandler("crypto", crypto_command))
+    application.add_handler(CommandHandler("define", define_command))
+    application.add_handler(CommandHandler("qr", qr_command))
+    application.add_handler(CommandHandler("shorten", shorten_command))
+    application.add_handler(CommandHandler("ud", ud_command))
+    application.add_handler(CommandHandler("paste", paste_command))
+
+    # Fun & Game Commands
+    application.add_handler(CommandHandler("couple", couple_command))
+    application.add_handler(CommandHandler("truth", truth_command))
+    application.add_handler(CommandHandler("dare", dare_command))
+    application.add_handler(CommandHandler("slap", slap_command))
+    application.add_handler(CommandHandler("roll", roll_command))
+    application.add_handler(CommandHandler("coinflip", coinflip_command))
+    application.add_handler(CommandHandler("startgame", start_game_command))
+    application.add_handler(CommandHandler("stopgame", stop_game_command))
+    # Fun Commands (NEW)
+    application.add_handler(CommandHandler("meme", meme_command))
+    application.add_handler(CommandHandler("joke", joke_command))
+    application.add_handler(CommandHandler("quote", quote_command))
+    application.add_handler(CommandHandler("roast", roast_command))
+    application.add_handler(CommandHandler("rate", rate_command))
+    application.add_handler(CommandHandler("catfact", catfact_command))
+    application.add_handler(CommandHandler("dogfact", dogfact_command))
+    application.add_handler(CommandHandler("advice", advice_command))
+
+    # --- NEW: Money Game Commands ---
+    application.add_handler(CommandHandler("account", account_command))
+    application.add_handler(CommandHandler("farm", farm_command))
+    application.add_handler(CommandHandler("deposit", deposit_command))
+    application.add_handler(CommandHandler("pay", pay_command))
+    application.add_handler(CommandHandler("hire", hire_command))
+    application.add_handler(CommandHandler("rob", rob_command))
+    application.add_handler(CommandHandler("kill", kill_command))
+    application.add_handler(CommandHandler("leaderboard", leaderboard_command))
+    # --- ADDED NEW EARNING & LEADERBOARD COMMANDS ---
+    application.add_handler(CommandHandler("work", work_command))
+    application.add_handler(CommandHandler("daily", daily_command))
+    application.add_handler(CommandHandler("crime", crime_command))
+    application.add_handler(CommandHandler("hustle", hustle_command))
+    application.add_handler(CommandHandler("beg", beg_command))
+    application.add_handler(CommandHandler("gcleaderboard", gcleaderboard_command))
+
+    # Admin Commands (Group Admin required)
+    application.add_handler(CommandHandler("on", on_command))
+    application.add_handler(CommandHandler("off", off_command))
+    application.add_handler(CommandHandler("reset", reset_command))
+    application.add_handler(CommandHandler("reboot", reboot_command))
+    application.add_handler(CommandHandler("ban", ban_user))
+    application.add_handler(CommandHandler("kick", kick_user))
+    application.add_handler(CommandHandler("mute", mute_user))
+    application.add_handler(CommandHandler("unban", unban_user))
+    application.add_handler(CommandHandler("unmute", unmute_user))
+    
+    # Sudo-Only Commands (Sudo user or Owner required)
+    application.add_handler(CommandHandler("poweron", check_sudo_wrapper(poweron_command)))
+    application.add_handler(CommandHandler("poweroff", check_sudo_wrapper(poweroff_command)))
+    application.add_handler(CommandHandler("broadcast", check_sudo_wrapper(broadcast_command)))
+    application.add_handler(CommandHandler("get_photo_id", check_sudo_wrapper(get_photo_id)))
+    application.add_handler(CommandHandler("adminstats", check_sudo_wrapper(admin_stats_command)))
+    application.add_handler(CommandHandler("forcegemma", check_sudo_wrapper(force_gemma_command)))
+    application.add_handler(CommandHandler("forcedynamic", check_sudo_wrapper(force_dynamic_command)))
+    application.add_handler(CommandHandler("forcedeepseek", check_sudo_wrapper(force_deepseek_command))) # NEW
+    application.add_handler(CommandHandler("show_chats", check_sudo_wrapper(show_chats_command)))
+    application.add_handler(CommandHandler("s_ban", check_sudo_wrapper(sudo_ban_user)))
+    application.add_handler(CommandHandler("s_unban", check_sudo_wrapper(sudo_unban_user)))
+    application.add_handler(CommandHandler("s_send", check_sudo_wrapper(sudo_send_message)))
+
+    # Owner-Only Sudo Management Commands (BROADCAST_ADMIN_ID required)
+    application.add_handler(CommandHandler("addsudo", add_sudo_command))
+    application.add_handler(CommandHandler("removesudo", remove_sudo_command))
+
+    # --- Message handlers ---
+    # ✨ ADDED THE NEW WELCOME HANDLER HERE ✨
+    application.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, welcome_new_members))
+    application.add_handler(MessageHandler(filters.TEXT | filters.CAPTION, process_message))
+    application.add_handler(MessageHandler(filters.VOICE, handle_voice_message))
+    
+    application.add_error_handler(error_handler)
+    
+    if WEBHOOK_URL:
+        PORT = int(os.getenv("PORT", "8000"))
+        application.run_webhook(
+            listen="0.0.0.0",
+            port=PORT,
+            url_path=TELEGRAM_BOT_TOKEN,
+            webhook_url=f"{WEBHOOK_URL}/{TELEGRAM_BOT_TOKEN}"
+        )
+        logger.info(f"Bot started with webhook on port {PORT}")
+    else:
+        logger.info("Starting bot in polling mode.")
+        application.run_polling()
+
+if __name__ == '__main__':
+    main()
