@@ -852,7 +852,7 @@ async def handle_kill(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         return
 
     # Calculate success chance
-    weapon_bonus = _find_item("weapons", killer_data.get("Weapon", ""_))
+    weapon_bonus = _find_item("weapons", killer_data.get("Weapon", ""))
     bonus = weapon_bonus["value"] if weapon_bonus else 0
     success_chance = KILL_RATES["chance"] + bonus
     
