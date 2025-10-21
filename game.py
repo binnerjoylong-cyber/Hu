@@ -1054,7 +1054,7 @@ async def handle_game_callback(update: Update, context: ContextTypes.DEFAULT_TYP
             assets_text += f"  • {weapon_data['name']}\n" if weapon_data else "  • None\n"
 
             assets_text += "\n**Pet:**\n"
-            pet_data = _find_item("pets", player_data.get("Pet", ""_))
+            pet_data = _find_item("pets", player_data.get("Pet", ""))
             assets_text += f"  • {pet_data['name']}\n" if pet_data else "  • None\n"
 
             assets_text += "\n**Properties & Vehicles:** (Assets)\n"
