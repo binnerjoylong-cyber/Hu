@@ -2480,8 +2480,7 @@ def main() -> None:
     application.add_handler(CommandHandler("marry", game.handle_marry))
     application.add_handler(CommandHandler("adopt", game.handle_adopt))
     application.add_handler(CommandHandler("divorce", game.handle_divorce))
-
-    
+    application.add_handler(CommandHandler("check", game.handle_check_profile))
 
     # --- Admin Commands (Group Admin required) ---
     application.add_handler(CommandHandler("on", on_command))
