@@ -762,7 +762,7 @@ async def handle_rob(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         return
 
     # Calculate success chance
-    weapon_bonus = _find_item("weapons", robber_data.get("Weapon", ""_))
+    weapon_bonus = _find_item("weapons", robber_data.get("Weapon", ""))
     bonus = weapon_bonus["value"] if weapon_bonus else 0
     success_chance = ROB_RATES["chance"] + bonus
     
