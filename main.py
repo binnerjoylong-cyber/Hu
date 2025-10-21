@@ -2465,6 +2465,13 @@ def main() -> None:
     application.add_handler(CommandHandler("catfact", catfact_command))
     application.add_handler(CommandHandler("dogfact", dogfact_command))
     application.add_handler(CommandHandler("advice", advice_command))
+    
+    # --- NEW: Added Game Commands (Rob, Kill, Bank) ---
+    application.add_handler(CommandHandler("rob", game.handle_rob))
+    application.add_handler(CommandHandler("kill", game.handle_kill))
+    application.add_handler(CommandHandler("deposit", game.handle_deposit))
+    application.add_handler(CommandHandler("withdraw", game.handle_withdraw))
+    application.add_handler(CommandHandler("gift", game.handle_gift))
 
     # --- NEW: Refactored Game Commands ---
     application.add_handler(CommandHandler("game", game.start_game))
@@ -2473,6 +2480,8 @@ def main() -> None:
     application.add_handler(CommandHandler("marry", game.handle_marry))
     application.add_handler(CommandHandler("adopt", game.handle_adopt))
     application.add_handler(CommandHandler("divorce", game.handle_divorce))
+
+    
 
     # --- Admin Commands (Group Admin required) ---
     application.add_handler(CommandHandler("on", on_command))
