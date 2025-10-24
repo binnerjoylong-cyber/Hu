@@ -1178,10 +1178,10 @@ async def translate_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         if available_gemini_keys:
             random.shuffle(available_gemini_keys)
             api_key_to_use = available_gemini_keys[0]
-            model_name_to_use = "gemini-1.5-flash"
+            model_name_to_use = "models/gemini-1.5-flash"
         elif GEMMA_API_KEY:
             api_key_to_use = GEMMA_API_KEY
-            model_name_to_use = "gemma-2-9b-it"
+            model_name_to_use = "models/gemma-2-9b-it"
         else:
             await message.reply_text("Sorry, no API keys are available for translation right now.")
             return
