@@ -1174,7 +1174,7 @@ await context.bot.send_chat_action(chat_id=chat_id, action="typing")
         if available_gemini_keys:
             random.shuffle(available_gemini_keys)
             api_key_to_use = available_gemini_keys[0] # Use a random one to distribute load
-            model_name_to_use = 'gemini-1.5-flash-latest'
+            model_name_to_use = 'gemini-1.5-flash'
         # Fallback to Gemma
         elif GEMMA_API_KEY:
             api_key_to_use = GEMMA_API_KEY
