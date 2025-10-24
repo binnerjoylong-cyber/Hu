@@ -2846,7 +2846,7 @@ def main() -> None:
         process_message
     ))
     application.add_handler(MessageHandler(
-        (filters.EDITED_MESSAGE & (filters.TEXT | filters.CAPTION)), 
+        (filters.UpdateType.EDITED_MESSAGE & (filters.TEXT | filters.CAPTION)), 
         process_message
     ))
     
