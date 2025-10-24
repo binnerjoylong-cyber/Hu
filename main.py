@@ -1123,52 +1123,40 @@ async def reboot_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
 # --- MODIFIED: Translate command for everyone ---
 async def translate_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Translates text using a direct model call for accuracy."""
-    message = update.message or update.edited_message
-    if not message:
-        return
-
-    chat_id = update.effective_chat.id
-    args = context.args
-
-    # Debugging (optional): uncomment if you want to see args in console
-    # print("ARGS:", args)
-    # print("MESSAGE:", message.text)
-
-    # If user replies to a message and adds language
-    if message.reply_to_message:
-        if not args:
-            await message.reply_text(
-                "Please specify a language. Example: `/tr hindi` when replying.",
-                parse_mode="Markdown"
-            )
-            return
-
-        target_language = args[0].strip().lower()
-        text_to_translate = message.reply_to_message.text or ""
-
-        if not text_to_translate:
-            await message.reply_text("The replied message has no text to translate.")
-            return
-
-    # If user uses direct command: /tr hindi Hello world
-    elif len(args) > 1:
-        target_language = args[0].strip().lower()
-        text_to_translate = " ".join(args[1:])
-
-    else:
-        await message.reply_text(
-            "Usage:\n"
-            "`/tr <language> <text>`\n"
-            "or reply to a message with `/tr <language>`.",
-            parse_mode="Markdown"
-        )
-        return
-
-    await context.bot.send_chat_action(chat_id=chat_id, action="typing")
 
     # --- 👇 Translation Logic (Replace with your model/API call) ---
-    # Example: Dummy translator for now
+    # Example: Dummy translasync def translate_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+"""Translates text using a direct model call for accuracy."""
+chat_id = update.effective_chat.id
+
+# --- FIX: Get message object ---  
+message = update.message or update.edited_message  
+if not message:  
+    return  
+  
+target_language = ""  
+text_to_translate = ""  
+  
+# Determine the text and language from the command usage  
+if message.reply_to_message:  
+    target_language = " ".join(context.args).strip()  
+    text_to_translate = message.reply_to_message.text  
+      
+    if not target_language:  
+        await message.reply_text("Please specify a language. Example: `/tr hindi` when replying.", parse_mode='Markdown')  
+        return  
+    if not text_to_translate:  
+        await message.reply_text("The replied message has no text to translate.")  
+        return  
+elif context.args and len(context.args) > 1:  
+    target_language = context.args[0]  
+    text_to_translate = " ".join(context.args[1:])  
+else:  
+    await message.reply_text("Usage: `/tr <language> <text>` or reply to a message with `/tr <language>`.", parse_mode='Markdown')  
+    return  
+  
+await context.bot.send_chat_action(chat_id=chat_id, action="typing")  
+
     translated_text = f"({target_language.upper()}) Translation of: {text_to_translate}"
 
     await message.reply_text(translated_text)
