@@ -2599,7 +2599,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         "`/dare` - Get a random dare.\n"
         "`/slap` - Slap a user (reply to their message).\n"
         "`/roast` - Roast a user (reply to their message).\n"
-Example: `/rate my new haircut`\n"
+        "`/rate- rate any thing`\n"
         "`/roll` - Roll a dice (1-6).\n"
         "`/coinflip` - Flip a coin.\n"
         "`/startgame` - Start a number guessing game.\n"
