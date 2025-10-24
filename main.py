@@ -2859,4 +2859,17 @@ def main() -> None:
     application.add_error_handler(error_handler)
     
     if WEBHOOK_URL:
-        PORT
+        PORT = int(os.getenv("PORT", "8000"))
+        application.run_webhook(
+            listen="0.0.0.0",
+            port=PORT,
+            url_path=TELEGRAM_BOT_TOKEN,
+            webhook_url=f"{WEBHOOK_URL}/{TELEGRAM_BOT_TOKEN}"
+        )
+        logger.info(f"Bot started with webhook on port {PORT}")
+    else:
+        logger.info("Starting bot in polling mode.")
+        application.run_polling()
+
+if __name__ == '__main__':
+    main()
