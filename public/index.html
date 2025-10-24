@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Laila Bot - Status</title>
+    <link href="style.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+</head>
+<body>
+    <header>
+        <h1>Laila Bot 🤖</h1>
+        <p>Aapki friendly AI assistant</p>
+    </header>
+
+    <main>
+        <section class="card status-card">
+            <h2>Bot Status</h2>
+            <div class="status-box">
+                <span class="status-indicator-dot"></span>
+                <span id="bot-status">Online</span>
+            </div>
+            <p class="status-note">
+                Agar aap yeh page dekh paa rahe hain, to bot ka server 'Online' hai. 
+                <br>(Render free tier pe, service 15 min inactivity ke baad so jaati hai aur visit karne pe jaag jaati hai).
+            </p>
+            <a href="https://t.me/YourBotUsername" target="_blank" class="cta-button">Chat with Laila</a>
+            </section>
+
+        <section class="card commands-card">
+            <h2>Available Commands</h2>
+            <p>Yeh saare commands bot mein kaam kar rahe hain:</p>
+
+            <div class="command-category">
+                <h3>💬 General</h3>
+                <ul>
+                    <li><code>/start</code> - Bot ko start karein.</li>
+                    <li><code>/help</code> - Yeh help message dekhein.</li>
+                    <li><code>/about</code> - Bot ke baare mein jaanein.</li>
+                    <li><code>/stats</code> - Bot ka live performance status.</li>
+                    <li><code>/id</code> - Apni User ID aur Chat ID paayein.</li>
+                </ul>
+            </div>
+
+            <div class="command-category">
+                <h3>🎨 Media & AI</h3>
+                <ul>
+                    <li><code>/gen &lt;prompt&gt;</code> - AI se image banayein.</li>
+                    <li><code>/img &lt;query&gt;</code> - Photo search karein.</li>
+                    <li><code>/lyrics &lt;song&gt;</code> - Gaane ke lyrics dhoondein.</li>
+                    <li><code>/youtube &lt;link&gt;</code> - YouTube video download karein.</li>
+                    <li><code>/tr &lt;lang&gt; &lt;text&gt;</code> - Text ko translate karein.</li>
+                </ul>
+            </div>
+
+            <div class="command-category">
+                <h3>💡 Utility</h3>
+                <ul>
+                    <li><code>/weather &lt;city&gt;</code> - Mausam ki jaankari.</li>
+                    <li><code>/crypto &lt;symbol&gt;</code> - Crypto ka price dekhein.</li>
+                    <li><code>/define &lt;word&gt;</code> - Shabdkosh (Dictionary).</li>
+                    <li><code>/ud &lt;term&gt;</code> - Urban Dictionary search.</li>
+                    <li><code>/qr &lt;text&gt;</code> - QR code banayein.</li>
+                    <li><code>/shorten &lt;url&gt;</code> - URL chhota karein.</li>
+                    <li><code>/paste</code> - Text ko online paste karein (reply karke).</li>
+                </ul>
+            </div>
+            
+            <div class="command-category">
+                <h3>🎮 Fun & Games</h3>
+                <ul>
+                    <li><code>/couple</code> - Group mein random couple chunein.</li>
+                    <li><code>/truth</code> | <code>/dare</code> - Truth ya Dare khele.</li>
+                    <li><code>/slap</code> | <code>/roast</code> - User ko slap/roast karein (reply karke).</li>
+                    <li><code>/rate &lt;thing&gt;</code> - Kisi cheez ko rate karein.</li>
+                    <li><code>/meme</code> | <code>/joke</code> | <code>/quote</code> | <code>/advice</code></li>
+                    <li><code>/catfact</code> | <code>/dogfact</code></li>
+                    <li><code>/roll</code> | <code>/coinflip</code></li>
+                    <li><code>/startgame</code> | <code>/stopgame</code> - Number guessing game.</li>
+                </ul>
+            </div>
+
+            <div class="command-category">
+                <h3>💸 Economy & Family Game</h3>
+                <ul>
+                    <li><code>/game</code> | <code>/profile</code> - Apna game menu kholein.</li>
+                    <li><code>/leaderboard</code> - Sabse ameer players dekhein.</li>
+                    <li><code>/marry</code> | <code>/divorce</code> - Shaadi karein (reply karke).</li>
+                    <li><code>/adopt</code> - God lein (reply karke).</li>
+                    <li><code>/rob</code> | <code>/kill</code> - Doosre user ko lootein ya...</li>
+                    <li><code>/deposit</code> | <code>/withdraw</code> - Bank mein paisa daalein/nikaalein.</li>
+                    <li><code>/gift</code> - Paisa gift karein.</li>
+                </ul>
+            </div>
+            
+            <div class="command-category">
+                <h3>🔒 Admin (Group Admins)</h3>
+                <ul>
+                    <li><code>/on</code> | <code>/off</code> - Bot ko group mein on/off karein.</li>
+                    <li><code>/reset</code> - Chat history reset karein.</li>
+                    <li><code>/ban</code> | <code>/kick</code> | <code>/mute</code></li>
+                    <li><code>/unban</code> | <code>/unmute</code></li>
+                    <li><code>/setwelcome</code> - Custom welcome message set karein.</li>
+                    <li><code>/setwelcomemedia</code> - Custom welcome media set karein.</li>
+                    <li><code>/resetwelcome</code> - Welcome settings reset karein.</li>
+                </ul>
+            </div>
+
+            <div class="command-category">
+                <h3>👑 Sudo (Bot Owner)</h3>
+                <ul>
+                    <li><code>/poweron</code> | <code>/poweroff</code> - Bot ko globally on/off karein.</li>
+                    <li><code>/broadcast</code> - Sabhi chats mein message bhejein.</li>
+                    <li><code>/adminstats</code> - Bot ka detailed report.</li>
+                    <li><code>/show_chats</code> - Bot kin groups mein hai, list dekhein.</li>
+                    <li><code>/s_ban</code> | <code>/s_unban</code> | <code>/s_send</code></li>
+                    <li><code>/addsudo</code> | <code>/removesudo</code></li>
+                    <li><code>/forcedynamic</code> | <code>/forcegemma</code> | <code>/forcedeepseek</code></li>
+                </ul>
+            </div>
+
+        </section>
+    </main>
+
+    <footer>
+        <p>✨ Laila Bot by Adhyan ✨</p>
+    </footer>
+
+    <script>
+        // Check if the page is visible, which means the server is online.
+        document.addEventListener('DOMContentLoaded', () => {
+            const statusElement = document.getElementById('bot-status');
+            const dotElement = document.querySelector('.status-indicator-dot');
+            
+            statusElement.textContent = 'Online';
+            dotElement.style.backgroundColor = '#4CAF50'; // Green color
+        });
+    </script>
+</body>
+</html>
