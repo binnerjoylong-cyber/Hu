@@ -1123,83 +1123,84 @@ async def reboot_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
 # --- MODIFIED: Translate command for everyone ---
 async def translate_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Translates text using a direct model call for accuracy."""
+    message = update.message or update.edited_message
+    if not message:
+        return
 
-    # --- 👇 Translation Logic (Replace with your model/API call) ---
-    # Example: Dummy translasync def translate_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-"""Translates text using a direct model call for accuracy."""
-chat_id = update.effective_chat.id
+    chat_id = update.effective_chat.id
+    args = context.args
 
-# --- FIX: Get message object ---  
-message = update.message or update.edited_message  
-if not message:  
-    return  
-  
-target_language = ""  
-text_to_translate = ""  
-  
-# Determine the text and language from the command usage  
-if message.reply_to_message:  
-    target_language = " ".join(context.args).strip()  
-    text_to_translate = message.reply_to_message.text  
-      
-    if not target_language:  
-        await message.reply_text("Please specify a language. Example: `/tr hindi` when replying.", parse_mode='Markdown')  
-        return  
-    if not text_to_translate:  
-        await message.reply_text("The replied message has no text to translate.")  
-        return  
-elif context.args and len(context.args) > 1:  
-    target_language = context.args[0]  
-    text_to_translate = " ".join(context.args[1:])  
-else:  
-    await message.reply_text("Usage: `/tr <language> <text>` or reply to a message with `/tr <language>`.", parse_mode='Markdown')  
-    return  
-  
-await context.bot.send_chat_action(chat_id=chat_id, action="typing")  
+    # --- Determine target language and text ---
+    if message.reply_to_message:
+        target_language = " ".join(args).strip()
+        text_to_translate = message.reply_to_message.text
 
-    translated_text = f"({target_language.upper()}) Translation of: {text_to_translate}"
+        if not target_language:
+            await message.reply_text(
+                "Please specify a language. Example: `/tr hindi` when replying.",
+                parse_mode="Markdown"
+            )
+            return
 
-    await message.reply_text(translated_text)
-    # Create a very direct prompt for translation
-    prompt = f"Translate the following text into {target_language}. Respond with ONLY the translated text and nothing else: '{text_to_translate}'"
-    
+        if not text_to_translate:
+            await message.reply_text("The replied message has no text to translate.")
+            return
+
+    elif args and len(args) > 1:
+        target_language = args[0]
+        text_to_translate = " ".join(args[1:])
+    else:
+        await message.reply_text(
+            "Usage: `/tr <language> <text>` or reply to a message with `/tr <language>`.",
+            parse_mode="Markdown"
+        )
+        return
+
+    await context.bot.send_chat_action(chat_id=chat_id, action="typing")
+
+    # --- Create translation prompt ---
+    prompt = (
+        f"Translate the following text into {target_language}. "
+        f"Respond with ONLY the translated text and nothing else:\n\n{text_to_translate}"
+    )
+
     try:
-        # Use a separate, direct API call to avoid Laila's personality
+        # --- Choose model & API key ---
         translation_model = None
         api_key_to_use = None
         model_name_to_use = None
-        
-        # Prioritize Gemini
-        available_gemini_keys = [key for key in GEMINI_API_KEYS if key and time.time() >= key_cooldown_until.get(key, 0)]
+
+        available_gemini_keys = [
+            key for key in GEMINI_API_KEYS if key and time.time() >= key_cooldown_until.get(key, 0)
+        ]
+
         if available_gemini_keys:
             random.shuffle(available_gemini_keys)
-            api_key_to_use = available_gemini_keys[0] # Use a random one to distribute load
-            model_name_to_use = 'gemini-1.5-flash'
-        # Fallback to Gemma
+            api_key_to_use = available_gemini_keys[0]
+            model_name_to_use = "gemini-1.5-flash"
         elif GEMMA_API_KEY:
             api_key_to_use = GEMMA_API_KEY
-            model_name_to_use = 'gemma-2-9b-it' # Use the correct Gemma model
+            model_name_to_use = "gemma-2-9b-it"
         else:
             await message.reply_text("Sorry, no API keys are available for translation right now.")
             return
 
+        # --- Configure and call model ---
         genai.configure(api_key=api_key_to_use)
-        # Use a model without any system instruction to get a raw response
-        translation_model = genai.GenerativeModel(model_name_to_use) 
-        
-        response = await translation_model.generate_content_async(
+        model = genai.GenerativeModel(model_name=model_name_to_use)
+
+        response = await model.generate_content_async(
             prompt,
-            generation_config=genai.types.GenerationConfig(temperature=0.1) # Low temp for direct translation
+            generation_config=genai.types.GenerationConfig(temperature=0.1)
         )
-        
-        # Send the raw translated text
-        await message.reply_text(response.text)
-        
+
+        translated_text = response.text.strip()
+        await message.reply_text(translated_text or "No translation result found.")
+
     except Exception as e:
         logger.error(f"Error in translate command: {e}", exc_info=True)
         await message.reply_text("An error occurred during translation. Please try again later.")
-
-
 # --- Reset command for group admins ---
 async def reset_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     chat_id = update.effective_chat.id
