@@ -816,68 +816,38 @@ async def lyrics_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
 # Temporary directory jahan files download hongi
 TEMP_DIR = "temp_downloads" 
-
 def sync_download_youtube(url: str):
-    """Synchronous function to download a video using yt-dlp to a file with robust error handling."""
-    # Har download ke liye unique filename banayenge
-    temp_filename_base = str(uuid.uuid4())
-    temp_filepath_template = os.path.join(TEMP_DIR, f"{temp_filename_base}.%(ext)s")
+    # ... (imports and setup)
     
-    # Telegram ki limit 50MB hai
-    MAX_FILESIZE = 50 * 1024 * 1024 
-    final_filepath = None
-    title = "Video"
-
     # --- YTDL OPTIONS WITH BYPASS FLAGS ---
     base_ydl_opts = {
         'quiet': True,
         'noplaylist': True,
         'no_warnings': True,
         # FIX: Bypass flags for Sign-in/Bot Detection/Age-Restriction
-        'age_limit': 99,                 # Claim to be 99 years old to bypass age gate
-        'geo_bypass': True,              # Bypass geographic restrictions
-        'check_formats': False,          # Speed up format checking
-        'no_check_certificate': True,    # Ignore certificate errors
+        'age_limit': 99,              
+        'geo_bypass': True,           
+        'check_formats': False,       
+        'no_check_certificate': True, 
+        # NEW FIX: Robust User-Agent add karein
+        'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.75 Safari/537.36',
     }
 
-    ydl_opts = base_ydl_opts.copy()
-    ydl_opts.update({
-        # MP4 format, 50MB se kam size prioritize karega
-        'format': 'bestvideo[ext=mp4][filesize<=50M]+bestaudio[ext=m4a]/best[ext=mp4][filesize<=50M]', 
-        'outtmpl': temp_filepath_template,
-        'max_filesize': MAX_FILESIZE,
-        'merge_output_format': 'mp4', # Final file MP4 format mein merge hoga
-    })
-
-    try:
-        # Temporary directory banao
-        os.makedirs(TEMP_DIR, exist_ok=True)
-        
-        # 1. Info extract karke title lein (download=False)
-        # Info extractor mein bhi bypass flags use karein
-        with yt_dlp.YoutubeDL(base_ydl_opts) as ydl:
-            info_dict = ydl.extract_info(url, download=False)
-            title = info_dict.get('title', 'Video')
-            
-        # 2. Video download karein
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            ydl.download([url])
-        
-        # 3. Downloaded file ko khojein 
-        downloaded_files = glob.glob(os.path.join(TEMP_DIR, f"{temp_filename_base}.*"))
-        
-        if not downloaded_files:
-            return None, title, "Video download nahi ho paya. Shayad size 50MB se zyada ho ya koi format available na ho."
-
-        final_filepath = downloaded_files[0]
-        
-        return final_filepath, title, None
+    # ... (ydl_opts copy and update)
 
     # --- Robust Error Handling ---
-    
     except DownloadError as e:
         error_message = str(e)
         logger.error(f"YTDL DownloadError for URL {url}: {error_message}")
+        
+        # ... (other error checks)
+
+        if "age-restricted" in error_message or "Sign in to confirm you’re not a bot" in error_message:
+            # FIX: User ko batao ki agar fir bhi error aa raha hai to kya karein.
+            return None, title, "Yeh video age-restricted/protected hai aur isse download nahi kiya ja sakta (ya to sign-in required hai). **Kripya koi aur video link try karein.**"
+        
+        # ... (rest of the error handling)
+
         
         if "size is larger than" in error_message or "Max filesize reached" in error_message:
             return None, title, "Video ka size 50MB se zyada hai, isliye Telegram par nahi bhej sakte."
@@ -912,31 +882,32 @@ async def youtube_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
 # --- NEW: Core YouTube Handler for both command and auto-detection (FIXED UPDATE.BOT ERROR) ---
 async def handle_youtube_link(update: Update, context: ContextTypes.DEFAULT_TYPE, url: str):
-    # ... (msg create karna, chat_id set karna) ...
     
-    video_filepath = None # Initialize variable for cleanup
+    # FIX: Initialize msg, chat_id, video_filepath, title at the start
+    chat_id = update.effective_chat.id
+    video_filepath = None 
     title = None
+    msg = None # <--- FIX: Initialize 'msg' to None to prevent NameError
 
     try:
+        # Initial 'Downloading...' message bhejna
+        msg = await context.bot.send_message(chat_id=chat_id, text="⏳ Downloading video...")
+        
         # Use a thread for the blocking operation (sync_download_youtube)
-        # video_filepath: File ki location, ya None agar download fail hua
-        # title: Video ka title
-        # error: Error message agar koi galti hui
         video_filepath, title, error = await asyncio.to_thread(sync_download_youtube, url)
         
-        # Download message ko delete karna
-        await msg.delete()
+        # Download message ko delete karna (Yeh ab safe hai)
+        await msg.delete() 
         
         # 1. DOWNLOAD ERROR CHECK
         if error:
-            # Agar sync_download_youtube ne koi error return kiya hai
+            # ... (rest of the error handling logic)
             await context.bot.send_message(chat_id=chat_id, text=f"Could not download video: {error}")
             logger.warning(f"[{chat_id}] YouTube download failed for '{url}': {error}")
             return # Yahaan se function end
             
         # --- UPLOAD LOGIC ---
-        
-        # Caption tayyar karna
+        # ... (rest of the upload logic)
         caption_text = f"🎥 **{title}**\n\nDownloaded with Laila Bot."
         if len(caption_text) > 1024:
             # Telegram ki caption limit se zyada hone par chota karna
@@ -965,14 +936,14 @@ async def handle_youtube_link(update: Update, context: ContextTypes.DEFAULT_TYPE
                 parse_mode='Markdown'
             )
             return # Upload fail hone par function end
-
+        
     # 3. UNEXPECTED ERROR CATCH
     except Exception as e:
-        # Koi bhi anjaani galti jo download ya threading se aayi ho
         logger.error(f"[{chat_id}] Unexpected error in YouTube handler: {e}", exc_info=True)
-        # Agar msg abhi tak delete nahi hua hai, toh koshish karein
+        # Agar msg set hua hai, toh usse delete karein
         try:
-            await msg.delete()
+            if msg: # Check if msg was set to a message object
+                await msg.delete()
         except:
             pass
             
@@ -982,18 +953,15 @@ async def handle_youtube_link(update: Update, context: ContextTypes.DEFAULT_TYPE
     finally:
         # Agar file_path set hua hai aur file exist karti hai, toh usse delete kar do.
         if video_filepath and os.path.exists(video_filepath):
-            try:
-                os.remove(video_filepath)
-                logger.info(f"[{chat_id}] Cleaned up temporary file: {video_filepath}")
-            except Exception as e:
-                logger.error(f"[{chat_id}] Failed to delete temp file {video_filepath}: {e}")
-        
+            # ... (rest of the cleanup logic)
+            
         # Ensure that the initial 'Downloading...' message is deleted, if it still exists.
-        # Although handled in try block, this acts as a final fail-safe.
         try:
-            await msg.delete()
+            if msg: # Check if msg was set to a message object before deleting
+                await msg.delete()
         except:
             pass
+     
 
 
 
