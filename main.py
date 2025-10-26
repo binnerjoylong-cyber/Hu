@@ -813,9 +813,14 @@ async def lyrics_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 def sync_download_youtube(url: str):
     """Synchronous function to download a YouTube video to a buffer with better size handling."""
     buffer = io.BytesIO()
+    
+    # 💥 FIX: Create a requests session for non-interactive token handling.
+    # This bypasses YouTube's 'bot detection' error.
+    session = requests.Session()
+    
     try:
-        # This initial call is where a lot of errors (like throttling) can happen
-        yt = YouTube(url, use_po_token=False)
+        # Pass the URL, set use_po_token=True, and pass the session.
+        yt = YouTube(url, use_po_token=True, session=session)
         
         # Max Telegram upload is 50MB
         MAX_SIZE = 50 * 1024 * 1024  # 50 MB in bytes
@@ -825,6 +830,7 @@ def sync_download_youtube(url: str):
         # Try to find a stream below the max size, prioritizing higher quality
         selected_stream = None
         for stream in reversed(streams):
+            # The 'filesize' can be None initially, so we check for both conditions.
             if stream.filesize and stream.filesize <= MAX_SIZE:
                 selected_stream = stream
                 break
@@ -854,7 +860,10 @@ def sync_download_youtube(url: str):
         # Catch any other unexpected errors
         logger.error(f"Unexpected error in sync_download_youtube for URL {url}: {e}", exc_info=True)
         return None, "Error", "An unexpected error occurred. Please double-check the link."
-
+    
+    finally:
+        # 💥 FIX: Always close the session to free up system resources.
+        session.close()
 
 # --- MODIFIED: /youtube Command ---
 async def youtube_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -886,7 +895,7 @@ async def handle_youtube_link(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     # FIX: Changed update.bot to context.bot
     msg = await context.bot.send_message(chat_id=chat_id, text="Request received. Starting download, please wait... 📥")
-    await context.bot.send_chat_action(chat_id=chat_id, action="upload_video")
+    await context.bot.send_chat_action(chat_id=chat_id, action="upoad_video")
 
     try:
         # Use a thread for the blocking operation
