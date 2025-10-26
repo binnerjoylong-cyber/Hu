@@ -2065,7 +2065,7 @@ async def paste_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 # Fun Commands
 async def meme_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Fetches a random meme."""
-    url = "https.meme-api.com/gimme"
+    url = "https://meme-api.com/gimme"
     try:
         response = requests.get(url).json()
         if response and response.get('url'):
@@ -2083,7 +2083,7 @@ async def meme_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
 async def joke_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Tells a random joke."""
-    url = "https.v2.jokeapi.dev/joke/Any?blacklistFlags=nsfw,religious,political,racist,sexist,explicit&type=single"
+    url = "https://v2.jokeapi.dev/joke/Any?blacklistFlags=nsfw,religious,political,racist,sexist,explicit&type=single"
     try:
         response = requests.get(url).json()
         if not response['error']:
@@ -2096,7 +2096,7 @@ async def joke_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
 async def quote_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Fetches a random inspirational quote."""
-    url = "https.api.quotable.io/random"
+    url = "https://api.quotable.io/random"
     try:
         response = requests.get(url).json()
         await update.message.reply_text(f"**Here's a quote:**\n\n>_{response['content']}_\n\n— **{response['author']}**", parse_mode='Markdown')
