@@ -2149,8 +2149,8 @@ async def dogfact_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     """Gets a random dog fact."""
     url = "https://dog.ceo/api/breeds/image/random" # Using this to get a fact and an image
     try:
-        fact_res = requests.get("https.dogapi.dog/api/v2/facts").json()
-        img_res = requests.get("https.dog.ceo/api/breeds/image/random").json()
+        fact_res = requests.get("https://dogapi.dog/api/v2/facts").json()
+        img_res = requests.get("https://dog.ceo/api/breeds/image/random").json()
         
         fact = fact_res['data'][0]['attributes']['body']
         img_url = img_res['message']
@@ -2167,7 +2167,7 @@ async def dogfact_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
 async def advice_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Gives a random piece of advice."""
-    url = "https.api.adviceslip.com/advice"
+    url = "https://api.adviceslip.com/advice"
     try:
         response = requests.get(url).json()
         await update.message.reply_text(f"💡 **Here's some advice:**\n\n_{response['slip']['advice']}_")
