@@ -895,7 +895,7 @@ async def handle_youtube_link(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     # FIX: Changed update.bot to context.bot
     msg = await context.bot.send_message(chat_id=chat_id, text="Request received. Starting download, please wait... 📥")
-    await context.bot.send_chat_action(chat_id=chat_id, action="upoad_video")
+    await context.bot.send_chat_action(chat_id=chat_id, action="upload_video")
 
     try:
         # Use a thread for the blocking operation
