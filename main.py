@@ -818,18 +818,9 @@ async def lyrics_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 # Temporary directory jahan files download hongi
 TEMP_DIR = "temp_downloads" 
 
-# NOTE: Is function ko chalane ke liye aapko 'os', 'uuid', 'glob', 'yt_dlp', 'DownloadError', 
-# 'YoutubeDLError', aur 'logger' ko file ki shuruaat mein import karna hoga.
-
 def sync_download_youtube(url: str):
     """Synchronous function to download a video using yt-dlp to a file with robust error handling."""
-    # Imports assumed to be here or at the top of the file
-    import os
-    import uuid
-    import glob
-    from yt_dlp.utils import DownloadError, YoutubeDLError 
-    # NOTE: Assuming logger is globally defined or available
-
+    
     # Har download ke liye unique filename banayenge
     temp_filename_base = str(uuid.uuid4())
     temp_filepath_template = os.path.join(TEMP_DIR, f"{temp_filename_base}.%(ext)s")
@@ -844,12 +835,12 @@ def sync_download_youtube(url: str):
         'quiet': True,
         'noplaylist': True,
         'no_warnings': True,
-        # FIX: Bypass flags for Sign-in/Bot Detection/Age-Restriction
+        # Bypass flags
         'age_limit': 99,              
         'geo_bypass': True,           
         'check_formats': False,       
         'no_check_certificate': True, 
-        # NEW FIX: Robust User-Agent add karein
+        # FIX: Robust User-Agent for Bot Detection
         'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.75 Safari/537.36',
     }
 
@@ -862,10 +853,7 @@ def sync_download_youtube(url: str):
         'merge_output_format': 'mp4', # Final file MP4 format mein merge hoga
     })
 
-    # <--- YAHAN 'try:' BLOCK SHURU HOTA HAI, JO AAPKE PICHELE SNIPPET MEIN MISSING THA --->
     try:
-        import yt_dlp # yt_dlp ko try block mein import karna agar upar import nahi hua ho
-        
         # Temporary directory banao
         os.makedirs(TEMP_DIR, exist_ok=True)
         
@@ -888,22 +876,17 @@ def sync_download_youtube(url: str):
         
         return final_filepath, title, None
 
-    # <--- YAHAN SE 'except' BLOCK SHURU HOTA HAI --->
     # --- Robust Error Handling ---
     except DownloadError as e:
         error_message = str(e)
-        # logger.error(f"YTDL DownloadError for URL {url}: {error_message}") # logger is assumed
+        logger.error(f"YTDL DownloadError for URL {url}: {error_message}")
         
-        # Check for size first, then others
         if "size is larger than" in error_message or "Max filesize reached" in error_message:
             return None, title, "Video ka size 50MB se zyada hai, isliye Telegram par nahi bhej sakte."
         if "private video" in error_message:
             return None, title, "Yeh video private hai aur isse access nahi kiya ja sakta."
-        
-        # Combined check for age/bot detection
         if "age-restricted" in error_message or "Sign in to confirm you’re not a bot" in error_message:
             return None, title, "Yeh video age-restricted/protected hai aur isse download nahi kiya ja sakta (ya to sign-in required hai). **Kripya koi aur video link try karein.**"
-            
         if "unavailable" in error_message or "invalid URL" in error_message:
             return None, title, "Video available nahi hai ya link galat hai. Kripya check karein."
         
@@ -916,8 +899,10 @@ def sync_download_youtube(url: str):
         
     except Exception as e:
         # Catch any unexpected system or Python errors
-        # logger.error(f"Unexpected system error in sync_download_youtube for URL {url}: {e}", exc_info=True) # logger is assumed
+        logger.error(f"Unexpected system error in sync_download_youtube for URL {url}: {e}", exc_info=True)
         return None, "Error", "Ek anjana system error aa gaya. Kripya thodi der baad try karein."
+
+
 # --- MODIFIED: /youtube Command ---
 async def youtube_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Downloads a video from a YouTube link using the command."""
@@ -929,14 +914,14 @@ async def youtube_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     # Call core handler
     await handle_youtube_link(update, context, url)
 
-# --- NEW: Core YouTube Handler for both command and auto-detection (FIXED UPDATE.BOT ERROR) ---
+# --- NEW: Core YouTube Handler ---
 async def handle_youtube_link(update: Update, context: ContextTypes.DEFAULT_TYPE, url: str):
     
-    # FIX: Initialize msg, chat_id, video_filepath, title at the start
+    # FIX: Initialize variables at the start to prevent NameError
     chat_id = update.effective_chat.id
     video_filepath = None 
     title = None
-    msg = None # <--- FIX: Initialize 'msg' to None to prevent NameError
+    msg = None # <--- Crucial: msg is initialized to None
 
     try:
         # Initial 'Downloading...' message bhejna
@@ -945,18 +930,18 @@ async def handle_youtube_link(update: Update, context: ContextTypes.DEFAULT_TYPE
         # Use a thread for the blocking operation (sync_download_youtube)
         video_filepath, title, error = await asyncio.to_thread(sync_download_youtube, url)
         
-        # Download message ko delete karna (Yeh ab safe hai)
-        await msg.delete() 
+        # Download message ko delete karna
+        await msg.delete()
         
         # 1. DOWNLOAD ERROR CHECK
         if error:
-            # ... (rest of the error handling logic)
             await context.bot.send_message(chat_id=chat_id, text=f"Could not download video: {error}")
             logger.warning(f"[{chat_id}] YouTube download failed for '{url}': {error}")
-            return # Yahaan se function end
+            return
             
         # --- UPLOAD LOGIC ---
-        # ... (rest of the upload logic)
+        
+        # Caption tayyar karna
         caption_text = f"🎥 **{title}**\n\nDownloaded with Laila Bot."
         if len(caption_text) > 1024:
             # Telegram ki caption limit se zyada hone par chota karna
@@ -977,21 +962,21 @@ async def handle_youtube_link(update: Update, context: ContextTypes.DEFAULT_TYPE
             logger.info(f"[{chat_id}] Successfully sent YouTube video: {title}")
         
         except Exception as e:
-            # UPLOAD ya SENDING mein galti (jaise Network Error, Telegram file size issue)
+            # UPLOAD ya SENDING mein galti
             logger.error(f"[{chat_id}] Error while uploading or sending video: {e}", exc_info=True)
             await context.bot.send_message(
                 chat_id=chat_id, 
                 text="⚠️ **Upload Error!** Sorry, video Telegram par bhejte waqt galti ho gayi. Shayad file corrupted ho ya network problem ho.",
                 parse_mode='Markdown'
             )
-            return # Upload fail hone par function end
-        
+            return
+
     # 3. UNEXPECTED ERROR CATCH
     except Exception as e:
         logger.error(f"[{chat_id}] Unexpected error in YouTube handler: {e}", exc_info=True)
         # Agar msg set hua hai, toh usse delete karein
         try:
-            if msg: # Check if msg was set to a message object
+            if msg:
                 await msg.delete()
         except:
             pass
@@ -999,23 +984,20 @@ async def handle_youtube_link(update: Update, context: ContextTypes.DEFAULT_TYPE
         await context.bot.send_message(chat_id=chat_id, text="Aapki request process karte waqt koi anjaani galti hui. Kripya dobara try karein.")
 
     # 4. FINAL CLEANUP (Yeh har haal mein run hoga)
-    # 4. FINAL CLEANUP (Yeh har haal mein run hoga)
     finally:
         # Agar file_path set hua hai aur file exist karti hai, toh usse delete kar do.
         if video_filepath and os.path.exists(video_filepath):
             try:
-                # <-- YAHAN KUCH CODE INDENTED HONA CHAHIYE -->
-                os.remove(video_filepath) # File delete karne ka code yahan aayega
-                # logger.info(f"[{chat_id}] Cleaned up temporary file: {video_filepath}")
+                # FIX: Indented code block
+                os.remove(video_filepath)
+                logger.info(f"[{chat_id}] Cleaned up temporary file: {video_filepath}")
             except Exception as e:
-                # logger.error(f"[{chat_id}] Failed to delete temp file {video_filepath}: {e}")
-                pass
-            
+                logger.error(f"[{chat_id}] Failed to delete temp file {video_filepath}: {e}")
+                pass # Continue even if file deletion fails
+        
         # Ensure that the initial 'Downloading...' message is deleted, if it still exists.
-        # Yeh block 'if' ke bahar hai, isliye iska indentation 'finally' ke barabar hai.
         try:
-            # FIX: If 'msg' was successfully assigned, delete it.
-            if msg: 
+            if msg:
                 await msg.delete()
         except:
             pass
