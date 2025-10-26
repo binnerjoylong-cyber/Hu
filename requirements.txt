@@ -10,9 +10,10 @@ uuid
 asyncio
 SpeechRecognition
 pydub
-pytubefix==10.1.1
+yt-dlp
 asyncpg 
 aiohttp
+
 
 
 
