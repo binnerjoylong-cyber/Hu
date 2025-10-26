@@ -883,47 +883,40 @@ async def youtube_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     await handle_youtube_link(update, context, url)
 
 # --- NEW: Core YouTube Handler for both command and auto-detection (FIXED UPDATE.BOT ERROR) ---
-async def handle_youtube_link(update: Update, context: ContextTypes.DEFAULT_TYPE, url: str) -> None:
-    chat_id = update.effective_chat.id
+async def handle_youtube_link(update: Update, context: ContextTypes.DEFAULT_TYPE, url: str):
+    # ... (msg create karna, chat_id set karna) ...
     
-    # --- FIX: Get the message object correctly ---
-    message = update.message or update.edited_message
-    if not message:
-        return # Should not happen, but good safety check
-
-    # Simple URL validation
-    if not ("youtube.com" in url.lower() or "youtu.be" in url.lower()):
-        # Only reply if it was explicitly called with the command
-        if message.text and message.text.startswith('/youtube'):
-            await message.reply_text("That doesn't look like a valid YouTube link.")
-        return
-
-    # FIX: Changed update.bot to context.bot
-    msg = await context.bot.send_message(chat_id=chat_id, text="Request received. Starting download, please wait... 📥")
-    await context.bot.send_chat_action(chat_id=chat_id, action="upload_video")
+    video_filepath = None # Initialize variable for cleanup
+    title = None
 
     try:
-        # Use a thread for the blocking operation
-        # Ab yeh function file path return karega
-        video_filepath, title, error = await asyncio.to_thread(sync_download_youtube, url) 
+        # Use a thread for the blocking operation (sync_download_youtube)
+        # video_filepath: File ki location, ya None agar download fail hua
+        # title: Video ka title
+        # error: Error message agar koi galti hui
+        video_filepath, title, error = await asyncio.to_thread(sync_download_youtube, url)
         
+        # Download message ko delete karna
         await msg.delete()
         
+        # 1. DOWNLOAD ERROR CHECK
         if error:
-            # FIX: Changed update.bot to context.bot
+            # Agar sync_download_youtube ne koi error return kiya hai
             await context.bot.send_message(chat_id=chat_id, text=f"Could not download video: {error}")
             logger.warning(f"[{chat_id}] YouTube download failed for '{url}': {error}")
-            return
-
-        # --- UPLOAD AND CLEANUP LOGIC ---
+            return # Yahaan se function end
+            
+        # --- UPLOAD LOGIC ---
         
-        # Upload message
+        # Caption tayyar karna
         caption_text = f"🎥 **{title}**\n\nDownloaded with Laila Bot."
         if len(caption_text) > 1024:
-            caption_text = f"🎥 **{title[:50]}...**\n\nDownloaded with Laila Bot."
+            # Telegram ki caption limit se zyada hone par chota karna
+            caption_text = f"🎥 **{title[:80]}...**\n\nDownloaded with Laila Bot."
             
-        # File ko open karke Telegram par bhejenge
+        # 2. UPLOAD TRY BLOCK
         try:
+            # File ko binary read mode ('rb') mein open karke bhejenge
             with open(video_filepath, 'rb') as video_file:
                 await context.bot.send_video(
                     chat_id=chat_id,
@@ -936,27 +929,43 @@ async def handle_youtube_link(update: Update, context: ContextTypes.DEFAULT_TYPE
             logger.info(f"[{chat_id}] Successfully sent YouTube video: {title}")
         
         except Exception as e:
+            # UPLOAD ya SENDING mein galti (jaise Network Error, Telegram file size issue)
             logger.error(f"[{chat_id}] Error while uploading or sending video: {e}", exc_info=True)
-            await context.bot.send_message(chat_id=chat_id, text="Sorry, video upload karne mein galti ho gayi.")
-            return # Yahaan se bahar nikal jaao
+            await context.bot.send_message(
+                chat_id=chat_id, 
+                text="⚠️ **Upload Error!** Sorry, video Telegram par bhejte waqt galti ho gayi. Shayad file corrupted ho ya network problem ho.",
+                parse_mode='Markdown'
+            )
+            return # Upload fail hone par function end
 
+    # 3. UNEXPECTED ERROR CATCH
     except Exception as e:
-        # ... baaki error handling code same rahega ...
-    
-    finally:
-        # Sabse zaroori: Temporary file ko delete karna
-        if 'video_filepath' in locals() and video_filepath and os.path.exists(video_filepath):
-            os.remove(video_filepath)
-            logger.info(f"[{chat_id}] Cleaned up temporary file: {video_filepath}")
-        
+        # Koi bhi anjaani galti jo download ya threading se aayi ho
+        logger.error(f"[{chat_id}] Unexpected error in YouTube handler: {e}", exc_info=True)
+        # Agar msg abhi tak delete nahi hua hai, toh koshish karein
         try:
-            # msg ko delete karna (jaise pehle tha)
             await msg.delete()
         except:
             pass
+            
+        await context.bot.send_message(chat_id=chat_id, text="Aapki request process karte waqt koi anjaani galti hui. Kripya dobara try karein.")
+
+    # 4. FINAL CLEANUP (Yeh har haal mein run hoga)
+    finally:
+        # Agar file_path set hua hai aur file exist karti hai, toh usse delete kar do.
+        if video_filepath and os.path.exists(video_filepath):
+            try:
+                os.remove(video_filepath)
+                logger.info(f"[{chat_id}] Cleaned up temporary file: {video_filepath}")
+            except Exception as e:
+                logger.error(f"[{chat_id}] Failed to delete temp file {video_filepath}: {e}")
         
-        logger.error(f"[{chat_id}] Error in YouTube handler: {e}", exc_info=True)
-        
+        # Ensure that the initial 'Downloading...' message is deleted, if it still exists.
+        # Although handled in try block, this acts as a final fail-safe.
+        try:
+            await msg.delete()
+        except:
+            pass
 
 # --- Name query handler ---
 async def handle_name_query(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
