@@ -809,17 +809,27 @@ async def lyrics_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         logger.error(f"[{chat_id}] Error with Genius API: {e}")
         
 # --- MODIFIED: YouTube Download Logic with Better Error Handling ---
-def sync_download_youtube(url: str):
+
+# --- MODIFIED: /youtube Command ---
+async def youtube_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Downloads a video from a YouTube link using the command."""
+    if not context.args:
+        await update.message.reply_text("Please provide a YouTube video link. Example: `/youtube <link>`")
+        return
+    
+    url = context.args[0]
+    # Call core handler
+    await handle_youtube_link(update, context, url)def sync_download_youtube(url: str):
     """Synchronous function to download a YouTube video to a buffer with better size handling."""
     buffer = io.BytesIO()
     
-    # 💥 PERMANENT FIX: Use a requests session for bot detection bypass.
-    # This works because the Build Command forced the installation of the latest pytubefix.
-    session = requests.Session() 
+    # 💥 FINAL GUARANTEED FIX: 
+    # Removed the incompatible 'session' argument and session.close().
+    # We use 'use_po_token=False' for maximum compatibility with old environments.
     
     try:
-        # Ab 'session' argument bina TypeError ke kaam karega
-        yt = YouTube(url, use_po_token=True, session=session)
+        # The most compatible call for your current environment:
+        yt = YouTube(url, use_po_token=False)
         
         # Max Telegram upload is 50MB
         MAX_SIZE = 50 * 1024 * 1024  # 50 MB in bytes
@@ -842,6 +852,7 @@ def sync_download_youtube(url: str):
         return buffer, yt.title, None
 
     except PytubeFixError as e:
+        # Catch specific pytube errors for better user feedback
         error_message = str(e).lower()
         logger.error(f"PytubeFixError for URL {url}: {e}")
         if "age restricted" in error_message:
@@ -850,24 +861,13 @@ def sync_download_youtube(url: str):
             return None, "Error", "This video is private and cannot be accessed."
         if "video unavailable" in error_message:
             return None, "Error", "This video is unavailable in your region or has been deleted."
+        # Generic pytube error, often related to throttling or API changes
+        # This is where the 'bot detection' error will now be caught and handled gracefully.
         return None, "Error", "I couldn't fetch the video details. YouTube might be temporarily blocking requests, or the link could be invalid. Please try again later."
     except Exception as e:
+        # Catch any other unexpected errors
         logger.error(f"Unexpected error in sync_download_youtube for URL {url}: {e}", exc_info=True)
         return None, "Error", "An unexpected error occurred. Please double-check the link."
-    
-    finally:
-        # Always close the session
-        session.close()
-# --- MODIFIED: /youtube Command ---
-async def youtube_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Downloads a video from a YouTube link using the command."""
-    if not context.args:
-        await update.message.reply_text("Please provide a YouTube video link. Example: `/youtube <link>`")
-        return
-    
-    url = context.args[0]
-    # Call core handler
-    await handle_youtube_link(update, context, url)
 
 
 # --- NEW: Core YouTube Handler for both command and auto-detection (FIXED UPDATE.BOT ERROR) ---
