@@ -34,7 +34,7 @@ from pytubefix import YouTube
 from pytubefix.exceptions import PytubeFixError
 import io
 import threading
-
+import request 
 # --- NEW: IMPORT THE GAME MODULE ---
 import game
 
