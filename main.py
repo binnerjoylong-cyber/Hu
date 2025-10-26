@@ -815,7 +815,7 @@ def sync_download_youtube(url: str):
     buffer = io.BytesIO()
     try:
         # This initial call is where a lot of errors (like throttling) can happen
-        yt = YouTube(url, use_po_token=True)
+        yt = YouTube(url, use_po_token=False)
         
         # Max Telegram upload is 50MB
         MAX_SIZE = 50 * 1024 * 1024  # 50 MB in bytes
