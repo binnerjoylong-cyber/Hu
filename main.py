@@ -815,11 +815,8 @@ async def lyrics_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await update.message.reply_text("An error occurred while fetching the lyrics. Please try again later.")
 
 # Temporary directory jahan files download hongi
-
 # Temporary directory jahan files download hongi
 TEMP_DIR = "temp_downloads" 
-
-# NOTE: Is code ko chalane ke liye aapko apne project folder mein 'cookies.txt' file rakhni hogi.
 
 def sync_download_youtube(url: str):
     """Synchronous function to download a video using yt-dlp to a file with robust error handling."""
@@ -890,8 +887,16 @@ def sync_download_youtube(url: str):
             return None, title, "Video ka size 50MB se zyada hai, isliye Telegram par nahi bhej sakte."
         if "private video" in error_message:
             return None, title, "Yeh video private hai aur isse access nahi kiya ja sakta."
+        
+        # --- NEW COOKIE DEBUGGING MESSAGE ---
         if "age-restricted" in error_message or "Sign in to confirm you’re not a bot" in error_message:
-            return None, title, "Yeh video age-restricted/protected hai aur isse download nahi kiya ja sakta. Kripya koi aur video link try karein."
+            error_details = (
+                "Yeh video protected hai (Age-Restricted/Bot Detection). "
+                "Agar aapne `cookies.txt` set kiya hai, toh shayad **cookies expire ho gaye** hain ya **`requests` library install nahi** hai. "
+                "Kripya naye cookies ke saath dobara try karein."
+            )
+            return None, title, error_details
+        
         if "unavailable" in error_message or "invalid URL" in error_message:
             return None, title, "Video available nahi hai ya link galat hai. Kripya check karein."
         
@@ -906,6 +911,7 @@ def sync_download_youtube(url: str):
         # Catch any unexpected system or Python errors
         logger.error(f"Unexpected system error in sync_download_youtube for URL {url}: {e}", exc_info=True)
         return None, "Error", "Ek anjana system error aa gaya. Kripya thodi der baad try karein."
+
 
 
 # --- MODIFIED: /youtube Command ---
