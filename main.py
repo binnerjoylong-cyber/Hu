@@ -999,14 +999,23 @@ async def handle_youtube_link(update: Update, context: ContextTypes.DEFAULT_TYPE
         await context.bot.send_message(chat_id=chat_id, text="Aapki request process karte waqt koi anjaani galti hui. Kripya dobara try karein.")
 
     # 4. FINAL CLEANUP (Yeh har haal mein run hoga)
+    # 4. FINAL CLEANUP (Yeh har haal mein run hoga)
     finally:
         # Agar file_path set hua hai aur file exist karti hai, toh usse delete kar do.
         if video_filepath and os.path.exists(video_filepath):
-            # ... (rest of the cleanup logic)
+            try:
+                # <-- YAHAN KUCH CODE INDENTED HONA CHAHIYE -->
+                os.remove(video_filepath) # File delete karne ka code yahan aayega
+                # logger.info(f"[{chat_id}] Cleaned up temporary file: {video_filepath}")
+            except Exception as e:
+                # logger.error(f"[{chat_id}] Failed to delete temp file {video_filepath}: {e}")
+                pass
             
         # Ensure that the initial 'Downloading...' message is deleted, if it still exists.
+        # Yeh block 'if' ke bahar hai, isliye iska indentation 'finally' ke barabar hai.
         try:
-            if msg: # Check if msg was set to a message object before deleting
+            # FIX: If 'msg' was successfully assigned, delete it.
+            if msg: 
                 await msg.delete()
         except:
             pass
