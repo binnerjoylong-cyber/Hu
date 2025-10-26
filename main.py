@@ -764,32 +764,55 @@ async def img_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         logger.warning(f"[{chat_id}] Pexels search failed for query: {query}")
 
 # --- Lyrics Command (/lyrics) ---
+# --- Lyrics Command (/lyrics) ---
 async def lyrics_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Fetches and displays lyrics from Genius API."""
     chat_id = update.effective_chat.id
-    
     if not context.args:
         await update.message.reply_text("Please provide a song name. Example: `/lyrics Shape of You`", parse_mode='Markdown')
         return
-
     query = " ".join(context.args)
-
     if not GENIUS_ACCESS_TOKEN:
         await update.message.reply_text("Sorry, the Genius API key is not configured. Please contact the bot owner.")
         return
-        
+    
+    msg = None # Initialize msg for the finally block
+    
     try:
         genius = lg.Genius(GENIUS_ACCESS_TOKEN, verbose=False, remove_section_headers=True)
-        
         msg = await update.message.reply_text(f"Searching for lyrics for **{query}**...")
         await context.bot.send_chat_action(chat_id=chat_id, action="typing")
         
         # Blocking search operation run in a thread
         song = await asyncio.to_thread(genius.search_song, query)
-
+        
+        await msg.delete() # Delete the 'Searching' message
+        
         if song:
             lyrics = song.lyrics
-            # Clean up lyrics
+            
+            # Formatting logic for lyrics
+            lyrics_text = f"🎶 **{song.title}** by **{song.artist}** 🎶\n\n{lyrics}"
+            
+            # Telegram message limit is 4096 characters
+            if len(lyrics_text) > 4096:
+                lyrics_text = lyrics_text[:4000] + "\n\n...(Lyrics truncated due to Telegram limit.)"
+            
+            await update.message.reply_text(lyrics_text, parse_mode='Markdown')
+            logger.info(f"[{chat_id}] Sent lyrics for: {song.title}")
+        else:
+            await update.message.reply_text(f"Sorry, could not find any song or lyrics for **{query}**.")
+            
+    except Exception as e:
+        # If the initial search message exists, try to delete it
+        try:
+            if msg:
+                await msg.delete() 
+        except:
+            pass
+            
+        logger.error(f"[{chat_id}] Error in /lyrics command: {e}", exc_info=True)
+        await update.message.reply_text("An error occurred while fetching the lyrics. Please try again later.")
 
 # Temporary directory jahan files download hongi
 TEMP_DIR = "temp_downloads" 
