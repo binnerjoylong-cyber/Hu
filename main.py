@@ -813,12 +813,12 @@ def sync_download_youtube(url: str):
     """Synchronous function to download a YouTube video to a buffer with better size handling."""
     buffer = io.BytesIO()
     
-    # 💥 FIX: Create a requests session for non-interactive token handling.
-    # This bypasses YouTube's 'bot detection' error.
-    session = requests.Session()
+    # 💥 PERMANENT FIX: Use a requests session for bot detection bypass.
+    # This works because the Build Command forced the installation of the latest pytubefix.
+    session = requests.Session() 
     
     try:
-        # Pass the URL, set use_po_token=True, and pass the session.
+        # Ab 'session' argument bina TypeError ke kaam karega
         yt = YouTube(url, use_po_token=True, session=session)
         
         # Max Telegram upload is 50MB
@@ -829,13 +829,11 @@ def sync_download_youtube(url: str):
         # Try to find a stream below the max size, prioritizing higher quality
         selected_stream = None
         for stream in reversed(streams):
-            # The 'filesize' can be None initially, so we check for both conditions.
             if stream.filesize and stream.filesize <= MAX_SIZE:
                 selected_stream = stream
                 break
         
         if not selected_stream:
-            # A more helpful error message if no suitable stream is found
             return None, yt.title, "Sorry, I couldn't find a version of this video that is small enough to send on Telegram (under 50MB). Please try a shorter video."
 
         # Blocking download operation
@@ -844,7 +842,6 @@ def sync_download_youtube(url: str):
         return buffer, yt.title, None
 
     except PytubeFixError as e:
-        # Catch specific pytube errors for better user feedback
         error_message = str(e).lower()
         logger.error(f"PytubeFixError for URL {url}: {e}")
         if "age restricted" in error_message:
@@ -853,17 +850,14 @@ def sync_download_youtube(url: str):
             return None, "Error", "This video is private and cannot be accessed."
         if "video unavailable" in error_message:
             return None, "Error", "This video is unavailable in your region or has been deleted."
-        # Generic pytube error, often related to throttling or API changes
         return None, "Error", "I couldn't fetch the video details. YouTube might be temporarily blocking requests, or the link could be invalid. Please try again later."
     except Exception as e:
-        # Catch any other unexpected errors
         logger.error(f"Unexpected error in sync_download_youtube for URL {url}: {e}", exc_info=True)
         return None, "Error", "An unexpected error occurred. Please double-check the link."
     
     finally:
-        # 💥 FIX: Always close the session to free up system resources.
+        # Always close the session
         session.close()
-
 # --- MODIFIED: /youtube Command ---
 async def youtube_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Downloads a video from a YouTube link using the command."""
