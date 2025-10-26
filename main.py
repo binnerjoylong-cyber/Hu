@@ -790,30 +790,13 @@ async def lyrics_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         if song:
             lyrics = song.lyrics
             # Clean up lyrics
-            clean_lyrics = re.sub(r'\[.*?\]', '', lyrics) # Remove [Chorus], [Verse], etc.
-            clean_lyrics = os.linesep.join([s for s in clean_lyrics.splitlines() if s]) # Remove empty lines
-            
-            response_text = f"**{song.title}** by **{song.artist}**\n\n{clean_lyrics}"
 
-            if len(response_text) > 4000:
-                truncated_lyrics = clean_lyrics[:3800] + "...\n\n(Lyrics are too long to display fully.)"
-                await msg.edit_text(f"**{song.title}** by **{song.artist}**\n\n{truncated_lyrics}", parse_mode='Markdown')
-            else:
-                await msg.edit_text(response_text, parse_mode='Markdown')
 
-        else:
-            await msg.edit_text(f"Sorry, I couldn't find any lyrics for `{query}`.", parse_mode='Markdown')
-
-    except Exception as e:
-        await update.message.reply_text("An error occurred while searching for lyrics.")
-        logger.error(f"[{chat_id}] Error with Genius API: {e}")
-        
-# --- MODIFIED: YouTube Download Logic with Better Error Handling ---
 # Temporary directory jahan files download hongi
 TEMP_DIR = "temp_downloads" 
 
 def sync_download_youtube(url: str):
-    """Synchronous function to download a video using yt-dlp to a file."""
+    """Synchronous function to download a video using yt-dlp to a file with robust error handling."""
     # Har download ke liye unique filename banayenge
     temp_filename_base = str(uuid.uuid4())
     temp_filepath_template = os.path.join(TEMP_DIR, f"{temp_filename_base}.%(ext)s")
@@ -823,23 +806,34 @@ def sync_download_youtube(url: str):
     final_filepath = None
     title = "Video"
 
-    # yt-dlp options
-    ydl_opts = {
-        'format': 'bestvideo[ext=mp4][filesize<=50M]+bestaudio[ext=m4a]/best[ext=mp4][filesize<=50M]', # MP4 format, 50MB se kam size prioritize karega
-        'outtmpl': temp_filepath_template,
+    # --- YTDL OPTIONS WITH BYPASS FLAGS ---
+    base_ydl_opts = {
         'quiet': True,
         'noplaylist': True,
+        'no_warnings': True,
+        # FIX: Bypass flags for Sign-in/Bot Detection/Age-Restriction
+        'age_limit': 99,                 # Claim to be 99 years old to bypass age gate
+        'geo_bypass': True,              # Bypass geographic restrictions
+        'check_formats': False,          # Speed up format checking
+        'no_check_certificate': True,    # Ignore certificate errors
+    }
+
+    ydl_opts = base_ydl_opts.copy()
+    ydl_opts.update({
+        # MP4 format, 50MB se kam size prioritize karega
+        'format': 'bestvideo[ext=mp4][filesize<=50M]+bestaudio[ext=m4a]/best[ext=mp4][filesize<=50M]', 
+        'outtmpl': temp_filepath_template,
         'max_filesize': MAX_FILESIZE,
         'merge_output_format': 'mp4', # Final file MP4 format mein merge hoga
-        'no_warnings': True,
-    }
+    })
 
     try:
         # Temporary directory banao
         os.makedirs(TEMP_DIR, exist_ok=True)
         
-        # 1. Info extract karke title lein
-        with yt_dlp.YoutubeDL({'quiet': True, 'noplaylist': True}) as ydl:
+        # 1. Info extract karke title lein (download=False)
+        # Info extractor mein bhi bypass flags use karein
+        with yt_dlp.YoutubeDL(base_ydl_opts) as ydl:
             info_dict = ydl.extract_info(url, download=False)
             title = info_dict.get('title', 'Video')
             
@@ -847,30 +841,42 @@ def sync_download_youtube(url: str):
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download([url])
         
-        # 3. Downloaded file ko khojein (kyunki extension .mp4 ya .m4a ho sakta hai)
-        # yt-dlp merge hone ke baad extension change karta hai
+        # 3. Downloaded file ko khojein 
         downloaded_files = glob.glob(os.path.join(TEMP_DIR, f"{temp_filename_base}.*"))
         
         if not downloaded_files:
-            return None, title, "Video download nahi ho paya. Shayad size 50MB se zyada ho ya link unsupported ho."
+            return None, title, "Video download nahi ho paya. Shayad size 50MB se zyada ho ya koi format available na ho."
 
         final_filepath = downloaded_files[0]
         
         return final_filepath, title, None
 
-    except (DownloadError, YoutubeDLError) as e:
-        error_message = str(e).lower()
-        logger.error(f"YTDL DownloadError for URL {url}: {e}")
-        if 'private' in error_message or 'unavailable' in error_message:
-            return None, "Error", "Yeh video private, unavailable hai ya unsupported hai."
-        if 'max_filesize' in error_message:
-            return None, "Error", "Video 50MB se bada hai, isliye Telegram par nahi bhej sakte."
-        # Generic error
-        return None, "Error", f"Download mein galti hui: {str(e)[:100]}"
+    # --- Robust Error Handling ---
+    
+    except DownloadError as e:
+        error_message = str(e)
+        logger.error(f"YTDL DownloadError for URL {url}: {error_message}")
+        
+        if "size is larger than" in error_message or "Max filesize reached" in error_message:
+            return None, title, "Video ka size 50MB se zyada hai, isliye Telegram par nahi bhej sakte."
+        if "private video" in error_message:
+            return None, title, "Yeh video private hai aur isse access nahi kiya ja sakta."
+        if "age-restricted" in error_message or "Sign in to confirm you’re not a bot" in error_message:
+            return None, title, "Yeh video age-restricted/protected hai aur isse download nahi kiya ja sakta (ya to sign-in required hai)."
+        if "unavailable" in error_message or "invalid URL" in error_message:
+            return None, title, "Video available nahi hai ya link galat hai. Kripya check karein."
+        
+        # Unhandled download error
+        return None, title, f"Download mein anjana error: {error_message.split(':')[0]}."
+
+    except YoutubeDLError as e:
+        # Catch other generic yt-dlp errors
+        return None, title, f"Video detail fetch karne mein galti: {str(e).split(':')[0]}."
         
     except Exception as e:
-        logger.error(f"Unexpected error in sync_download_youtube for URL {url}: {e}", exc_info=True)
-        return None, "Error", "Ek anjana error aa gaya. Kripya link check karein."
+        # Catch any unexpected system or Python errors
+        logger.error(f"Unexpected system error in sync_download_youtube for URL {url}: {e}", exc_info=True)
+        return None, "Error", "Ek anjana system error aa gaya. Kripya thodi der baad try karein."
 # --- MODIFIED: /youtube Command ---
 async def youtube_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Downloads a video from a YouTube link using the command."""
