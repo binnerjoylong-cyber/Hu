@@ -791,7 +791,6 @@ async def lyrics_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             lyrics = song.lyrics
             # Clean up lyrics
 
-
 # Temporary directory jahan files download hongi
 TEMP_DIR = "temp_downloads" 
 
@@ -973,7 +972,9 @@ async def handle_youtube_link(update: Update, context: ContextTypes.DEFAULT_TYPE
         except:
             pass
 
-# --- Name query handler ---
+
+
+    # --- Name query handler ---
 async def handle_name_query(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_name = update.effective_user.first_name
     chat_id = update.effective_chat.id
