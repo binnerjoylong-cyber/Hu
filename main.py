@@ -815,10 +815,30 @@ async def lyrics_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await update.message.reply_text("An error occurred while fetching the lyrics. Please try again later.")
 
 # Temporary directory jahan files download hongi
+# Temporary directory jahan files download hongi
 TEMP_DIR = "temp_downloads" 
+
+# NOTE: Is function ko chalane ke liye aapko 'os', 'uuid', 'glob', 'yt_dlp', 'DownloadError', 
+# 'YoutubeDLError', aur 'logger' ko file ki shuruaat mein import karna hoga.
+
 def sync_download_youtube(url: str):
-    # ... (imports and setup)
+    """Synchronous function to download a video using yt-dlp to a file with robust error handling."""
+    # Imports assumed to be here or at the top of the file
+    import os
+    import uuid
+    import glob
+    from yt_dlp.utils import DownloadError, YoutubeDLError 
+    # NOTE: Assuming logger is globally defined or available
+
+    # Har download ke liye unique filename banayenge
+    temp_filename_base = str(uuid.uuid4())
+    temp_filepath_template = os.path.join(TEMP_DIR, f"{temp_filename_base}.%(ext)s")
     
+    # Telegram ki limit 50MB hai
+    MAX_FILESIZE = 50 * 1024 * 1024 
+    final_filepath = None
+    title = "Video"
+
     # --- YTDL OPTIONS WITH BYPASS FLAGS ---
     base_ydl_opts = {
         'quiet': True,
@@ -833,28 +853,57 @@ def sync_download_youtube(url: str):
         'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.75 Safari/537.36',
     }
 
-    # ... (ydl_opts copy and update)
+    ydl_opts = base_ydl_opts.copy()
+    ydl_opts.update({
+        # MP4 format, 50MB se kam size prioritize karega
+        'format': 'bestvideo[ext=mp4][filesize<=50M]+bestaudio[ext=m4a]/best[ext=mp4][filesize<=50M]', 
+        'outtmpl': temp_filepath_template,
+        'max_filesize': MAX_FILESIZE,
+        'merge_output_format': 'mp4', # Final file MP4 format mein merge hoga
+    })
 
+    # <--- YAHAN 'try:' BLOCK SHURU HOTA HAI, JO AAPKE PICHELE SNIPPET MEIN MISSING THA --->
+    try:
+        import yt_dlp # yt_dlp ko try block mein import karna agar upar import nahi hua ho
+        
+        # Temporary directory banao
+        os.makedirs(TEMP_DIR, exist_ok=True)
+        
+        # 1. Info extract karke title lein (download=False)
+        with yt_dlp.YoutubeDL(base_ydl_opts) as ydl:
+            info_dict = ydl.extract_info(url, download=False)
+            title = info_dict.get('title', 'Video')
+            
+        # 2. Video download karein
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            ydl.download([url])
+        
+        # 3. Downloaded file ko khojein 
+        downloaded_files = glob.glob(os.path.join(TEMP_DIR, f"{temp_filename_base}.*"))
+        
+        if not downloaded_files:
+            return None, title, "Video download nahi ho paya. Shayad size 50MB se zyada ho ya koi format available na ho."
+
+        final_filepath = downloaded_files[0]
+        
+        return final_filepath, title, None
+
+    # <--- YAHAN SE 'except' BLOCK SHURU HOTA HAI --->
     # --- Robust Error Handling ---
     except DownloadError as e:
         error_message = str(e)
-        logger.error(f"YTDL DownloadError for URL {url}: {error_message}")
+        # logger.error(f"YTDL DownloadError for URL {url}: {error_message}") # logger is assumed
         
-        # ... (other error checks)
-
-        if "age-restricted" in error_message or "Sign in to confirm you’re not a bot" in error_message:
-            # FIX: User ko batao ki agar fir bhi error aa raha hai to kya karein.
-            return None, title, "Yeh video age-restricted/protected hai aur isse download nahi kiya ja sakta (ya to sign-in required hai). **Kripya koi aur video link try karein.**"
-        
-        # ... (rest of the error handling)
-
-        
+        # Check for size first, then others
         if "size is larger than" in error_message or "Max filesize reached" in error_message:
             return None, title, "Video ka size 50MB se zyada hai, isliye Telegram par nahi bhej sakte."
         if "private video" in error_message:
             return None, title, "Yeh video private hai aur isse access nahi kiya ja sakta."
+        
+        # Combined check for age/bot detection
         if "age-restricted" in error_message or "Sign in to confirm you’re not a bot" in error_message:
-            return None, title, "Yeh video age-restricted/protected hai aur isse download nahi kiya ja sakta (ya to sign-in required hai)."
+            return None, title, "Yeh video age-restricted/protected hai aur isse download nahi kiya ja sakta (ya to sign-in required hai). **Kripya koi aur video link try karein.**"
+            
         if "unavailable" in error_message or "invalid URL" in error_message:
             return None, title, "Video available nahi hai ya link galat hai. Kripya check karein."
         
@@ -867,7 +916,7 @@ def sync_download_youtube(url: str):
         
     except Exception as e:
         # Catch any unexpected system or Python errors
-        logger.error(f"Unexpected system error in sync_download_youtube for URL {url}: {e}", exc_info=True)
+        # logger.error(f"Unexpected system error in sync_download_youtube for URL {url}: {e}", exc_info=True) # logger is assumed
         return None, "Error", "Ek anjana system error aa gaya. Kripya thodi der baad try karein."
 # --- MODIFIED: /youtube Command ---
 async def youtube_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
