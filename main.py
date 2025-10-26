@@ -678,7 +678,7 @@ def sync_generate_image(query: str) -> str | None:
         
         # Get final image URL
         # --- FIX: Added https:// ---
-        result_response = requests.get(f"https.stablehorde.net/api/v2/generate/status/{generation_id}", timeout=10)
+        result_response = requests.get(f"https://stablehorde.net/api/v2/generate/status/{generation_id}", timeout=10)
         result_response.raise_for_status()
         
         return result_response.json()["generations"][0]["img"]
