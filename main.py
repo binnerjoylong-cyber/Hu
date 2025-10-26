@@ -809,17 +809,7 @@ async def lyrics_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         logger.error(f"[{chat_id}] Error with Genius API: {e}")
         
 # --- MODIFIED: YouTube Download Logic with Better Error Handling ---
-
-# --- MODIFIED: /youtube Command ---
-async def youtube_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Downloads a video from a YouTube link using the command."""
-    if not context.args:
-        await update.message.reply_text("Please provide a YouTube video link. Example: `/youtube <link>`")
-        return
-    
-    url = context.args[0]
-    # Call core handler
-    await handle_youtube_link(update, context, url)def sync_download_youtube(url: str):
+def sync_download_youtube(url: str):
     """Synchronous function to download a YouTube video to a buffer with better size handling."""
     buffer = io.BytesIO()
     
@@ -868,7 +858,16 @@ async def youtube_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         # Catch any other unexpected errors
         logger.error(f"Unexpected error in sync_download_youtube for URL {url}: {e}", exc_info=True)
         return None, "Error", "An unexpected error occurred. Please double-check the link."
-
+# --- MODIFIED: /youtube Command ---
+async def youtube_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Downloads a video from a YouTube link using the command."""
+    if not context.args:
+        await update.message.reply_text("Please provide a YouTube video link. Example: `/youtube <link>`")
+        return
+    
+    url = context.args[0]
+    # Call core handler
+    await handle_youtube_link(update, context, url)
 
 # --- NEW: Core YouTube Handler for both command and auto-detection (FIXED UPDATE.BOT ERROR) ---
 async def handle_youtube_link(update: Update, context: ContextTypes.DEFAULT_TYPE, url: str) -> None:
