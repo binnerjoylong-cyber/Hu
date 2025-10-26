@@ -1865,7 +1865,7 @@ async def weather_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
     # Fallback to Visual Crossing
     if VISUALCROSSING_API_KEY:
-        url = f"https.weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/{city}?unitGroup=metric&key={VISUALCROSSING_API_KEY}&contentType=json"
+        url = f"https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/{city}?unitGroup=metric&key={VISUALCROSSING_API_KEY}&contentType=json"
         try:
             response = requests.get(url).json()
             if "address" in response:
@@ -1904,7 +1904,7 @@ async def crypto_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         return
         
     symbol = context.args[0].lower()
-    url = f"https.api.coingecko.com/api/v3/simple/price?ids={symbol}&vs_currencies=usd,inr&include_24hr_change=true"
+    url = f"https://api.coingecko.com/api/v3/simple/price?ids={symbol}&vs_currencies=usd,inr&include_24hr_change=true"
     
     try:
         response = requests.get(url).json()
@@ -1935,7 +1935,7 @@ async def define_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         return
     
     word = " ".join(context.args)
-    url = f"https.api.dictionaryapi.dev/api/v2/entries/en/{word}"
+    url = f"https://api.dictionaryapi.dev/api/v2/entries/en/{word}"
     
     try:
         response = requests.get(url).json()
@@ -1965,7 +1965,7 @@ async def qr_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         
     text = " ".join(context.args)
     encoded_text = urllib.parse.quote(text)
-    qr_url = f"https.api.qrserver.com/v1/create-qr-code/?size=500x500&data={encoded_text}"
+    qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=500x500&data={encoded_text}"
     
     await context.bot.send_photo(
         chat_id=update.effective_chat.id,
@@ -1984,7 +1984,7 @@ async def shorten_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         return
         
     url = context.args[0]
-    api_url = f"https.api.tinyurl.com/create?api_token={TINYURL_API_KEY}"
+    api_url = f"https://api.tinyurl.com/create?api_token={TINYURL_API_KEY}"
     payload = {"url": url, "domain": "tiny.one"} # Using tiny.one domain
     
     try:
@@ -2033,7 +2033,7 @@ async def paste_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         return
     
     text_to_paste = update.message.reply_to_message.text
-    url = "https.spaceb.in/api/v1/documents" # This is a POST endpoint, not for direct data sending
+    url = "https://spaceb.in/api/v1/documents" # This is a POST endpoint, not for direct data sending
     
     try:
         # The correct way is to send the text as the 'data' payload
@@ -2045,7 +2045,7 @@ async def paste_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             json_response = response.json()
             if json_response.get("payload") and json_response["payload"].get("id"):
                 paste_id = json_response["payload"]["id"]
-                paste_url = f"https.spaceb.in/{paste_id}"
+                paste_url = f"https://spaceb.in/{paste_id}"
                 await update.message.reply_text(f"Text has been pasted successfully:\n{paste_url}")
             else:
                 await update.message.reply_text(f"Failed to paste text. Unexpected API response.")
@@ -2147,7 +2147,7 @@ async def catfact_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
 async def dogfact_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Gets a random dog fact."""
-    url = "https.dog.ceo/api/breeds/image/random" # Using this to get a fact and an image
+    url = "https://dog.ceo/api/breeds/image/random" # Using this to get a fact and an image
     try:
         fact_res = requests.get("https.dogapi.dog/api/v2/facts").json()
         img_res = requests.get("https.dog.ceo/api/breeds/image/random").json()
