@@ -815,8 +815,11 @@ async def lyrics_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await update.message.reply_text("An error occurred while fetching the lyrics. Please try again later.")
 
 # Temporary directory jahan files download hongi
+
 # Temporary directory jahan files download hongi
 TEMP_DIR = "temp_downloads" 
+
+# NOTE: Is code ko chalane ke liye aapko apne project folder mein 'cookies.txt' file rakhni hogi.
 
 def sync_download_youtube(url: str):
     """Synchronous function to download a video using yt-dlp to a file with robust error handling."""
@@ -842,6 +845,8 @@ def sync_download_youtube(url: str):
         'no_check_certificate': True, 
         # FIX: Robust User-Agent for Bot Detection
         'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.75 Safari/537.36',
+        # ✅ COOKIE FIX: Use cookies for authentication to bypass bot detection
+        'cookiefile': 'cookies.txt', 
     }
 
     ydl_opts = base_ydl_opts.copy()
@@ -886,7 +891,7 @@ def sync_download_youtube(url: str):
         if "private video" in error_message:
             return None, title, "Yeh video private hai aur isse access nahi kiya ja sakta."
         if "age-restricted" in error_message or "Sign in to confirm you’re not a bot" in error_message:
-            return None, title, "Yeh video age-restricted/protected hai aur isse download nahi kiya ja sakta (ya to sign-in required hai). **Kripya koi aur video link try karein.**"
+            return None, title, "Yeh video age-restricted/protected hai aur isse download nahi kiya ja sakta. Kripya koi aur video link try karein."
         if "unavailable" in error_message or "invalid URL" in error_message:
             return None, title, "Video available nahi hai ya link galat hai. Kripya check karein."
         
@@ -914,14 +919,14 @@ async def youtube_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     # Call core handler
     await handle_youtube_link(update, context, url)
 
-# --- NEW: Core YouTube Handler ---
+# --- NEW: Core YouTube Handler (Fixed NameError and Indentation) ---
 async def handle_youtube_link(update: Update, context: ContextTypes.DEFAULT_TYPE, url: str):
     
-    # FIX: Initialize variables at the start to prevent NameError
+    # FIX 1: Initialize variables at the start to prevent NameError
     chat_id = update.effective_chat.id
     video_filepath = None 
     title = None
-    msg = None # <--- Crucial: msg is initialized to None
+    msg = None 
 
     try:
         # Initial 'Downloading...' message bhejna
@@ -988,12 +993,11 @@ async def handle_youtube_link(update: Update, context: ContextTypes.DEFAULT_TYPE
         # Agar file_path set hua hai aur file exist karti hai, toh usse delete kar do.
         if video_filepath and os.path.exists(video_filepath):
             try:
-                # FIX: Indented code block
                 os.remove(video_filepath)
                 logger.info(f"[{chat_id}] Cleaned up temporary file: {video_filepath}")
             except Exception as e:
                 logger.error(f"[{chat_id}] Failed to delete temp file {video_filepath}: {e}")
-                pass # Continue even if file deletion fails
+                pass 
         
         # Ensure that the initial 'Downloading...' message is deleted, if it still exists.
         try:
@@ -1001,8 +1005,6 @@ async def handle_youtube_link(update: Update, context: ContextTypes.DEFAULT_TYPE
                 await msg.delete()
         except:
             pass
-     
-
 
 
     # --- Name query handler ---
