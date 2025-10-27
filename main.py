@@ -1571,7 +1571,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     
     # Fetch bot username for group link
     bot_info = await context.bot.get_me()
-    add_to_group_url = f"https.t.me/{bot_info.username}?startgroup=true"
+    add_to_group_url = f"https://t.me/{bot_info.username}?startgroup=true"
     
     keyboard = [[InlineKeyboardButton("➕ Add Me To Your Group ➕", url=add_to_group_url)]]
     reply_markup = InlineKeyboardMarkup(keyboard)
