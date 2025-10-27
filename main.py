@@ -68,8 +68,9 @@ VISUALCROSSING_API_KEY = os.getenv("VISUALCROSSING_API_KEY") # From visualcrossi
 TINYURL_API_KEY = os.getenv("TINYURL_API_KEY") # From tinyurl.com
 
 # --- NEW: API Key for DeepSeek via OpenRouter ---
-DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY") # From openrouter.ai
+DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")# From openrouter.ai
 
+INVIDIOUS_BASE_URL = os.getenv("INVIDIOUS_BASE_URL")
 
 # --- Global Stats Variables ---
 start_time = datetime.now()
