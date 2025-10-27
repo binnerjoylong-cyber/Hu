@@ -817,7 +817,7 @@ async def lyrics_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
 # Temporary directory jahan files download hongi
 # Temporary directory jahan files download hongi
-
+MAX_FILESIZE = 50 * 1024 * 1024
 TEMP_DIR = "temp_downloads" 
 # --- NEW/MODIFIED: sync_download_youtube (YT-DLP PRIMARY FUNCTION) ---
 def sync_download_youtube(url: str):
