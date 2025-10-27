@@ -856,6 +856,16 @@ def sync_download_youtube(url: str):
     })
 
     try:
+        # --- NEW TEMPORARY CHECK FOR COOKIES FILE ---
+        # Isse turant pata chal jayega ki file deploy hui hai ya nahi.
+        if not os.path.exists('cookies.txt'):
+            logger.error("Critical: 'cookies.txt' file not found at execution root.")
+            return None, title, "❌ **Critical Error:** 'cookies.txt' file server par nahi mili. Kripya ensure karein ki yeh `main.py` ke saath deploy hui hai."
+        # -------------------------------------------
+
+        # Temporary directory banao
+        os.makedirs(TEMP_DIR, exist_ok=True)
+        # ... (rest of the download logic) ...
         # Temporary directory banao
         os.makedirs(TEMP_DIR, exist_ok=True)
         
