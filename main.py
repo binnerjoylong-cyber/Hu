@@ -816,17 +816,15 @@ async def lyrics_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
 # Temporary directory jahan files download hongi
 # Temporary directory jahan files download hongi
-TEMP_DIR = "temp_downloads" 
 
+TEMP_DIR = "temp_downloads" 
+# --- NEW/MODIFIED: sync_download_youtube (YT-DLP PRIMARY FUNCTION) ---
 def sync_download_youtube(url: str):
     """Synchronous function to download a video using yt-dlp to a file with robust error handling."""
     
-    # Har download ke liye unique filename banayenge
     temp_filename_base = str(uuid.uuid4())
     temp_filepath_template = os.path.join(TEMP_DIR, f"{temp_filename_base}.%(ext)s")
     
-    # Telegram ki limit 50MB hai
-    MAX_FILESIZE = 50 * 1024 * 1024 
     final_filepath = None
     title = "Video"
 
@@ -835,41 +833,31 @@ def sync_download_youtube(url: str):
         'quiet': True,
         'noplaylist': True,
         'no_warnings': True,
-        # Bypass flags
         'age_limit': 99,              
         'geo_bypass': True,           
         'check_formats': False,       
         'no_check_certificate': True, 
-        # FIX: Robust User-Agent for Bot Detection
         'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.75 Safari/537.36',
-        # ✅ COOKIE FIX: Use cookies for authentication to bypass bot detection
         'cookiefile': 'cookies.txt', 
     }
 
     ydl_opts = base_ydl_opts.copy()
     ydl_opts.update({
-        # MP4 format, 50MB se kam size prioritize karega
         'format': 'bestvideo[ext=mp4][filesize<=50M]+bestaudio[ext=m4a]/best[ext=mp4][filesize<=50M]', 
         'outtmpl': temp_filepath_template,
         'max_filesize': MAX_FILESIZE,
-        'merge_output_format': 'mp4', # Final file MP4 format mein merge hoga
+        'merge_output_format': 'mp4',
     })
 
     try:
-        # --- NEW TEMPORARY CHECK FOR COOKIES FILE ---
-        # Isse turant pata chal jayega ki file deploy hui hai ya nahi.
+        # Check for cookies file
         if not os.path.exists('cookies.txt'):
             logger.error("Critical: 'cookies.txt' file not found at execution root.")
-            return None, title, "❌ **Critical Error:** 'cookies.txt' file server par nahi mili. Kripya ensure karein ki yeh `main.py` ke saath deploy hui hai."
-        # -------------------------------------------
+            return None, title, "❌ **Critical Error:** 'cookies.txt' file server par nahi mili."
 
-        # Temporary directory banao
-        os.makedirs(TEMP_DIR, exist_ok=True)
-        # ... (rest of the download logic) ...
-        # Temporary directory banao
         os.makedirs(TEMP_DIR, exist_ok=True)
         
-        # 1. Info extract karke title lein (download=False)
+        # 1. Info extract karke title lein
         with yt_dlp.YoutubeDL(base_ydl_opts) as ydl:
             info_dict = ydl.extract_info(url, download=False)
             title = info_dict.get('title', 'Video')
@@ -885,7 +873,6 @@ def sync_download_youtube(url: str):
             return None, title, "Video download nahi ho paya. Shayad size 50MB se zyada ho ya koi format available na ho."
 
         final_filepath = downloaded_files[0]
-        
         return final_filepath, title, None
 
     # --- Robust Error Handling ---
@@ -898,47 +885,131 @@ def sync_download_youtube(url: str):
         if "private video" in error_message:
             return None, title, "Yeh video private hai aur isse access nahi kiya ja sakta."
         
-        # --- NEW COOKIE DEBUGGING MESSAGE ---
+        # --- FALLBACK TRIGGER MESSAGE ---
         if "age-restricted" in error_message or "Sign in to confirm you’re not a bot" in error_message:
-            error_details = (
-                "Yeh video protected hai (Age-Restricted/Bot Detection). "
-                "Agar aapne `cookies.txt` set kiya hai, toh shayad **cookies expire ho gaye** hain ya **`requests` library install nahi** hai. "
-                "Kripya naye cookies ke saath dobara try karein."
-            )
-            return None, title, error_details
+            return None, title, "FALLBACK_TRIGGERED: YT-DLP failed due to Age-Restriction or Bot Detection."
         
         if "unavailable" in error_message or "invalid URL" in error_message:
             return None, title, "Video available nahi hai ya link galat hai. Kripya check karein."
         
-        # Unhandled download error
         return None, title, f"Download mein anjana error: {error_message.split(':')[0]}."
 
     except YoutubeDLError as e:
-        # Catch other generic yt-dlp errors
         return None, title, f"Video detail fetch karne mein galti: {str(e).split(':')[0]}."
         
     except Exception as e:
-        # Catch any unexpected system or Python errors
         logger.error(f"Unexpected system error in sync_download_youtube for URL {url}: {e}", exc_info=True)
         return None, "Error", "Ek anjana system error aa gaya. Kripya thodi der baad try karein."
 
 
-
-# --- MODIFIED: /youtube Command ---
-async def youtube_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Downloads a video from a YouTube link using the command."""
-    if not context.args:
-        await update.message.reply_text("Please provide a YouTube video link. Example: `/youtube <link>`")
-        return
+# --- NEW: download_via_invidious (INVIDIOUS URL EXTRACTOR) ---
+async def download_via_invidious(video_url: str) -> tuple[str | None, str]:
+    """Invidious API se video details fetch karta hai aur direct MP4 download URL nikalta hai."""
     
-    url = context.args[0]
-    # Call core handler
-    await handle_youtube_link(update, context, url)
+    video_id_match = re.search(r'(?:v=|youtu\.be/|watch\?v=)([a-zA-Z0-9_-]{11})', video_url)
+    if not video_id_match:
+        return None, "Invalid YouTube URL format."
+    video_id = video_id_match.group(1)
 
-# --- NEW: Core YouTube Handler (Fixed NameError and Indentation) ---
+    api_endpoint = f"{INVIDIOUS_BASE_URL}/api/v1/videos/{video_id}"
+    
+    try:
+        response = await asyncio.to_thread(requests.get, api_endpoint, timeout=15)
+        response.raise_for_status()
+        data = response.json()
+
+        title = data.get('title', 'Video (via Invidious)')
+        best_url = None
+        
+        for f in data.get('format', []):
+            if f['container'] == 'mp4' and f.get('qualityLabel') in ['720p', '480p', '360p']:
+                best_url = f.get('url')
+                break
+        
+        if not best_url:
+            for f in data.get('format', []):
+                if f['container'] == 'mp4':
+                    best_url = f.get('url')
+                    break
+        
+        if best_url:
+            return best_url, title
+        else:
+            return None, f"{title}: Invidious ko video ke liye koi suitable MP4 link nahi mila."
+            
+    except requests.RequestException as e:
+        logger.error(f"Invidious API Request failed for {video_id}: {e}")
+        return None, f"Invidious API se connect nahi ho paya. Server down ho sakta hai ya INVIDIOUS_BASE_URL galat hai."
+    except Exception as e:
+        logger.error(f"Invidious download mein anjaani galti: {e}")
+        return None, f"Invidious fallback mein anjaani galti: {type(e).__name__}"
+
+
+# --- NEW: sync_download_and_upload (INVIDIOUS DOWNLOADER/UPLOADER) ---
+async def sync_download_and_upload(update: Update, context: ContextTypes.DEFAULT_TYPE, download_url: str, title: str):
+    """Direct URL (Invidious se) ko download karke Telegram par bhejta hai."""
+    chat_id = update.effective_chat.id
+    temp_filename = os.path.join(TEMP_DIR, f"{str(uuid.uuid4())}.mp4")
+    
+    # Send temporary message for progress
+    temp_msg = await context.bot.send_message(chat_id=chat_id, text=f"📥 **Downloading {title[:50]}...** (via Fallback)", parse_mode='Markdown')
+
+    try:
+        response = await asyncio.to_thread(requests.get, download_url, stream=True, timeout=120)
+        response.raise_for_status()
+        
+        file_size = 0
+        os.makedirs(TEMP_DIR, exist_ok=True)
+        
+        with open(temp_filename, 'wb') as f:
+            for chunk in response.iter_content(chunk_size=8192):
+                if chunk:
+                    f.write(chunk)
+                    file_size += len(chunk)
+                    if file_size > MAX_FILESIZE:
+                        raise Exception("MAX_FILESIZE_EXCEEDED")
+        
+        caption_text = f"🎥 **{title}**\n\nDownloaded with Laila Bot (Fallback)."
+        if len(caption_text) > 1024:
+            caption_text = f"🎥 **{title[:80]}...**\n\nDownloaded with Laila Bot (Fallback)."
+            
+        await temp_msg.delete()
+
+        # Upload karna
+        with open(temp_filename, 'rb') as video_file:
+            await context.bot.send_video(
+                chat_id=chat_id,
+                video=video_file, 
+                caption=caption_text,
+                parse_mode='Markdown',
+                read_timeout=120, 
+                write_timeout=120
+            )
+        logger.info(f"[{chat_id}] Successfully sent Invidious fallback video: {title}")
+        return True, None
+        
+    except Exception as e:
+        try:
+            await temp_msg.delete()
+        except:
+            pass
+
+        if "MAX_FILESIZE_EXCEEDED" in str(e):
+            return False, "Video ka size 50MB se zyada hai, isliye Telegram par nahi bhej sakte."
+        logger.error(f"[{chat_id}] Error in Invidious download/upload: {e}", exc_info=True)
+        return False, f"Invidious se video download ya upload karte waqt galti ho gayi: {type(e).__name__}"
+        
+    finally:
+        if os.path.exists(temp_filename):
+            try:
+                os.remove(temp_filename)
+            except Exception as e:
+                logger.error(f"[{chat_id}] Failed to delete temp file {temp_filename}: {e}")
+                pass
+
+# --- MODIFIED: handle_youtube_link (CORE LOGIC) ---
 async def handle_youtube_link(update: Update, context: ContextTypes.DEFAULT_TYPE, url: str):
     
-    # FIX 1: Initialize variables at the start to prevent NameError
     chat_id = update.effective_chat.id
     video_filepath = None 
     title = None
@@ -946,56 +1017,82 @@ async def handle_youtube_link(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     try:
         # Initial 'Downloading...' message bhejna
-        msg = await context.bot.send_message(chat_id=chat_id, text="⏳ Downloading video...")
+        msg = await context.bot.send_message(chat_id=chat_id, text="⏳ Downloading video with YT-DLP...")
         
-        # Use a thread for the blocking operation (sync_download_youtube)
+        # --- 1. YT-DLP ATTEMPT ---
         video_filepath, title, error = await asyncio.to_thread(sync_download_youtube, url)
         
-        # Download message ko delete karna
-        await msg.delete()
-        
-        # 1. DOWNLOAD ERROR CHECK
+        # --- 2. ERROR CHECK AND FALLBACK LOGIC ---
         if error:
+            # Agar error humara FALLBACK_TRIGGERED message hai
+            if "FALLBACK_TRIGGERED" in error:
+                
+                # Invidious Fallback try karo
+                await msg.edit_text("⚠️ YT-DLP failed (Bot/Age-Restricted). Trying **Invidious Fallback**...")
+                
+                invidious_url, invidious_title = await download_via_invidious(url)
+                
+                # YT-DLP file ko delete karein agar galti se ban gayi ho
+                if video_filepath and os.path.exists(video_filepath):
+                    os.remove(video_filepath)
+                    
+                if invidious_url:
+                    # Agar Invidious se direct URL mil gaya, toh usse download karke bhej do
+                    await msg.delete() # Purana message delete
+                    success, final_error = await sync_download_and_upload(update, context, invidious_url, invidious_title)
+                    
+                    if not success:
+                        await context.bot.send_message(chat_id=chat_id, text=f"❌ **Fallback failed:** {final_error}")
+                        logger.warning(f"[{chat_id}] Invidious download failed: {final_error}")
+                    return
+                else:
+                    # Agar Invidious se bhi link nahi mila
+                    await msg.delete() 
+                    await context.bot.send_message(chat_id=chat_id, text=f"Could not download video: **{invidious_title}**")
+                    logger.warning(f"[{chat_id}] Invidious link extraction failed: {invidious_title}")
+                    return
+
+            # Agar error koi aur hai (e.g., file size, private)
+            await msg.delete()
             await context.bot.send_message(chat_id=chat_id, text=f"Could not download video: {error}")
             logger.warning(f"[{chat_id}] YouTube download failed for '{url}': {error}")
             return
             
-        # --- UPLOAD LOGIC ---
+        # --- 3. YT-DLP SUCCESSFUL UPLOAD LOGIC ---
+        
+        # Download message ko delete karna
+        await msg.delete() 
         
         # Caption tayyar karna
         caption_text = f"🎥 **{title}**\n\nDownloaded with Laila Bot."
         if len(caption_text) > 1024:
-            # Telegram ki caption limit se zyada hone par chota karna
             caption_text = f"🎥 **{title[:80]}...**\n\nDownloaded with Laila Bot."
             
-        # 2. UPLOAD TRY BLOCK
+        # UPLOAD TRY BLOCK 
         try:
-            # File ko binary read mode ('rb') mein open karke bhejenge
             with open(video_filepath, 'rb') as video_file:
                 await context.bot.send_video(
                     chat_id=chat_id,
-                    video=video_file,  # File handle pass kiya
+                    video=video_file, 
                     caption=caption_text,
                     parse_mode='Markdown',
                     read_timeout=120, 
                     write_timeout=120
                 )
-            logger.info(f"[{chat_id}] Successfully sent YouTube video: {title}")
+            logger.info(f"[{chat_id}] Successfully sent YouTube video (YT-DLP): {title}")
         
         except Exception as e:
-            # UPLOAD ya SENDING mein galti
             logger.error(f"[{chat_id}] Error while uploading or sending video: {e}", exc_info=True)
             await context.bot.send_message(
                 chat_id=chat_id, 
-                text="⚠️ **Upload Error!** Sorry, video Telegram par bhejte waqt galti ho gayi. Shayad file corrupted ho ya network problem ho.",
+                text="⚠️ **Upload Error!** Sorry, video Telegram par bhejte waqt galti ho gayi.",
                 parse_mode='Markdown'
             )
             return
 
-    # 3. UNEXPECTED ERROR CATCH
+    # 4. UNEXPECTED ERROR CATCH
     except Exception as e:
         logger.error(f"[{chat_id}] Unexpected error in YouTube handler: {e}", exc_info=True)
-        # Agar msg set hua hai, toh usse delete karein
         try:
             if msg:
                 await msg.delete()
@@ -1004,23 +1101,25 @@ async def handle_youtube_link(update: Update, context: ContextTypes.DEFAULT_TYPE
             
         await context.bot.send_message(chat_id=chat_id, text="Aapki request process karte waqt koi anjaani galti hui. Kripya dobara try karein.")
 
-    # 4. FINAL CLEANUP (Yeh har haal mein run hoga)
+    # 5. FINAL CLEANUP 
     finally:
-        # Agar file_path set hua hai aur file exist karti hai, toh usse delete kar do.
+        # Cleanup sirf tab jab YT-DLP ne local file banaya ho
         if video_filepath and os.path.exists(video_filepath):
             try:
                 os.remove(video_filepath)
                 logger.info(f"[{chat_id}] Cleaned up temporary file: {video_filepath}")
             except Exception as e:
                 logger.error(f"[{chat_id}] Failed to delete temp file {video_filepath}: {e}")
-                pass 
+                pass
         
-        # Ensure that the initial 'Downloading...' message is deleted, if it still exists.
         try:
+            # Final message delete karna (agar pehle nahi hua)
             if msg:
                 await msg.delete()
         except:
             pass
+  
+        
 
 
     # --- Name query handler ---
