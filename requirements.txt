@@ -10,9 +10,10 @@ uuid
 asyncio
 SpeechRecognition
 pydub
-yt-dlp
+yt-dlp==2024.07.25
 asyncpg 
 aiohttp
+
 
 
 
