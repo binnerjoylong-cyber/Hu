@@ -1119,7 +1119,16 @@ async def handle_youtube_link(update: Update, context: ContextTypes.DEFAULT_TYPE
                 await msg.delete()
         except:
             pass
-  
+  # --- MISSING: youtube_command handler ---
+async def youtube_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Downloads a video from a YouTube link using the command."""
+    if not context.args:
+        await update.message.reply_text("Please provide a YouTube video link. Example: `/youtube <link>`")
+        return
+    
+    url = context.args[0]
+    # Call core handler
+    await handle_youtube_link(update, context, url)
         
 
 
