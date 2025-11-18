@@ -37,6 +37,7 @@ import glob
 # --- NEW: IMPORT THE GAME MODULE ---
 import game
 
+
 # Load environment variables from .env file
 load_dotenv()
 
@@ -80,6 +81,8 @@ known_users = set()
 chat_members = defaultdict(dict)
 # --- NEW: Global variable for the guessing game ---
 guessing_games = defaultdict(dict)
+
+xoxo_games = {}
 
 
 # --- Sudo User Management ---
@@ -594,7 +597,171 @@ async def get_bot_response(user_message: str, chat_id: int, bot_username: str, s
     logger.critical(f"[{chat_id}] All models (Gemini, Gemma, DeepSeek) failed or keys are missing.")
     return "Sorry, I'm a bit busy right now. Please try again later. 😔"
 
+# --- XOXO Helper Functions ---
+def check_xoxo_win(board):
+    """Checks for a winner on the board."""
+    win_conditions = [
+        (0, 1, 2), (3, 4, 5), (6, 7, 8), # Rows
+        (0, 3, 6), (1, 4, 7), (2, 5, 8), # Columns
+        (0, 4, 8), (2, 4, 6)             # Diagonals
+    ]
+    for a, b, c in win_conditions:
+        if board[a] == board[b] == board[c] and board[a] != " ":
+            return board[a]
+    if " " not in board:
+        return "Draw"
+    return None
 
+def get_xoxo_keyboard(board):
+    """Creates the inline keyboard for the board."""
+    keyboard = []
+    for i in range(0, 9, 3):
+        row = []
+        for j in range(3):
+            idx = i + j
+            text = "⬜"
+            if board[idx] == "X": text = "❌"
+            if board[idx] == "O": text = "⭕"
+            
+            # Callback data includes index: xoxo_move_0, xoxo_move_1 etc.
+            row.append(InlineKeyboardButton(text, callback_data=f"xoxo_move_{idx}"))
+        keyboard.append(row)
+    
+    # Add a close/quit button
+    keyboard.append([InlineKeyboardButton("End Game 🛑", callback_data="xoxo_end")])
+    return InlineKeyboardMarkup(keyboard)
+# --- XOXO Command Handler ---
+async def xoxo_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Starts a Tic-Tac-Toe game lobby."""
+    chat_id = update.effective_chat.id
+    user = update.effective_user
+    
+    if chat_id in xoxo_games:
+        await update.message.reply_text("Ek game pehle se chal raha hai! Use khatam hone do ya /endxoxo karo.")
+        return
+
+    # Create Lobby
+    keyboard = [[InlineKeyboardButton("Join Game 🎮", callback_data="xoxo_join")]]
+    await update.message.reply_text(
+        f"❌ **Tic-Tac-Toe Challenge!** ⭕\n\n"
+        f"{user.first_name} wants to play!\n"
+        f"Click the button below to join as Player 2.",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
+    
+    # Initialize State
+    xoxo_games[chat_id] = {
+        'board': [" "] * 9,
+        'turn': None, # Will be set when game starts
+        'p1': (user.id, user.first_name),
+        'p2': None,
+        'active': False
+    }
+
+async def xoxo_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handles button clicks for XOXO."""
+    query = update.callback_query
+    chat_id = update.effective_chat.id
+    user_id = query.from_user.id
+    data = query.data
+    
+    if chat_id not in xoxo_games:
+        await query.answer("Game exist nahi karta ya expire ho gaya.", show_alert=True)
+        await query.message.delete()
+        return
+
+    game = xoxo_games[chat_id]
+
+    # --- JOIN LOGIC ---
+    if data == "xoxo_join":
+        if game['p2'] is not None:
+            await query.answer("Game full hai!", show_alert=True)
+            return
+        
+        if user_id == game['p1'][0]:
+             await query.answer("Aap khud ke sath nahi khel sakte! Kisi aur ka wait karo.", show_alert=True)
+             return
+             
+        # Start Game
+        game['p2'] = (user_id, query.from_user.first_name)
+        game['active'] = True
+        game['turn'] = game['p1'][0] # Player 1 starts
+        
+        p1_name = game['p1'][1]
+        p2_name = game['p2'][1]
+        
+        await query.edit_message_text(
+            f"🎮 **Game Started!**\n\n"
+            f"❌ Player 1: {p1_name}\n"
+            f"⭕ Player 2: {p2_name}\n\n"
+            f"Current Turn: **{p1_name} (❌)**",
+            reply_markup=get_xoxo_keyboard(game['board']),
+            parse_mode='Markdown'
+        )
+        return
+
+    # --- END GAME LOGIC ---
+    if data == "xoxo_end":
+        if user_id in [game['p1'][0], game['p2'] and game['p2'][0]]:
+            del xoxo_games[chat_id]
+            await query.edit_message_text("🏳️ Game was cancelled by a player.")
+        else:
+            await query.answer("Sirf players game end kar sakte hain!", show_alert=True)
+        return
+
+    # --- MOVE LOGIC ---
+    if data.startswith("xoxo_move_"):
+        if not game['active']:
+            await query.answer("Game abhi start nahi hua hai. Join button dabao!", show_alert=True)
+            return
+
+        # Check Turn
+        if user_id != game['turn']:
+            await query.answer("Abhi aapki baari nahi hai! ✋", show_alert=True)
+            return
+
+        idx = int(data.split("_")[-1])
+        
+        # Check Valid Move
+        if game['board'][idx] != " ":
+            await query.answer("Ye jagah pehle se bhari hai! 🚫", show_alert=True)
+            return
+
+        # Make Move
+        symbol = "X" if user_id == game['p1'][0] else "O"
+        game['board'][idx] = symbol
+        
+        # Check Win
+        winner = check_xoxo_win(game['board'])
+        
+        if winner:
+            del xoxo_games[chat_id] # Clear game
+            if winner == "Draw":
+                final_text = "🤝 **It's a Draw!** Koi nahi jeeta."
+            else:
+                winner_name = game['p1'][1] if winner == "X" else game['p2'][1]
+                final_text = f"🎉 **WOHOO! {winner_name} ({winner}) wins!** 🎉"
+            
+            await query.edit_message_text(
+                final_text,
+                reply_markup=get_xoxo_keyboard(game['board']) # Show final board
+            )
+        else:
+            # Switch Turn
+            next_turn_id = game['p2'][0] if user_id == game['p1'][0] else game['p1'][0]
+            next_name = game['p2'][1] if user_id == game['p1'][0] else game['p1'][1]
+            next_symbol = "⭕" if symbol == "X" else "❌"
+            
+            game['turn'] = next_turn_id
+            
+            await query.edit_message_text(
+                f"🎮 **Tic-Tac-Toe**\n\n"
+                f"❌ {game['p1'][1]} vs ⭕ {game['p2'][1]}\n\n"
+                f"Current Turn: **{next_name} ({next_symbol})**",
+                reply_markup=get_xoxo_keyboard(game['board']),
+                parse_mode='Markdown'
+            )
 # --- MODIFIED: /couple Command ---
 async def couple_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Selects a random couple from the chat members and mentions them."""
@@ -3053,6 +3220,17 @@ def main() -> None:
     application.add_handler(CommandHandler("removesudo", remove_sudo_command))
 
     # --- Message handlers ---
+    # ... existing handlers ...
+    
+    # XOXO Handlers
+    application.add_handler(CommandHandler("xoxo", xoxo_command))
+    application.add_handler(CommandHandler("tictactoe", xoxo_command))
+    
+    # IMPORTANT: Add this pattern filter so only xoxo buttons go here
+    application.add_handler(CallbackQueryHandler(xoxo_callback, pattern="^xoxo_"))
+
+    # ... existing CallbackQueryHandler for game.py ...
+    # application.add_handler(CallbackQueryHandler(game.handle_game_callback))
     # ✨ ADDED THE NEW WELCOME HANDLER HERE ✨
     application.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, welcome_new_members))
     
