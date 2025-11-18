@@ -637,7 +637,7 @@ async def xoxo_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     user = update.effective_user
     
     if chat_id in xoxo_games:
-        await update.message.reply_text("Ek game pehle se chal raha hai! Use khatam hone do ya /endxoxo karo.")
+        await update.message.reply_text("A game is already running! Let it finish first or use /endxoxo.")
         return
 
     # Create Lobby
@@ -667,7 +667,7 @@ async def xoxo_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     data = query.data
     
     if chat_id not in xoxo_games:
-        await query.answer("Game exist nahi karta ya expire ho gaya.", show_alert=True)
+        await query.answer("The game doesn’t exist or has expired.", show_alert=True)
         await query.message.delete()
         return
 
@@ -676,11 +676,11 @@ async def xoxo_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     # --- JOIN LOGIC ---
     if data == "xoxo_join":
         if game['p2'] is not None:
-            await query.answer("Game full hai!", show_alert=True)
+            await query.answer("Game is already full !", show_alert=True)
             return
         
         if user_id == game['p1'][0]:
-             await query.answer("Aap khud ke sath nahi khel sakte! Kisi aur ka wait karo.", show_alert=True)
+             await query.answer("You can’t play with yourself! Please wait for another player.", show_alert=True)
              return
              
         # Start Game
@@ -707,25 +707,25 @@ async def xoxo_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             del xoxo_games[chat_id]
             await query.edit_message_text("🏳️ Game was cancelled by a player.")
         else:
-            await query.answer("Sirf players game end kar sakte hain!", show_alert=True)
+            await query.answer("Only the players can end the game", show_alert=True)
         return
 
     # --- MOVE LOGIC ---
     if data.startswith("xoxo_move_"):
         if not game['active']:
-            await query.answer("Game abhi start nahi hua hai. Join button dabao!", show_alert=True)
+            await query.answer("The game hasn’t started yet. Press the Join button!", show_alert=True)
             return
 
         # Check Turn
         if user_id != game['turn']:
-            await query.answer("Abhi aapki baari nahi hai! ✋", show_alert=True)
+            await query.answer(" “It’s not your turn yet!”✋", show_alert=True)
             return
 
         idx = int(data.split("_")[-1])
         
         # Check Valid Move
         if game['board'][idx] != " ":
-            await query.answer("Ye jagah pehle se bhari hai! 🚫", show_alert=True)
+            await query.answer("This spot is already occupied!🚫", show_alert=True)
             return
 
         # Make Move
@@ -738,7 +738,7 @@ async def xoxo_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         if winner:
             del xoxo_games[chat_id] # Clear game
             if winner == "Draw":
-                final_text = "🤝 **It's a Draw!** Koi nahi jeeta."
+                final_text = "🤝 **It's a Draw!** Nobody won"
             else:
                 winner_name = game['p1'][1] if winner == "X" else game['p2'][1]
                 final_text = f"🎉 **WOHOO! {winner_name} ({winner}) wins!** 🎉"
