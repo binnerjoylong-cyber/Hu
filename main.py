@@ -2813,8 +2813,8 @@ async def welcome_new_members(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     # --- Define Default Welcome Settings ---
     # Using the reliable photo file_id from /start as the default
-    DEFAULT_WELCOME_MEDIA_ID = 'AgACAgUAAxkBAAIIKGigVdAK07aRr9QiXpRalahcPO2pAAIL0DEblXUBVSY5LS31XxPSAQADAgADeAADNgQ'
-    DEFAULT_WELCOME_MEDIA_TYPE = 'photo'
+    DEFAULT_WELCOME_MEDIA_ID = 'BAACAgUAAxkBAAI8yWkd6Bm0RD0lDq5wQ0_6M5Wv7nLmAAKnHAACUybxVApN-dVoWaFGNgQ'
+    DEFAULT_WELCOME_MEDIA_TYPE = 'video'
     DEFAULT_WELCOME_MESSAGE_TEMPLATE = (
         "🎉 **Welcome to {group_name}!** 🎉\n\n"
         "Hey {user_mention}, we're thrilled to have you join us! We hope you have a great time here.\n\n"
