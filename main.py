@@ -599,7 +599,6 @@ async def get_bot_response(user_message: str, chat_id: int, bot_username: str, s
 # ----------------------------------------------------------------
 # --- XOXO (TIC-TAC-TOE) GAME LOGIC (FIXED & CLEAN) ---
 # ----------------------------------------------------------------
-
 def check_xoxo_win(board):
     """Checks for a winner on the board."""
     win_conditions = [
@@ -607,12 +606,16 @@ def check_xoxo_win(board):
         (0, 3, 6), (1, 4, 7), (2, 5, 8), # Columns
         (0, 4, 8), (2, 4, 6)             # Diagonals
     ]
+    # Check for a winner
     for a, b, c in win_conditions:
         if board[a] == board[b] == board[c] and board[a] != " ":
-            return board[a]
+            return board[a] # Returns "X" or "O"
+            
+    # Check for Draw (Agar koi winner nahi hai aur board full hai)
     if " " not in board:
         return "Draw"
-    return None
+        
+    return None # Game abhi chal raha hai
 
 def get_xoxo_keyboard(board):
     """Creates the inline keyboard for the board."""
