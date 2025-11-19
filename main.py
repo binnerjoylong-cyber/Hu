@@ -657,9 +657,8 @@ async def end_xoxo_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         await update.message.reply_text("✅ **Game Force Stopped!**\nYou can start a new one with `/xoxo`.", parse_mode='Markdown')
     else:
         await update.message.reply_text("No active game found to stop.")
-
 async def xoxo_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handles button clicks for XOXO (with English Pop-ups)."""
+    """Handles button clicks for XOXO (Fixed Win/Draw Logic)."""
     query = update.callback_query
     chat_id = update.effective_chat.id
     user_id = query.from_user.id
@@ -675,28 +674,36 @@ async def xoxo_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
     # --- JOIN LOGIC ---
     if data == "xoxo_join":
+        # Agar Player 2 pehle se hai to game full hai
         if game['p2'] is not None:
-            await query.answer("Game is full! 🚫", show_alert=True)
+            await query.answer("Game is already full! 🚫", show_alert=True)
             return
         
+        # Player 1 khud join nahi kar sakta
         if user_id == game['p1'][0]:
-             await query.answer("You cannot play against yourself! 😅", show_alert=True)
+             await query.answer("Wait for someone else to join! 😅", show_alert=True)
              return
              
+        # Player 2 Join Success
         game['p2'] = (user_id, query.from_user.first_name)
         game['active'] = True
-        game['turn'] = game['p1'][0]
+        game['turn'] = game['p1'][0] # Player 1 ki turn pehle
         
         await query.answer("Game Joined! Let's play! 🎮", show_alert=True)
         await query.edit_message_text(
-            f"🎮 **Game Started!**\n\n❌ Player 1: {game['p1'][1]}\n⭕ Player 2: {game['p2'][1]}\n\nCurrent Turn: **{game['p1'][1]} (❌)**",
-            reply_markup=get_xoxo_keyboard(game['board']), parse_mode='Markdown'
+            f"🎮 **Game Started!**\n\n"
+            f"❌ Player 1: {game['p1'][1]}\n"
+            f"⭕ Player 2: {game['p2'][1]}\n\n"
+            f"Current Turn: **{game['p1'][1]} (❌)**",
+            reply_markup=get_xoxo_keyboard(game['board']), 
+            parse_mode='Markdown'
         )
         return
 
     # --- END GAME LOGIC ---
     if data == "xoxo_end":
-        if user_id in [game['p1'][0], game['p2'] and game['p2'][0]]:
+        # Sirf players hi end kar sakte hain
+        if user_id in [game['p1'][0], (game['p2'][0] if game['p2'] else None)]:
             del xoxo_games[chat_id]
             await query.answer("Game Ended! 🛑", show_alert=True)
             await query.edit_message_text(f"🏳️ Game was cancelled by {query.from_user.first_name}.")
@@ -706,48 +713,65 @@ async def xoxo_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
     # --- MOVE LOGIC ---
     if data.startswith("xoxo_move_"):
+        # Agar game active nahi hai (matlab P2 ne join nahi kiya)
         if not game['active']:
-            await query.answer("Please press 'Join Game' first!", show_alert=True)
+            await query.answer("Wait for Player 2 to join! 👇", show_alert=True)
             return
 
+        # Agar turn user ki nahi hai
         if user_id != game['turn']:
             await query.answer("It's not your turn yet! ✋", show_alert=True)
             return
 
         idx = int(data.split("_")[-1])
+        
+        # Agar jagah bhari hui hai
         if game['board'][idx] != " ":
             await query.answer("Spot already taken! 🚫", show_alert=True)
             return
 
+        # Board update karo
         symbol = "X" if user_id == game['p1'][0] else "O"
         game['board'][idx] = symbol
         
-        winner = check_xoxo_win(game['board'])
+        # Winner Check karo
+        result = check_xoxo_win(game['board'])
         
-        if winner:
+        if result:
+            # Game Khatam (Win or Draw)
             del xoxo_games[chat_id]
-            if winner == "Draw":
-                popup = "🤝 Match Draw! No one won!"
-                text = "🤝 **It's a Draw!** Good game."
-            else:
-                winner_name = game['p1'][1] if winner == "X" else game['p2'][1]
-                popup = f"🎉 Congratulations! {winner_name} WON! 🎉"
-                text = f"🎉 **WOHOO! {winner_name} ({winner}) wins!** 🎉"
             
-            await query.answer(popup, show_alert=True)
-            await query.edit_message_text(text, reply_markup=get_xoxo_keyboard(game['board']))
+            if result == "Draw":
+                popup_text = "🤝 Match Draw! No one won!"
+                final_text = f"🎮 **Tic-Tac-Toe**\n\n❌ {game['p1'][1]} vs ⭕ {game['p2'][1]}\n\n🤝 **It's a Draw!** Good game."
+            else:
+                # Winner woh hai jisne abhi chal chali (current user)
+                winner_name = query.from_user.first_name
+                popup_text = f"🎉 Congratulations! {winner_name} WON! 🎉"
+                final_text = f"🎉 **WOHOO! {winner_name} ({symbol}) wins!** 🎉\n\n❌ {game['p1'][1]} vs ⭕ {game['p2'][1]}"
+            
+            await query.answer(popup_text, show_alert=True)
+            await query.edit_message_text(final_text, reply_markup=get_xoxo_keyboard(game['board']))
+        
         else:
-            next_turn_id = game['p2'][0] if user_id == game['p1'][0] else game['p1'][0]
-            next_name = game['p2'][1] if user_id == game['p1'][0] else game['p1'][1]
-            next_symbol = "⭕" if symbol == "X" else "❌"
-            game['turn'] = next_turn_id
+            # Turn Change karo
+            if user_id == game['p1'][0]:
+                game['turn'] = game['p2'][0]
+                next_name = game['p2'][1]
+                next_symbol = "⭕"
+            else:
+                game['turn'] = game['p1'][0]
+                next_name = game['p1'][1]
+                next_symbol = "❌"
             
             await query.answer("Move made! ✅")
             await query.edit_message_text(
-                f"🎮 **Tic-Tac-Toe**\n\n❌ {game['p1'][1]} vs ⭕ {game['p2'][1]}\n\nCurrent Turn: **{next_name} ({next_symbol})**",
-                reply_markup=get_xoxo_keyboard(game['board']), parse_mode='Markdown'
-    )
-
+                f"🎮 **Tic-Tac-Toe**\n\n"
+                f"❌ {game['p1'][1]} vs ⭕ {game['p2'][1]}\n\n"
+                f"Current Turn: **{next_name} ({next_symbol})**",
+                reply_markup=get_xoxo_keyboard(game['board']), 
+                parse_mode='Markdown'
+            )
 # --- MODIFIED: /couple Command ---
 async def couple_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Selects a random couple from the chat members and mentions them."""
