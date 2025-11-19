@@ -705,6 +705,67 @@ async def xoxo_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             parse_mode='Markdown'
         )
         return
+# --- 1. FORCE END COMMAND (Ye naya hai, ise zaroor copy karein) ---
+async def end_xoxo_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Forcefully ends the current XOXO game."""
+    chat_id = update.effective_chat.id
+    
+    # Check if game exists
+    if chat_id in xoxo_games:
+        del xoxo_games[chat_id] # Delete game data
+        await update.message.reply_text("✅ **Game Force Stopped!**\nOld game deleted. You can start a new one with `/xoxo`.", parse_mode='Markdown')
+    else:
+        await update.message.reply_text("No active game found to stop. 🤷‍♂️")
+
+
+# --- 2. CALLBACK FUNCTION (Ye aapka wala code hai) ---
+async def xoxo_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handles button clicks for XOXO."""
+    query = update.callback_query
+    chat_id = update.effective_chat.id
+    user_id = query.from_user.id
+    data = query.data
+    
+    if chat_id not in xoxo_games:
+        await query.answer("Game does not exist or has expired.", show_alert=True)
+        try:
+            await query.message.delete()
+        except:
+            pass
+        return
+
+    game = xoxo_games[chat_id]
+
+    # --- JOIN LOGIC ---
+    if data == "xoxo_join":
+        if game['p2'] is not None:
+            await query.answer("Game is full! 🚫", show_alert=True)
+            return
+        
+        if user_id == game['p1'][0]:
+             await query.answer("You cannot play against yourself! 😅", show_alert=True)
+             return
+             
+        # Start Game
+        game['p2'] = (user_id, query.from_user.first_name)
+        game['active'] = True
+        game['turn'] = game['p1'][0] # Player 1 starts
+        
+        p1_name = game['p1'][1]
+        p2_name = game['p2'][1]
+        
+        # Pop-up for joiner
+        await query.answer("Game Joined! Let's play! 🎮", show_alert=True)
+        
+        await query.edit_message_text(
+            f"🎮 **Game Started!**\n\n"
+            f"❌ Player 1: {p1_name}\n"
+            f"⭕ Player 2: {p2_name}\n\n"
+            f"Current Turn: **{p1_name} (❌)**",
+            reply_markup=get_xoxo_keyboard(game['board']),
+            parse_mode='Markdown'
+        )
+        return
 
     # --- END GAME LOGIC ---
     if data == "xoxo_end":
@@ -778,6 +839,79 @@ async def xoxo_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
                 reply_markup=get_xoxo_keyboard(game['board']),
                 parse_mode='Markdown'
             )
+
+    # --- END GAME LOGIC ---
+ '''   if data == "xoxo_end":
+        if user_id in [game['p1'][0], game['p2'] and game['p2'][0]]:
+            del xoxo_games[chat_id]
+            await query.answer("Game Ended! 🛑", show_alert=True)
+            await query.edit_message_text(f"🏳️ Game was cancelled by {query.from_user.first_name}.")
+        else:
+            await query.answer("Only the players can end the game! 😡", show_alert=True)
+        return
+
+    # --- MOVE LOGIC ---
+    if data.startswith("xoxo_move_"):
+        if not game['active']:
+            await query.answer("Please press 'Join Game' first! 👇", show_alert=True)
+            return
+
+        # Check Turn
+        if user_id != game['turn']:
+            await query.answer("It's not your turn yet! ✋ Hold on!", show_alert=True)
+            return
+
+        idx = int(data.split("_")[-1])
+        
+        # Check Valid Move
+        if game['board'][idx] != " ":
+            await query.answer("This spot is already taken! 🚫", show_alert=True)
+            return
+
+        # Make Move
+        symbol = "X" if user_id == game['p1'][0] else "O"
+        game['board'][idx] = symbol
+        
+        # Check Win
+        winner = check_xoxo_win(game['board'])
+        
+        if winner:
+            del xoxo_games[chat_id] # Clear game
+            
+            if winner == "Draw":
+                popup_text = "🤝 Match Draw! No one won!"
+                final_text = "🤝 **It's a Draw!** Good game."
+            else:
+                winner_name = game['p1'][1] if winner == "X" else game['p2'][1]
+                popup_text = f"🎉 Congratulations! {winner_name} WON! 🎉"
+                final_text = f"🎉 **WOHOO! {winner_name} ({winner}) wins!** 🎉"
+            
+            # ✨ POP-UP ALERT ON WIN ✨
+            await query.answer(popup_text, show_alert=True)
+            
+            # Update message with final result
+            await query.edit_message_text(
+                final_text,
+                reply_markup=get_xoxo_keyboard(game['board']) 
+            )
+        else:
+            # Switch Turn
+            next_turn_id = game['p2'][0] if user_id == game['p1'][0] else game['p1'][0]
+            next_name = game['p2'][1] if user_id == game['p1'][0] else game['p1'][1]
+            next_symbol = "⭕" if symbol == "X" else "❌"
+            
+            game['turn'] = next_turn_id
+            
+            # Small notification for valid move
+            await query.answer("Move made! ✅") 
+            
+            await query.edit_message_text(
+                f"🎮 **Tic-Tac-Toe**\n\n"
+                f"❌ {game['p1'][1]} vs ⭕ {game['p2'][1]}\n\n"
+                f"Current Turn: **{next_name} ({next_symbol})**",
+                reply_markup=get_xoxo_keyboard(game['board']),
+                parse_mode='Markdown'
+            )'''
 '''async def xoxo_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handles button clicks for XOXO."""
     query = update.callback_query
