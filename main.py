@@ -3344,6 +3344,15 @@ def main() -> None:
     # XOXO Handlers
     application.add_handler(CommandHandler("xoxo", xoxo_command))
     application.add_handler(CommandHandler("tictactoe", xoxo_command))
+    # ... (Ye lines main() function ke andar honi chahiye) ...
+
+    # XOXO Game Commands
+
+    # 👇 YE LINE SABSE ZAROORI HAI, ISKE BINA END NAHI HOGA 👇
+    application.add_handler(CommandHandler("endxoxo", end_xoxo_command))
+    application.add_handler(CommandHandler("endgame", end_xoxo_command))
+
+    # Callback Handler (Button clicks ke liye)
     
     # IMPORTANT: Add this pattern filter so only xoxo buttons go here
     application.add_handler(CallbackQueryHandler(xoxo_callback, pattern="^xoxo_"))
