@@ -3241,6 +3241,10 @@ def main() -> None:
     application.add_handler(CommandHandler("deposit", game.handle_deposit))
     application.add_handler(CommandHandler("withdraw", game.handle_withdraw))
     application.add_handler(CommandHandler("gift", game.handle_gift))
+    application.add_handler(CommandHandler("start", game.start_game))
+    application.add_handler(CommandHandler("heal", game.handle_heal))
+    application.add_handler(CommandHandler("slots", game.handle_slots))
+# ... aur baaki purane wale bhi (rob, kill, etc)
 
     # --- NEW: Refactored Game Commands ---
     application.add_handler(CommandHandler("game", game.start_game))
