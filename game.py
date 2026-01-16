@@ -478,7 +478,90 @@ async def show_leaderboard_menu(update: Update, context: ContextTypes.DEFAULT_TY
             reply_markup=reply_markup,
             parse_mode='Markdown'
         )
+async def handle_slots(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Plays a slot machine game. Usage: /slots <amount>"""
+    user = update.effective_user
+    player_data = await get_player_data(user.id, user.full_name)
 
+    if not player_data:
+        await update.message.reply_text("Error accessing your account.")
+        return
+
+    # 1. Parse Bet Amount
+    if not context.args:
+        await update.message.reply_text("🎰 Usage: `/slots <amount>` or `/slots all`", parse_mode='Markdown')
+        return
+
+    try:
+        amount_str = context.args[0]
+        money_on_hand = player_data["Money"]
+        
+        if amount_str.lower() == "all":
+            bet = money_on_hand
+        else:
+            bet = int(amount_str)
+
+        if bet <= 0:
+            await update.message.reply_text("You must bet a positive amount!")
+            return
+        if bet > money_on_hand:
+            await update.message.reply_text(f"You don't have enough cash! You only have `${money_on_hand:,}`.")
+            return
+
+    except ValueError:
+        await update.message.reply_text("Invalid amount. Please enter a number.")
+        return
+
+    # 2. Spin the Slots
+    # Symbols: 🍒 Cherry, 🍊 Orange, 🍇 Grape, 💎 Diamond, 7️⃣ Seven, 🔔 Bell
+    symbols = ["🍒", "🍊", "🍇", "💎", "7️⃣", "🔔"]
+    
+    s1 = random.choice(symbols)
+    s2 = random.choice(symbols)
+    s3 = random.choice(symbols)
+
+    # 3. Calculate Winnings
+    winnings = 0
+    result_message = ""
+    
+    # Jackpot (3 matching)
+    if s1 == s2 == s3:
+        multiplier = 10
+        if s1 == "7️⃣": multiplier = 20 # Super Jackpot for 7s
+        winnings = bet * multiplier
+        result_message = f"🎉 **JACKPOT!** You won `${winnings:,}`! 🎉"
+    
+    # Mini-Win (2 matching)
+    elif s1 == s2 or s2 == s3 or s1 == s3:
+        multiplier = 2
+        winnings = bet * multiplier
+        result_message = f"✨ **Nice!** You matched 2 and won `${winnings:,}`."
+    
+    # Loss
+    else:
+        winnings = 0
+        result_message = f"💥 You lost `${bet:,}`. Better luck next time!"
+
+    # 4. Update Player Data
+    player_data["Money"] -= bet
+    player_data["Money"] += winnings
+    
+    # Save to sheet
+    if await update_player_data(player_data):
+        # 5. Send Result
+        # Format: 
+        # 🎰 SLOTS 🎰
+        # | 🍒 | 💎 | 🍒 |
+        # result message
+        await update.message.reply_text(
+            f"🎰 **SLOTS** 🎰\n\n"
+            f"   | {s1} | {s2} | {s3} |\n\n"
+            f"{result_message}\n"
+            f"💰 New Balance: `${player_data['Money']:,}`",
+            parse_mode='Markdown'
+        )
+    else:
+        await update.message.reply_text("An error occurred while saving your game.")
 async def handle_leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Shows the top 10 users for a specific category."""
     
