@@ -573,7 +573,70 @@ async def display_leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE
         logger.error(f"Error in display_leaderboard: {e}", exc_info=True)
         await query.edit_message_text(text="An error occurred while fetching the leaderboard.")
 
+async def handle_heal(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Heals the user using items from their inventory."""
+    user = update.effective_user
+    player_data = await get_player_data(user.id, user.full_name)
+    
+    if not player_data:
+        await update.message.reply_text("Error accessing your account.")
+        return
 
+    # 1. Check if health is already full
+    if player_data["Health"] >= STARTING_HEALTH:
+        await update.message.reply_text("Your health is already full! ❤️")
+        return
+
+    # 2. Check Cooldown
+    is_ready, time_left = _check_cooldown(player_data["LastHeal"], COOLDOWNS["heal"])
+    if not is_ready:
+        await update.message.reply_text(f"You cannot heal yet! Wait {time_left}.")
+        return
+
+    # 3. Check Inventory & Select Item
+    # Logic: Prioritize Medkit if HP missing >= 50, otherwise Bandage.
+    inventory = player_data["Inventory"]
+    item_to_use = None
+    heal_amount = 0
+    missing_hp = STARTING_HEALTH - player_data["Health"]
+
+    # Check for Medkit first if we need a lot of health
+    if missing_hp >= 50 and inventory.get("medkit", 0) > 0:
+        item_to_use = "medkit"
+        heal_amount = 50
+    # Check for Bandage
+    elif inventory.get("bandage", 0) > 0:
+        item_to_use = "bandage"
+        heal_amount = 10
+    # Fallback: Use Medkit even if missing < 50 HP if it's all we have
+    elif inventory.get("medkit", 0) > 0:
+        item_to_use = "medkit"
+        heal_amount = 50
+    else:
+        await update.message.reply_text(
+            "You don't have any healing items! 🤕\n"
+            "Buy **Bandages** or **Medkits** from the `/shop`."
+        )
+        return
+
+    # 4. Apply Heal
+    player_data["Health"] += heal_amount
+    if player_data["Health"] > STARTING_HEALTH:
+        player_data["Health"] = STARTING_HEALTH
+    
+    # 5. Consume Item & Update Cooldown
+    player_data["Inventory"][item_to_use] -= 1
+    player_data["LastHeal"] = time.time()
+    
+    if await update_player_data(player_data):
+        item_name = "Medkit ✚" if item_to_use == "medkit" else "Bandage 🩹"
+        await update.message.reply_text(
+            f"You used a **{item_name}** and recovered **{heal_amount} HP**! ❤️\n"
+            f"Current Health: `{player_data['Health']}/{STARTING_HEALTH}`",
+            parse_mode='Markdown'
+        )
+    else:
+        await update.message.reply_text("An error occurred while processing your heal.")
 # --- Family Command Handlers ---
 
 async def handle_marry(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
