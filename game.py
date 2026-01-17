@@ -2021,9 +2021,18 @@ async def handle_game_callback(update: Update, context: ContextTypes.DEFAULT_TYP
             await query.answer(reply_text, show_alert=True)
             return
 
+    
+    parts = data.split(":")
+    if len(parts) < 2:
+        await query.answer()
+        return
+
         # --- Family Proposal Handlers ---
         # --- Family Proposal Handlers ---
-    try: # <--- YE TRY BLOCK HONA ZAROORI HAI
+    try:
+        if parts[0] != "game":
+            return
+            
         if parts[1] == "marry":
             action, proposer_id_str = parts[2], parts[3]
             proposer_id = int(proposer_id_str)
