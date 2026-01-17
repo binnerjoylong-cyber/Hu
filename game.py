@@ -122,6 +122,67 @@ def init_game_module(spreadsheet: gspread.Spreadsheet):
     except Exception as e:
         logger.error(f"Failed to initialize game module: {e}", exc_info=True)
 
+
+
+def get_progress_bar(current, total, length=10):
+    """Generates a visual bar like: [🟩🟩🟩⬜⬜⬜]"""
+    filled_length = int(length * current // total)
+    bar = "🟩" * filled_length + "⬜" * (length - filled_length)
+    return f"[{bar}] {current}/{total}"
+
+def get_status_emoji(health):
+    if health > 70: return "😎"
+    if health > 30: return "😟"
+    return "💀"
+# --- ELITE VISUAL HELPERS ---
+def get_bar(current, total=100, length=10):
+    """Generates a high-quality progress bar."""
+    filled = int(length * current // total)
+    bar = "🟩" * filled + "⬜" * (length - filled)
+    return f"`{bar}` {current}%"
+
+def format_money(amount):
+    """Formats 1000000 into $1,000,000."""
+    return f"${amount:,}"
+# --- ADVANCED VISUAL HELPERS ---
+def get_visual_bar(current, total, length=10):
+    """Generates a professional-grade progress bar."""
+    filled = int(length * current // total)
+    bar = "🟩" * filled + "⬜" * (length - filled)
+    return f"[{bar}] {current}%"
+
+async def handle_game_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """The central hub for Laila Legends."""
+    user = update.effective_user
+    # Fetch player data using your existing get_player_data function
+    data = await get_player_data(user.id, user.full_name)
+    
+    # Calculate health status
+    health_bar = get_visual_bar(data['Health'], 100)
+    
+    dashboard = (
+        f"🏆 **LAILA LEGENDS: {user.first_name.upper()}**\n"
+        f"━━━━━━━━━━━━━━━━━━\n"
+        f"💰 **Wallet:** `${data['Money']:,}`\n"
+        f"🏦 **Bank:** `${data['Bank']:,}`\n"
+        f"❤️ **Health:** {health_bar}\n"
+        f"━━━━━━━━━━━━━━━━━━\n"
+        f"⚡️ *Select an action to continue your journey:* "
+    )
+
+    keyboard = [
+        [InlineKeyboardButton("💼 Work", callback_data="game_work"), 
+         InlineKeyboardButton("🌾 Farm", callback_data="game_farm")],
+        [InlineKeyboardButton("🛒 Shop", callback_data="game_shop"), 
+         InlineKeyboardButton("⚔️ PVP Arena", callback_data="game_pvp")],
+        [InlineKeyboardButton("📜 Inventory", callback_data="game_inventory")]
+    ]
+    
+    # Logic to either send a new message or update the existing one
+    if update.callback_query:
+        await update.callback_query.edit_message_text(dashboard, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+    else:
+        await update.message.reply_text(dashboard, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
 # --- Helper Functions ---
 
 def _format_time(seconds: int) -> str:
@@ -373,7 +434,37 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
             parse_mode='Markdown',
             disable_web_page_preview=True
         )
+async def handle_game_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    data = await get_player_data(user.id, user.full_name)
+    
+    health_bar = get_progress_bar(data['Health'], 100)
+    status = get_status_emoji(data['Health'])
+    
+    text = (
+        f"🏆 **LAILA LEGENDS: {user.first_name.upper()}** {status}\n"
+        f"━━━━━━━━━━━━━━━━━━\n"
+        f"💰 **Wallet:** `${data['Money']:,}`\n"
+        f"🏦 **Bank:** `${data['Bank']:,}`\n"
+        f"❤️ **Health:** {health_bar}\n"
+        f"━━━━━━━━━━━━━━━━━━\n"
+        f"⚡️ *Use the buttons below to build your empire!*"
+    )
 
+    keyboard = [
+        [InlineKeyboardButton("💼 Work", callback_data="game_work"), 
+         InlineKeyboardButton("🌾 Farm", callback_data="game_farm")],
+        [InlineKeyboardButton("🛒 Shop", callback_data="game_shop"), 
+         InlineKeyboardButton("⚔️ Arena", callback_data="game_pvp")],
+        [InlineKeyboardButton("📜 Inventory", callback_data="game_inventory")]
+    ]
+    
+    markup = InlineKeyboardMarkup(keyboard)
+    
+    if update.callback_query:
+        await update.callback_query.edit_message_text(text, reply_markup=markup, parse_mode='Markdown')
+    else:
+        await update.message.reply_text(text, reply_markup=markup, parse_mode='Markdown')
 # --- NEW: /check COMMAND ---
 async def handle_check_profile(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Shows the profile of the replied-to user."""
