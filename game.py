@@ -2081,12 +2081,17 @@ async def handle_game_callback(update: Update, context: ContextTypes.DEFAULT_TYP
                     proposer_data["ChildrenIDs"].append(target.id)
                     await update_player_data(proposer_data)
                 
-                await query.edit_message_text(f"🎉 **Welcome to the Family!** 🎉\n\n{_mention(target.id, target.full_name)} has been adopted by {_mention(proposer_id, proposer_data['UserName'])}!", parse_mode='Markdown')
+                await query.edit_message_text(
+                    f"🎉 **Welcome to the Family!** 🎉\n\n"
+                    f"{_mention(target.id, target.full_name)} has been adopted by "
+                    f"{_mention(proposer_id, proposer_data['UserName'])}!", 
+                    parse_mode='Markdown'
+                )
                 return
 
     except Exception as e:
         logger.error(f"Error in game callback handler: {e}", exc_info=True)
         try:
             await query.answer("An unexpected error occurred. Please try again.", show_alert=True)
-        except:
+        except Exception:
             pass
