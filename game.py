@@ -49,6 +49,21 @@ ROB_RATES = {"chance": 40, "success_pct": (0.1, 0.35), "fail_hp_loss": 15}
 KILL_RATES = {"chance": 30, "cost": 5000, "success_hp_loss": 0, "fail_hp_loss": 25} # success_hp_loss 0, killer shouldn't die.
 
 # --- ITEM CATALOG (RESTRUCTURED FOR VARIETY) ---
+SHOP_ITEMS = {
+    "Common": {
+        "🥖 Bread": {"price": 100, "effect": "Restores 20 Health"},
+        "🔪 Pocket Knife": {"price": 1500, "effect": "+5% Rob success"}
+    },
+    "Epic": {
+        "🛡️ Kevlar Vest": {"price": 50000, "effect": "-50% damage from /kill"},
+        "🔫 Glock-17": {"price": 75000, "effect": "+20% Kill success"}
+    },
+    "Legendary": {
+        "👑 Laila's Crown": {"price": 1000000, "effect": "Tax Immunity + 2x Daily Rewards"},
+        "🏎️ Ferrari": {"price": 5000000, "effect": "Instant /work cooldown"}
+    }
+}
+'''
 SHOP_CATALOG = {
     "items": [
         {"id": "bandage", "name": "Bandage 🩹", "price": 100, "description": "Heals 10 HP.", "value": 10},
@@ -80,7 +95,7 @@ SHOP_CATALOG = {
         {"id": "island", "name": "Private Island 🏝️", "price": 10000000, "description": "The ultimate asset.", "image": "https://loremflickr.com/320/240/island"}
     ]
 }
-
+'''
 # Helper to find an item in the new list-based catalog by its ID
 def _find_item(category, item_id):
     if category in SHOP_CATALOG:
@@ -1126,7 +1141,37 @@ async def handle_divorce(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     await update.message.reply_text(f"You have successfully divorced {_mention(spouse_id, spouse_name)}. 💔", parse_mode='Markdown')
 
 # --- NEW UTILITY COMMANDS ---
+async def clan_war(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Command: /clanwar <EnemyClanName>"""
+    user = update.effective_user
+    attacker_data = await get_player_data(user.id, user.full_name)
+    
+    if attacker_data.get('ClanRole') != 'Leader':
+        await update.message.reply_text("❌ Only the **Clan Leader** can declare war!")
+        return
 
+    if not context.args:
+        await update.message.reply_text("⚔️ **Usage:** `/clanwar <ClanName>`")
+        return
+
+    target_clan = context.args[0]
+    # Logic: Sum up the power of all members in both clans
+    # The clan with higher 'Total XP' and 'Better Weapons' wins 70% of the time.
+    
+    win_chance = random.randint(1, 100)
+    if win_chance > 50:
+        msg = (
+            f"🚩 **CLAN WAR VICTORY!** 🚩\n"
+            f"━━━━━━━━━━━━━━━━━━\n"
+            f"🏴‍☠️ **Winners:** {attacker_data['ClanName']}\n"
+            f"🏳️ **Losers:** {target_clan}\n\n"
+            f"💰 Your clan looted **$50,000** from their treasury!"
+        )
+    else:
+        msg = f"💀 **WAR DEFEAT!**\n\n{target_clan} defended their base. You lost **$25,000** in damages."
+    
+    await update.message.reply_text(msg, parse_mode='Markdown')
+    
 async def handle_deposit(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Deposits money into the bank."""
     user = update.effective_user
