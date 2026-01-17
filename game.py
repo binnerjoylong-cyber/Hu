@@ -723,6 +723,10 @@ async def daily_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     await update.message.reply_text(msg, parse_mode='Markdown')
 
+async def leaderboard_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Shows the top players by XP or Money."""
+    # Agar aapne leaderboard logic abhi nahi likha hai, to ye temporary message dikhayega
+    await update.message.reply_text("🏆 **Leaderboard**\n\nFeature coming soon! We are still ranking the top players.", parse_mode='Markdown')
 # --- 🎯 GLOBAL BOUNTY SYSTEM ---
 async def bounty_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Command: /bounty @user 5000"""
