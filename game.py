@@ -400,6 +400,17 @@ async def check_level_up(data, update, context):
         )
     return data
     
+ async def update_player_data(data):
+    # Calculate Level based on XP
+    xp = data.get('XP', 0)
+    new_level = (xp // 1000) + 1
+    if new_level > data.get('Level', 1):
+        data['Level'] = new_level
+        # Trigger a Level Up message if possible
+    
+    # Existing update logic...
+    cells = game_sheet.find(str(data['UserID']))
+    # ... update the row ...   
 async def update_player_data(player_data: dict) -> bool:
     """Updates a player's account data in the sheet."""
     if not game_sheet:
