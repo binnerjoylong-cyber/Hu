@@ -1648,9 +1648,10 @@ async def handle_kill(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 # --- Main Callback Query Handler ---
 async def handle_game_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
+    await query.answer()
     data = query.data
     user = query.from_user
-    await query.answer()
+    parts = data.split(":")
 
     # --- CATEGORY ROUTING ---
     if data == "game_main":
