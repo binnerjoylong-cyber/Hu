@@ -365,7 +365,62 @@ async def update_player_data(player_data: dict) -> bool:
         return False
 
 # --- Main Game Command Handlers ---
+# --- 🎰 THE CASINO ENGINE ---
+async def slots_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    if not context.args:
+        await update.message.reply_text("🎰 **Usage:** `/slots <amount>`\nExample: `/slots 500`")
+        return
 
+    try:
+        bet = int(context.args[0])
+        if bet < 100:
+            await update.message.reply_text("❌ Minimum bet is `$100`.")
+            return
+    except:
+        await update.message.reply_text("❌ Please enter a valid number.")
+        return
+
+    data = await get_player_data(user.id, user.full_name)
+    if data['Money'] < bet:
+        await update.message.reply_text("💸 You don't have enough money in your wallet!")
+        return
+
+    # Slot items
+    items = ["🍎", "💎", "🎰", "🔔", "🍒", "⭐"]
+    result = [random.choice(items) for _ in range(3)]
+    
+    # Visual spinning effect
+    spinning_msg = await update.message.reply_text("🎰 **SPINNING...**\n`[ ⌛ | ⌛ | ⌛ ]`")
+    await asyncio.sleep(1) # Fake delay for suspense
+    
+    # Calculate Winnings
+    win_multiplier = 0
+    if result[0] == result[1] == result[2]:
+        win_multiplier = 10 if result[0] == "💎" else 5
+    elif result[0] == result[1] or result[1] == result[2] or result[0] == result[2]:
+        win_multiplier = 2
+    
+    if win_multiplier > 0:
+        winnings = bet * win_multiplier
+        data['Money'] += winnings
+        status = f"🎉 **YOU WON!**\n💰 Payout: `${winnings:,}`"
+    else:
+        data['Money'] -= bet
+        status = f"💀 **YOU LOST!**\n💸 Better luck next time."
+
+    await update_player_data(data)
+    
+    final_view = (
+        f"🎰 **LAILA CASINO** 🎰\n"
+        f"━━━━━━━━━━━━━━━━━━\n"
+        f"  `[ {result[0]} | {result[1]} | {result[2]} ]`  \n"
+        f"━━━━━━━━━━━━━━━━━━\n"
+        f"{status}\n"
+        f"💰 **New Balance:** `${data['Money']:,}`"
+    )
+    await spinning_msg.edit_text(final_view, parse_mode='Markdown')
+    
 async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Main game entry point. Shows profile and main menu."""
     user = update.effective_user
