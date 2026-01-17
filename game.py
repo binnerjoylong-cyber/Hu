@@ -1567,34 +1567,34 @@ async def handle_kill(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
 
 # --- Main Callback Query Handler ---
-
-async def handle_game_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handles all inline button presses for the game."""
+async def handle_game_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    await query.answer()  # Acknowledge the press
-    
-    user = query.from_user
     data = query.data
-    
-    if not data.startswith("game:"):
-        # Not a game callback, ignore
-        return
+    user = query.from_user
+    await query.answer()
 
-    # --- Parse callback data ---
-    parts = data.split(':')
+    # --- CATEGORY ROUTING ---
+    if data == "game_main":
+        await handle_game_menu(update, context) # The Dashboard we built
     
-    try:
-        # --- Main Menu Navigation ---
-        if data == "game:menu:main":
-            # Pass the update object so it can edit the message
-            await start_game(update, context)
-            return
+    elif data == "game_work":
+        await work_command(update, context)
+        
+    elif data == "game_shop":
+        # New Paginated Shop UI
+        await shop_menu(update, context)
 
-        if data == "game:menu:actions":
-            player_data = await get_player_data(user.id, user.full_name)
-            if not player_data:
-                await query.edit_message_text("Error loading your data.")
-                return
+    elif data == "game_pvp_menu":
+        text = "⚔️ **BATTLE ARENA**\nChoose your combat style:"
+        buttons = [
+            [InlineKeyboardButton("🕵️ Rob Someone", callback_data="game_rob_help")],
+            [InlineKeyboardButton("🎯 Place Bounty", callback_data="game_bounty_help")],
+            [InlineKeyboardButton("🔙 Back", callback_data="game_main")]
+        ]
+        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(buttons), parse_mode='Markdown')
+
+    # Add other routing for 'game_farm', 'game_inventory', etc.
+
             
             # Build text with cooldowns
             _, work_cd = _check_cooldown(player_data["LastWork"], COOLDOWNS["work"])
