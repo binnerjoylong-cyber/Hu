@@ -63,6 +63,23 @@ SHOP_ITEMS = {
         "🏎️ Ferrari": {"price": 5000000, "effect": "Instant /work cooldown"}
     }
 }
+ACHIEVEMENTS = {
+    "richie_rich": {"threshold": 1000000, "label": "💰 Millionaire", "bonus": "5% higher Work pay"},
+    "serial_killer": {"threshold": 50, "label": "💀 Assassin", "bonus": "+10% Kill success"},
+    "loyal_player": {"threshold": 30, "label": "🔥 Devoted", "bonus": "2x Daily Rewards"}, # 30 day streak
+}
+
+async def get_badges(data):
+    """Checks player data and returns a string of earned badges."""
+    badges = []
+    if data.get('Money', 0) + data.get('Bank', 0) >= 1000000:
+        badges.append("💰")
+    if data.get('Kills', 0) >= 50:
+        badges.append("💀")
+    if data.get('StreakCount', 0) >= 30:
+        badges.append("🔥")
+    
+    return " ".join(badges) if badges else "🆕 Newbie"
 '''
 SHOP_CATALOG = {
     "items": [
@@ -435,7 +452,20 @@ async def slots_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"💰 **New Balance:** `${data['Money']:,}`"
     )
     await spinning_msg.edit_text(final_view, parse_mode='Markdown')
+ async def shop_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    keyboard = [
+        [InlineKeyboardButton("⚪ Common", callback_data="shop_tier_common"),
+         InlineKeyboardButton("🟣 Epic", callback_data="shop_tier_epic")],
+        [InlineKeyboardButton("🟡 Legendary", callback_data="shop_tier_legendary")],
+        [InlineKeyboardButton("🔙 Back to Game", callback_data="help_main")]
+    ]
+    text = "🛒 **LAILA BLACK MARKET**\nSelect a rarity tier to browse items:"
     
+    if update.callback_query:
+        await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+    else:
+        await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+        
 async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Main game entry point. Shows profile and main menu."""
     user = update.effective_user
