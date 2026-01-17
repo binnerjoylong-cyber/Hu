@@ -126,7 +126,7 @@ PLAYER_HEADERS = [
     "UserID", "UserName", "Money", "Bank", "Health", "MarriedToID", "ChildrenIDs",
     "Pet", "Inventory", "Assets", "Weapon", "LastWork", "LastFarm", "LastCrime",
     "LastMine", "LastRob", "LastKill", "LastHeal", "LastTask", "LastDaily",
-    "Kills", "Deaths"
+    "Kills", "Deaths","StreakCount", "XP", "Level", "Bounty", "ClanName", "ClanRole"
 ]
 
 # --- In-memory proposal cache ---
