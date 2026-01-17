@@ -3239,7 +3239,23 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     await update.message.reply_text(help_text, parse_mode='Markdown', disable_web_page_preview=True)
     logger.info(f"[{update.effective_chat.id}] /help command used.")
 
-
+async def spawn_boss_event(context: ContextTypes.DEFAULT_TYPE):
+    """Randomly drops a treasure in a group chat."""
+    # List of group IDs the bot is active in (from your known_users/groups)
+    chat_id = "YOUR_MAIN_GROUP_ID" 
+    
+    boss_msg = (
+        "👾 **BOSS ALERT: THE TAX COLLECTOR**\n"
+        "━━━━━━━━━━━━━━━━━━\n"
+        "A corrupt official is passing through the chat! \n"
+        "The first person to **ATTACK** him gets his bag of gold!\n"
+        "━━━━━━━━━━━━━━━━━━\n"
+        "👇 **Tap the button below to strike!**"
+    )
+    
+    keyboard = [[InlineKeyboardButton("⚔️ ATTACK!", callback_data="event_boss_attack")]]
+    await context.bot.send_message(chat_id, boss_msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+    
 # --- ABOUT Command ---
 async def about_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     about_text = (
@@ -3400,6 +3416,8 @@ def main() -> None:
     
     application.add_handler(CommandHandler("daily", game.daily_command))
     application.add_handler(CommandHandler("bounty", game.bounty_command))
+    application.add_handler(CommandHandler("slots", game.slots_command))
+    application.add_handler(CommandHandler("clan", game.clan_command))
 
     # --- Admin Commands (Group Admin required) ---
     application.add_handler(CommandHandler("on", on_command))
