@@ -489,7 +489,38 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
             parse_mode='Markdown',
             disable_web_page_preview=True
         )
-
+# --- 🏴‍☠️ THE CLAN SYSTEM ---
+async def clan_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    data = await get_player_data(user.id, user.full_name)
+    
+    # Check if user is in a clan (You'll need a 'ClanName' column in your sheet)
+    clan_name = data.get('ClanName', "None")
+    
+    if clan_name == "None":
+        text = (
+            "🏴‍☠️ **CLAN HEADQUARTERS**\n"
+            "━━━━━━━━━━━━━━━━━━\n"
+            "You are currently **Lone Wolf**.\n\n"
+            "Join a clan to participate in Wars, pool resources, and dominate the leaderboard!\n"
+            "━━━━━━━━━━━━━━━━━━\n"
+            "🔹 `/create_clan <name>` - Cost: $100,000\n"
+            "🔹 `/join_clan <name>` - Join an existing gang"
+        )
+        await update.message.reply_text(text, parse_mode='Markdown')
+    else:
+        # Show Clan Dashboard
+        text = (
+            f"🏴‍☠️ **CLAN: {clan_name.upper()}**\n"
+            f"━━━━━━━━━━━━━━━━━━\n"
+            f"👑 **Leader:** `{data.get('ClanRole', 'Member')}`\n"
+            f"💰 **Clan Bank:** `$0` (Coming Soon)\n"
+            f"⚔️ **Clan Power:** `Level 1`\n"
+            f"━━━━━━━━━━━━━━━━━━\n"
+            f"📢 *Work together to become the most feared gang!*"
+        )
+        await update.message.reply_text(text, parse_mode='Markdown')
+        
 # --- 🏆 ELITE DAILY SYSTEM ---
 async def daily_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
