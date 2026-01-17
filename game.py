@@ -359,7 +359,47 @@ async def get_player_data(user_id: int, user_name: str) -> dict | None:
     except (ValueError, TypeError) as e:
         logger.error(f"Data type error for user {user_id}: {e}. Returning raw data.")
         return player_data # Return as-is, let handler fail
+async def profile_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    data = await get_player_data(user.id, user.full_name)
+    
+    badges = await get_badges(data)
+    health_bar = get_visual_bar(data['Health'], 100) # Using the bar helper from earlier
+    xp_progress = get_visual_bar(data.get('XP', 0) % 1000, 1000, length=8)
 
+    profile_ui = (
+        f"👤 **PLAYER PROFILE**\n"
+        f"━━━━━━━━━━━━━━━━━━\n"
+        f"NAME: **{user.first_name}**\n"
+        f"RANK: `{badges}`\n"
+        f"LEVEL: `Lv. {data.get('Level', 1)}`\n"
+        f"━━━━━━━━━━━━━━━━━━\n"
+        f"❤️ HEALTH: {health_bar}\n"
+        f"⭐ XP: {xp_progress}\n"
+        f"💰 WALLET: `${data['Money']:,}`\n"
+        f"🏦 BANK: `${data['Bank']:,}`\n"
+        f"━━━━━━━━━━━━━━━━━━\n"
+        f"⚔️ KILLS: `{data.get('Kills', 0)}` | 🏴‍☠️ CLAN: `{data.get('ClanName', 'None')}`\n"
+    )
+    
+    await update.message.reply_text(profile_ui, parse_mode='Markdown')
+
+
+async def check_level_up(data, update, context):
+    current_xp = data.get('XP', 0)
+    current_level = data.get('Level', 1)
+    new_level = (current_xp // 1000) + 1
+    
+    if new_level > current_level:
+        data['Level'] = new_level
+        # Give a Level-up bonus!
+        data['Money'] += 5000 
+        await update.effective_chat.send_message(
+            f"🎊 **LEVEL UP!** 🎊\n\n{update.effective_user.first_name} reached **Level {new_level}**!\n"
+            f"🎁 Reward: `$5,000` has been added to your wallet."
+        )
+    return data
+    
 async def update_player_data(player_data: dict) -> bool:
     """Updates a player's account data in the sheet."""
     if not game_sheet:
