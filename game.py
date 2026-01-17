@@ -552,20 +552,36 @@ async def slots_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"💰 **New Balance:** `${data['Money']:,}`"
     )
     await spinning_msg.edit_text(final_view, parse_mode='Markdown')
- async def shop_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+
+async def shop_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Laila Black Market Menu"""
     keyboard = [
-        [InlineKeyboardButton("⚪ Common", callback_data="shop_tier_common"),
-         InlineKeyboardButton("🟣 Epic", callback_data="shop_tier_epic")],
+        [
+            InlineKeyboardButton("⚪ Common", callback_data="shop_tier_common"),
+            InlineKeyboardButton("🟣 Epic", callback_data="shop_tier_epic")
+        ],
         [InlineKeyboardButton("🟡 Legendary", callback_data="shop_tier_legendary")],
         [InlineKeyboardButton("🔙 Back to Game", callback_data="help_main")]
     ]
     text = "🛒 **LAILA BLACK MARKET**\nSelect a rarity tier to browse items:"
     
-    if update.callback_query:
-        await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
-    else:
-        await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
-        
+    try:
+        if update.callback_query:
+            await update.callback_query.edit_message_text(
+                text, 
+                reply_markup=InlineKeyboardMarkup(keyboard), 
+                parse_mode='Markdown'
+            )
+        else:
+            await update.message.reply_text(
+                text, 
+                reply_markup=InlineKeyboardMarkup(keyboard), 
+                parse_mode='Markdown'
+            )
+    except Exception as e:
+        logger.error(f"Error in shop_menu: {e}")
+
 async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Main game entry point. Shows profile and main menu."""
     user = update.effective_user
@@ -574,7 +590,6 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     if not player_data:
         await update.message.reply_text("Sorry, there was an error accessing your game account. Please try again.")
         return
-
     # --- Build Profile Text ---
     # Fetch spouse name if married
     spouse_name = "Nobody"
