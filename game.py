@@ -399,8 +399,56 @@ async def check_level_up(data, update, context):
             f"🎁 Reward: `$5,000` has been added to your wallet."
         )
     return data
-    
- async def update_player_data(data):
+ async def update_player_data(player_data: dict) -> bool:
+    """Updates a player's account data in the sheet with Level-Up check."""
+    if not game_sheet:
+        logger.error("game_sheet not initialized. Cannot update data.")
+        return False
+        
+    try:
+        # 1. Level Up Logic: XP ke hisaab se Level check karein
+        xp = player_data.get('XP', 0)
+        # Har 1000 XP par ek level (Level 1 starts at 0 XP)
+        new_level = (xp // 1000) + 1
+        
+        if new_level > player_data.get('Level', 1):
+            player_data['Level'] = new_level
+            # Note: Level up ka message aap yahan se nahi bhej payenge 
+            # kyunki update ke paas 'context' nahi hota. Use command function mein handle karein.
+            logger.info(f"User {player_data['UserID']} leveled up to {new_level}")
+
+        # 2. Row Find Karein (Async tarike se)
+        cell = await asyncio.to_thread(_get_player_row, player_data["UserID"])
+        if not cell:
+            logger.error(f"Cannot update: User {player_data['UserID']} not found in sheet.")
+            return False
+            
+        row_idx = cell.row
+
+        # 3. Data ko Sheet ke Columns ke hisaab se list mein convert karein
+        # Ye bahut zaroori hai taaki data galat column mein na jaye
+        row_values = []
+        for header in PLAYER_HEADERS:
+            val = player_data.get(header, 0)
+            # List ya Dictionary ko string mein badlein (JSON)
+            if isinstance(val, (list, dict)):
+                val = json.dumps(val)
+            row_values.append(val)
+
+        # 4. Sheet Update Logic
+        # Hum puri row ko ek baar mein update karenge (Efficiency ke liye)
+        # A se lekar headers ki length tak column select hoga (e.g., A:V)
+        end_col = chr(64 + len(PLAYER_HEADERS)) # A, B, C... maps to headers count
+        update_range = f"A{row_idx}:{end_col}{row_idx}"
+        
+        await asyncio.to_thread(game_sheet.update, update_range, [row_values])
+        
+        return True
+
+    except Exception as e:
+        logger.error(f"Error updating player data: {e}", exc_info=True)
+        return False   
+''' async def update_player_data(data):
     # Calculate Level based on XP
     xp = data.get('XP', 0)
     new_level = (xp // 1000) + 1
@@ -445,7 +493,7 @@ async def update_player_data(player_data: dict) -> bool:
         
     except Exception as e:
         logger.error(f"Error in update_player_data for {player_data['UserID']}: {e}", exc_info=True)
-        return False
+        return False'''
 
 # --- Main Game Command Handlers ---
 # --- 🎰 THE CASINO ENGINE ---
