@@ -2017,12 +2017,13 @@ async def handle_game_callback(update: Update, context: ContextTypes.DEFAULT_TYP
             return
 
         # --- Family Proposal Handlers ---
+        # --- Family Proposal Handlers ---
+    try: # <--- YE TRY BLOCK HONA ZAROORI HAI
         if parts[1] == "marry":
             action, proposer_id_str = parts[2], parts[3]
             proposer_id = int(proposer_id_str)
             target = user # The user clicking the button
             
-            # Check if proposal is valid
             if proposals["marry"].get(target.id) != proposer_id:
                 await query.edit_message_text("This proposal has expired or is invalid.")
                 return
@@ -2030,21 +2031,18 @@ async def handle_game_callback(update: Update, context: ContextTypes.DEFAULT_TYP
             del proposals["marry"][target.id] # Clear proposal
             
             if action == "decline":
-                await query.edit_message_text(f"{_mention(target.id, target.full_name)} has declined the marriage proposal from {_mention(proposer_id, 'user')}.", parse_mode='Markdown')
+                await query.edit_message_text(f"{_mention(target.id, target.full_name)} has declined the marriage proposal.", parse_mode='Markdown')
                 return
 
             if action == "accept":
-                # Get data for both
                 proposer_data = await get_player_data(proposer_id, "Proposer")
                 target_data = await get_player_data(target.id, target.full_name)
                 
-                # Double-check they are still single
                 if (proposer_data and proposer_data["MarriedToID"] != 0) or \
                    (target_data and target_data["MarriedToID"] != 0):
                     await query.edit_message_text("One of you is already married. Proposal cancelled.")
                     return
                     
-                # Success!
                 proposer_data["MarriedToID"] = target.id
                 target_data["MarriedToID"] = proposer_id
                 
@@ -2054,16 +2052,16 @@ async def handle_game_callback(update: Update, context: ContextTypes.DEFAULT_TYP
                 await query.edit_message_text(f"🎉 **Congratulations!** 🎉\n\n{_mention(proposer_id, proposer_data['UserName'])} and {_mention(target.id, target_data['UserName'])} are now married!", parse_mode='Markdown')
                 return
 
-        if parts[1] == "adopt":
+        elif parts[1] == "adopt": # <--- Use elif for better flow
             action, proposer_id_str = parts[2], parts[3]
             proposer_id = int(proposer_id_str)
-            target = user # The user clicking the button
+            target = user 
             
             if proposals["adopt"].get(target.id) != proposer_id:
                 await query.edit_message_text("This adoption offer has expired or is invalid.")
                 return
 
-            del proposals["adopt"][target.id] # Clear proposal
+            del proposals["adopt"][target.id] 
             
             if action == "decline":
                 await query.edit_message_text(f"{_mention(target.id, target.full_name)} has declined the adoption.", parse_mode='Markdown')
@@ -2076,7 +2074,6 @@ async def handle_game_callback(update: Update, context: ContextTypes.DEFAULT_TYP
                     await query.edit_message_text("The adopter is no longer married. Offer cancelled.")
                     return
                     
-                # Success!
                 if target.id not in proposer_data["ChildrenIDs"]:
                     proposer_data["ChildrenIDs"].append(target.id)
                     await update_player_data(proposer_data)
@@ -2089,7 +2086,7 @@ async def handle_game_callback(update: Update, context: ContextTypes.DEFAULT_TYP
                 )
                 return
 
-    except Exception as e:
+    except Exception as e: # <--- Ab ye except sahi chalega
         logger.error(f"Error in game callback handler: {e}", exc_info=True)
         try:
             await query.answer("An unexpected error occurred. Please try again.", show_alert=True)
