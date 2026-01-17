@@ -1658,7 +1658,6 @@ async def handle_game_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     elif data == "game_shop":
         # New Paginated Shop UI
         await shop_menu(update, context)
-
     elif data == "game_pvp_menu":
         text = "⚔️ **BATTLE ARENA**\nChoose your combat style:"
         buttons = [
@@ -1668,45 +1667,46 @@ async def handle_game_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         ]
         await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(buttons), parse_mode='Markdown')
 
-    # Add other routing for 'game_farm', 'game_inventory', etc.
+    # --- YAHAN SE FIX KIYA GAYA HAI ---
+    elif data == "game_actions_menu": # Maan lijiye aapne iska naam ye rakha hai
+        # Build text with cooldowns
+        _, work_cd = _check_cooldown(player_data["LastWork"], COOLDOWNS["work"])
+        _, farm_cd = _check_cooldown(player_data["LastFarm"], COOLDOWNS["farm"])
+        _, crime_cd = _check_cooldown(player_data["LastCrime"], COOLDOWNS["crime"])
+        _, mine_cd = _check_cooldown(player_data["LastMine"], COOLDOWNS["mine"])
+        _, task_cd = _check_cooldown(player_data["LastTask"], COOLDOWNS["task"])
+        _, daily_cd = _check_cooldown(player_data["LastDaily"], COOLDOWNS["daily"])
+        
+        action_text = (
+            f"**Actions Menu**\n\n"
+            f"What would you like to do?\n"
+            f"*Note: Minigames for actions are not yet implemented.*\n\n"
+            f"**Cooldowns:**\n"
+            f"  •  **Daily**: `{daily_cd}`\n"
+            f"  •  **Work**: `{work_cd}`\n"
+            f"  •  **Farm**: `{farm_cd}`\n"
+            f"  •  **Mine**: `{mine_cd}`\n"
+            f"  •  **Crime**: `{crime_cd}`\n"
+            f"  •  **Task**: `{task_cd}`"
+        )
+        
+        keyboard = [
+            [InlineKeyboardButton(f"🎁 Daily", callback_data="game:action:daily")],
+            [
+                InlineKeyboardButton(f"🧑‍💻 Work", callback_data="game:action:work"),
+                InlineKeyboardButton(f"🧑‍🌾 Farm", callback_data="game:action:farm"),
+                InlineKeyboardButton(f"⛏️ Mine", callback_data="game:action:mine")
+            ],
+            [
+                InlineKeyboardButton(f"💰 Crime", callback_data="game:action:crime"),
+                InlineKeyboardButton(f"🎯 Task", callback_data="game:action:task")
+            ],
+            [InlineKeyboardButton("⬅️ Back to Main Menu", callback_data="game:menu:main")]
+        ]
+        await query.edit_message_text(action_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+        return
 
-            
-            # Build text with cooldowns
-            _, work_cd = _check_cooldown(player_data["LastWork"], COOLDOWNS["work"])
-            _, farm_cd = _check_cooldown(player_data["LastFarm"], COOLDOWNS["farm"])
-            _, crime_cd = _check_cooldown(player_data["LastCrime"], COOLDOWNS["crime"])
-            _, mine_cd = _check_cooldown(player_data["LastMine"], COOLDOWNS["mine"])
-            _, task_cd = _check_cooldown(player_data["LastTask"], COOLDOWNS["task"])
-            _, daily_cd = _check_cooldown(player_data["LastDaily"], COOLDOWNS["daily"])
-            
-            action_text = (
-                f"**Actions Menu**\n\n"
-                f"What would you like to do?\n"
-                f"*Note: Minigames for actions are not yet implemented.*\n\n"
-                f"**Cooldowns:**\n"
-                f"  •  **Daily**: `{daily_cd}`\n"
-                f"  •  **Work**: `{work_cd}`\n"
-                f"  •  **Farm**: `{farm_cd}`\n"
-                f"  •  **Mine**: `{mine_cd}`\n"
-                f"  •  **Crime**: `{crime_cd}`\n"
-                f"  •  **Task**: `{task_cd}`"
-            )
-            
-            keyboard = [
-                [InlineKeyboardButton(f"🎁 Daily", callback_data="game:action:daily")],
-                [
-                    InlineKeyboardButton(f"🧑‍💻 Work", callback_data="game:action:work"),
-                    InlineKeyboardButton(f"🧑‍🌾 Farm", callback_data="game:action:farm"),
-                    InlineKeyboardButton(f"⛏️ Mine", callback_data="game:action:mine")
-                ],
-                [
-                    InlineKeyboardButton(f"💰 Crime", callback_data="game:action:crime"),
-                    InlineKeyboardButton(f"🎯 Task", callback_data="game:action:task")
-                ],
-                [InlineKeyboardButton("⬅️ Back to Main Menu", callback_data="game:menu:main")]
-            ]
-            await query.edit_message_text(action_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
-            return
+    
 
         # --- NEW LEADERBOARD MENU ---
         if data == "game:menu:leaderboard":
