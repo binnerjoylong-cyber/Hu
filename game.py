@@ -434,6 +434,109 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
             parse_mode='Markdown',
             disable_web_page_preview=True
         )
+
+# --- 🏆 ELITE DAILY SYSTEM ---
+async def daily_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    data = await get_player_data(user.id, user.full_name)
+    now = time.time()
+    
+    last_daily = data.get('LastDaily', 0)
+    # Reuse your existing cooldown checker
+    is_ready, time_left = _check_cooldown(last_daily, COOLDOWNS["daily"])
+    
+    if not is_ready:
+        await update.message.reply_text(f"⏳ **Too Early!**\nReturn in `{time_left}` to claim your reward.")
+        return
+
+    # Streak Logic: If they miss > 48 hours, streak resets
+    streak = data.get('StreakCount', 0)
+    if now - last_daily > 172800: # 48 hours
+        streak = 1
+    else:
+        streak += 1
+
+    # Bonus Multiplier: 10% extra per streak day
+    multiplier = 1 + (streak * 0.1)
+    base_reward = random.randint(3000, 7000)
+    total_reward = int(base_reward * multiplier)
+
+    data['Money'] += total_reward
+    data['LastDaily'] = now
+    data['StreakCount'] = streak
+    await update_player_data(data)
+
+    msg = (
+        f"🌞 **DAILY REWARDS**\n"
+        f"━━━━━━━━━━━━━━━━━━\n"
+        f"🔥 **Streak:** `Day {streak}`\n"
+        f"💰 **Earned:** `${total_reward:,}`\n"
+        f"📈 **Bonus:** `{int(multiplier*100)-100}% extra`\n"
+        f"━━━━━━━━━━━━━━━━━━\n"
+        f"🎁 *Keep playing daily to reach a 2x bonus!*"
+    )
+    await update.message.reply_text(msg, parse_mode='Markdown')
+
+# --- 🎯 GLOBAL BOUNTY SYSTEM ---
+async def bounty_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Command: /bounty @user 5000"""
+    user = update.effective_user
+    if not context.args or len(context.args) < 2:
+        await update.message.reply_text("❌ **Usage:** `/bounty @user <amount>`")
+        return
+
+    # Extract amount
+    try:
+        amount = int(re.sub(r'[^0-9]', '', context.args[1]))
+        if amount < 1000:
+            await update.message.reply_text("⚠️ Minimum bounty is $1,000.")
+            return
+    except:
+        await update.message.reply_text("❌ Invalid amount.")
+        return
+
+    # Check if target is mentioned
+    target_user = None
+    if update.message.entities:
+        for entity in update.message.entities:
+            if entity.type == 'mention':
+                # This requires resolving the username, for now we assume they reply to target
+                pass
+    
+    # Simpler version: Bounty via Reply
+    if not update.message.reply_to_message:
+        await update.message.reply_text("🎯 **Tip:** Reply to the person you want to put a bounty on!")
+        return
+    
+    target = update.message.reply_to_message.from_user
+    if target.id == user.id:
+        await update.message.reply_text("🤡 You can't put a bounty on yourself!")
+        return
+
+    # Deduct money from sender
+    sender_data = await get_player_data(user.id, user.full_name)
+    if sender_data['Money'] < amount:
+        await update.message.reply_text("💸 You don't have enough money in your wallet!")
+        return
+
+    target_data = await get_player_data(target.id, target.full_name)
+    current_bounty = target_data.get('Bounty', 0)
+    
+    sender_data['Money'] -= amount
+    target_data['Bounty'] = current_bounty + amount
+    
+    await update_player_data(sender_data)
+    await update_player_data(target_data)
+
+    await update.message.reply_text(
+        f"📢 **BOUNTY PLACED!**\n"
+        f"━━━━━━━━━━━━━━━━━━\n"
+        f"👤 **Target:** {target.first_name}\n"
+        f"💰 **Reward:** `${target_data['Bounty']:,}`\n"
+        f"🕵️ **Contractor:** {user.first_name}\n\n"
+        f"⚔️ *Anyone who uses /kill on them successfully will claim the reward!*"
+    )
+    
 async def handle_game_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     data = await get_player_data(user.id, user.full_name)
