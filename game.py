@@ -399,6 +399,8 @@ async def check_level_up(data, update, context):
             f"🎁 Reward: `$5,000` has been added to your wallet."
         )
     return data
+
+
  async def update_player_data(player_data: dict) -> bool:
     """Updates a player's account data in the sheet with Level-Up check."""
     if not game_sheet:
