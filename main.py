@@ -3403,6 +3403,13 @@ def main() -> None:
     application.add_handler(CommandHandler("start", game.start_game))
     application.add_handler(CommandHandler("heal", game.handle_heal))
     application.add_handler(CommandHandler("slots", game.handle_slots))
+    # --- GAME COMMANDS ---
+    application.add_handler(CommandHandler("game", game.handle_game_menu))
+    application.add_handler(CommandHandler("daily", game.daily_command))
+    application.add_handler(CommandHandler("slots", game.slots_command))
+    application.add_handler(CommandHandler("bounty", game.bounty_command))
+    application.add_handler(CommandHandler("profile", game.profile_command))
+    application.add_handler(CommandHandler("top", game.leaderboard_command))
 # ... aur baaki purane wale bhi (rob, kill, etc)
 
     # --- NEW: Refactored Game Commands ---
