@@ -384,8 +384,11 @@ async def profile_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await update.message.reply_text(profile_ui, parse_mode='Markdown')
 
-
 async def check_level_up(data, update, context):
+    """
+    Checks for level up, awards bonus, and sends a notification message.
+    Use this inside command functions (like /work or /crime).
+    """
     current_xp = data.get('XP', 0)
     current_level = data.get('Level', 1)
     new_level = (current_xp // 1000) + 1
@@ -398,28 +401,25 @@ async def check_level_up(data, update, context):
             f"🎊 **LEVEL UP!** 🎊\n\n{update.effective_user.first_name} reached **Level {new_level}**!\n"
             f"🎁 Reward: `$5,000` has been added to your wallet."
         )
-        return data
+    return data
 
-
- async def update_player_data(player_data: dict) -> bool:
-    """Updates a player's account data in the sheet with Level-Up check."""
+async def update_player_data(player_data: dict) -> bool:
+    """Updates a player's account data in the sheet with an internal Level-Up check."""
     if not game_sheet:
         logger.error("game_sheet not initialized. Cannot update data.")
         return False
         
     try:
-        # 1. Level Up Logic: XP ke hisaab se Level check karein
+        # 1. Internal Level Up Check (as a backup to keep sheet data consistent)
         xp = player_data.get('XP', 0)
-        # Har 1000 XP par ek level (Level 1 starts at 0 XP)
         new_level = (xp // 1000) + 1
         
         if new_level > player_data.get('Level', 1):
             player_data['Level'] = new_level
-            # Note: Level up ka message aap yahan se nahi bhej payenge 
-            # kyunki update ke paas 'context' nahi hota. Use command function mein handle karein.
-            logger.info(f"User {player_data['UserID']} leveled up to {new_level}")
+            # Note: Notification message is handled in check_level_up, not here.
+            logger.info(f"User {player_data['UserID']} internally leveled up to {new_level}")
 
-        # 2. Row Find Karein (Async tarike se)
+        # 2. Find Player Row (Async)
         cell = await asyncio.to_thread(_get_player_row, player_data["UserID"])
         if not cell:
             logger.error(f"Cannot update: User {player_data['UserID']} not found in sheet.")
@@ -427,20 +427,19 @@ async def check_level_up(data, update, context):
             
         row_idx = cell.row
 
-        # 3. Data ko Sheet ke Columns ke hisaab se list mein convert karein
-        # Ye bahut zaroori hai taaki data galat column mein na jaye
+        # 3. Map Data to Columns
+        # Ensures data is written in the correct order based on PLAYER_HEADERS
         row_values = []
         for header in PLAYER_HEADERS:
             val = player_data.get(header, 0)
-            # List ya Dictionary ko string mein badlein (JSON)
+            # Serialize lists/dicts to JSON strings for the sheet
             if isinstance(val, (list, dict)):
                 val = json.dumps(val)
             row_values.append(val)
 
-        # 4. Sheet Update Logic
-        # Hum puri row ko ek baar mein update karenge (Efficiency ke liye)
-        # A se lekar headers ki length tak column select hoga (e.g., A:V)
-        end_col = chr(64 + len(PLAYER_HEADERS)) # A, B, C... maps to headers count
+        # 4. Sheet Update Logic (Efficient Row Update)
+        # Calculates the column range (e.g., A:V) based on number of headers
+        end_col = chr(64 + len(PLAYER_HEADERS)) 
         update_range = f"A{row_idx}:{end_col}{row_idx}"
         
         await asyncio.to_thread(game_sheet.update, update_range, [row_values])
