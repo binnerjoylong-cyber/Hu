@@ -3455,6 +3455,10 @@ def main() -> None:
     application.add_handler(CommandHandler("s_ban", check_sudo_wrapper(sudo_ban_user)))
     application.add_handler(CommandHandler("s_unban", check_sudo_wrapper(sudo_unban_user)))
     application.add_handler(CommandHandler("s_send", check_sudo_wrapper(sudo_send_message)))
+    application.add_handler(CommandHandler("slots", game.slots_command))
+    application.add_handler(CommandHandler("bounty", game.bounty_command))
+    application.add_handler(CommandHandler("top", game.leaderboard_command))
+    application.add_handler(CommandHandler("clan", game.clan_command))
 
     # Owner-Only Sudo Management Commands (BROADCAST_ADMIN_ID required)
     application.add_handler(CommandHandler("addsudo", add_sudo_command))
