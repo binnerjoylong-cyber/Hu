@@ -3397,6 +3397,9 @@ def main() -> None:
     application.add_handler(CommandHandler("adopt", game.handle_adopt))
     application.add_handler(CommandHandler("divorce", game.handle_divorce))
     application.add_handler(CommandHandler("check", game.handle_check_profile))
+    
+    application.add_handler(CommandHandler("daily", game.daily_command))
+    application.add_handler(CommandHandler("bounty", game.bounty_command))
 
     # --- Admin Commands (Group Admin required) ---
     application.add_handler(CommandHandler("on", on_command))
