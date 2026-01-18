@@ -849,7 +849,69 @@ async def get_file_id_command(update: Update, context: ContextTypes.DEFAULT_TYPE
             "The message you replied to does not contain a supported media file (video, photo, document, audio, or voice message)."
         )
 # --- MODIFIED: /couple Command ---
+# Is list mein aap jitni chahein photos (URLs ya File IDs) daal sakte hain
+COUPLE_IMAGES = [
+    "https://i.pinimg.com/736x/b3/78/3c/b3783c2e64bc77df1be6382104c96a75.jpg", # Cute anime couple
+    "https://i.pinimg.com/736x/55/ec/88/55ec886d26c59b15b3c54d19487c53d1.jpg", # Holding hands
+    "https://i.pinimg.com/736x/8b/16/7a/8b167af754b2d4157582531cb4829393.jpg", # Romantic vibe
+    "AgACAgUAAxkBAAId5GjLxQv_BxOm3_RGmB9j4WceUFg7AALdyzEb-tJgVuOn7v3_BWvqAQADAgADeQADNgQ", # Aapki purani wali photo
+]
+
 async def couple_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Selects a random couple from the chat members and mentions them."""
+    chat_id = update.effective_chat.id
+    
+    if update.effective_chat.type == 'private':
+        await update.message.reply_text("Yaar, couple banne ke liye group mein aana padega! Akele kaise couple banoge? 😂")
+        return
+
+    current_chat_members = chat_members.get(chat_id, {})
+    
+    if len(current_chat_members) < 2:
+        await update.message.reply_text("Arre, kam se kam do log toh baat karo tabhi toh jodi banegi! 😉 Talk more and try again.")
+        return
+        
+    try:
+        user_ids = list(current_chat_members.keys())
+        # Pick 2 random users
+        couple_ids = random.sample(user_ids, 2)
+        
+        user1_id, user2_id = couple_ids[0], couple_ids[1]
+        user1_name, user2_name = current_chat_members[user1_id], current_chat_members[user2_id]
+        
+        # Create mentions using Markdown format
+        user1_mention = f"[{user1_name}](tg://user?id={user1_id})"
+        user2_mention = f"[{user2_name}](tg://user?id={user2_id})"
+
+        # MODIFIED: Names clearly visible at the TOP
+        messages = [
+            f"❤️ **COUPLE OF THE DAY** ❤️\n\n{user1_mention} 💘 {user2_mention}\n\n_Uff! Kya jodi hai! Nazar na lage kisi ki!_ ✨",
+            
+            f"💍 **MATCH MADE IN HEAVEN** 💍\n\n{user1_mention} 💍 {user2_mention}\n\n_Rab ne bana di jodi... Asli wali!_ 😍",
+            
+            f"✨ **OFFICIAL SHIP ALERT** ✨\n\n{user1_mention} x {user2_mention}\n\n_Ab mithai kab khila rahe ho tum dono?_ 🍬",
+            
+            f"🌟 **PERFECT PAIR** 🌟\n\n{user1_mention} 💖 {user2_mention}\n\n_Lagta hai aaj hawa mein thoda pyaar hai!_ 🥰"
+        ]
+        
+        couple_message = random.choice(messages)
+        
+        # Pick a random photo from the list
+        random_photo = random.choice(COUPLE_IMAGES)
+
+        await context.bot.send_photo(
+            chat_id=chat_id,
+            photo=random_photo,
+            caption=couple_message,
+            parse_mode='Markdown'
+        )
+        logger.info(f"[{chat_id}] /couple command used. Selected {user1_name} and {user2_name}.")
+
+    except Exception as e:
+        await update.message.reply_text("Oops, couple choose karne mein kuch gadbad ho gayi. Phir se try karo!")
+        logger.error(f"[{chat_id}] Error in /couple command: {e}")
+
+'''async def couple_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Selects a random couple from the chat members and mentions them."""
     chat_id = update.effective_chat.id
     
@@ -897,7 +959,7 @@ async def couple_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     except Exception as e:
         await update.message.reply_text("Oops, something went wrong while choosing a couple. Please try again!")
         logger.error(f"[{chat_id}] Error in /couple command: {e}")
-
+'''
 # --- MODIFIED: Background task for /gen command ---
 def sync_generate_image(query: str) -> str | None:
     """Synchronous function to handle Stable Horde API requests."""
