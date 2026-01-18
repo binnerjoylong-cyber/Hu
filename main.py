@@ -885,6 +885,7 @@ COUPLE_IMAGES = [
 async def couple_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Selects a random couple from the chat members and mentions them."""
     chat_id = update.effective_chat.id
+    SPECIAL_USER_ID = 6086655225
     
     if update.effective_chat.type == 'private':
         await update.message.reply_text("Yaar, couple banne ke liye group mein aana padega! Akele kaise couple banoge? 😂")
@@ -903,23 +904,42 @@ async def couple_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         
         user1_id, user2_id = couple_ids[0], couple_ids[1]
         user1_name, user2_name = current_chat_members[user1_id], current_chat_members[user2_id]
-        
+
+        is_special = False
+        # --- SPECIAL LOGIC FOR TAKI & MITSUHA ---
+        if u1_id == SPECIAL_USER_ID or u2_id == SPECIAL_USER_ID:
+            is_special = True
+            if u1_id == SPECIAL_USER_ID:
+                u1_name = "Taki"
+                u2_name = "Mitsuha"
+            else:
+                u2_name = "Taki"
+                u1_name = "Mitsuha"
         # Create mentions using Markdown format
         user1_mention = f"[{user1_name}](tg://user?id={user1_id})"
         user2_mention = f"[{user2_name}](tg://user?id={user2_id})"
 
-        # MODIFIED: Names clearly visible at the TOP
-        messages = [
-            f"❤️ **COUPLE OF THE DAY** ❤️\n\n{user1_mention} 💘 {user2_mention}\n\n_Uff! Kya jodi hai! Nazar na lage kisi ki!_ ✨",
-            
-            f"💍 **MATCH MADE IN HEAVEN** 💍\n\n{user1_mention} 💍 {user2_mention}\n\n_Rab ne bana di jodi... Asli wali!_ 😍",
-            
-            f"✨ **OFFICIAL SHIP ALERT** ✨\n\n{user1_mention} x {user2_mention}\n\n_Ab mithai kab khila rahe ho tum dono?_ 🍬",
-            
-            f"🌟 **PERFECT PAIR** 🌟\n\n{user1_mention} 💖 {user2_mention}\n\n_Lagta hai aaj hawa mein thoda pyaar hai!_ 🥰"
-        ]
+        if is_special:
+            couple_message = (
+                f"☄️ **KIMI NO NAWA MOMENT** ☄️\n\n"
+                f"{user1_mention} 💫 {user2_mention}\n\n"
+                f"_Woah! Destiny has reunited Taki and Mitsuha in this group! ❤️_"
+            )
+        else:
         
-        couple_message = random.choice(messages)
+
+        # MODIFIED: Names clearly visible at the TOP
+            messages = [
+                f"❤️ **COUPLE OF THE DAY** ❤️\n\n{user1_mention} 💘 {user2_mention}\n\n_Uff! Kya jodi hai! Nazar na lage kisi ki!_ ✨",
+            
+                f"💍 **MATCH MADE IN HEAVEN** 💍\n\n{user1_mention} 💍 {user2_mention}\n\n_Rab ne bana di jodi... Asli wali!_ 😍",
+            
+                f"✨ **OFFICIAL SHIP ALERT** ✨\n\n{user1_mention} x {user2_mention}\n\n_Ab mithai kab khila rahe ho tum dono?_ 🍬",
+            
+                f"🌟 **PERFECT PAIR** 🌟\n\n{user1_mention} 💖 {user2_mention}\n\n_Lagta hai aaj hawa mein thoda pyaar hai!_ 🥰"
+            ]
+        
+            couple_message = random.choice(messages)
         
         # Pick a random photo from the list
         random_photo = random.choice(COUPLE_IMAGES)
