@@ -910,11 +910,11 @@ async def couple_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         if u1_id == SPECIAL_USER_ID or u2_id == SPECIAL_USER_ID:
             is_special = True
             if u1_id == SPECIAL_USER_ID:
-                u1_name = "Taki"
-                u2_name = "Mitsuha"
+                u1_name = "Adhyan"
+                u2_name = "Kavya"
             else:
-                u2_name = "Taki"
-                u1_name = "Mitsuha"
+                u2_name = "Adhyan"
+                u1_name = "Kavya"
         # Create mentions using Markdown format
         user1_mention = f"[{user1_name}](tg://user?id={user1_id})"
         user2_mention = f"[{user2_name}](tg://user?id={user2_id})"
