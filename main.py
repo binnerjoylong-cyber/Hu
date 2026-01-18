@@ -880,7 +880,7 @@ COUPLE_IMAGES = [
     "AgACAgUAAxkBAAO5aW0Dg8qda3aZRtIAAR5MC3kj0wrJAAJsDmsb7ZxwV816gaAZ4L5PAQADAgADeAADOAQ",
     "AgACAgUAAxkBAAO6aW0Dg0IuU5tBNpP96M97QUCNsTEAAm0OaxvtnHBX3RnpFQaqlAsBAAMCAAN4AAM4BA",
     "AgACAgUAAxkBAAO7aW0Dg9IkV38rfCR9N5YsrsZDiV0AAm4OaxvtnHBX8ZIp6HJro1kBAAMCAAN4AAM4BA"
-    
+]
 
 async def couple_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Selects a random couple from the chat members and mentions them."""
