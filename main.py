@@ -1914,8 +1914,8 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     
     keyboard = [
         [
-            InlineKeyboardButton("🚀 Features & Help", callback_data="help_main"),
-            InlineKeyboardButton("🎮 Game Zone", callback_data="help_games") 
+            InlineKeyboardButton("🚀 Features & Help", callback_data="start_features"),
+            InlineKeyboardButton("🎮 Game Zone", callback_data="start_games") 
         ],
         [InlineKeyboardButton("➕ Add Me To Your Group", url=add_to_group_url)]
     ]
@@ -1940,7 +1940,89 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         )
     except Exception:
         await context.bot.send_message(chat_id=chat_id, text=welcome_message, reply_markup=reply_markup, parse_mode='Markdown')
+        
+  async def help_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    data = query.data
+    user_name = update.effective_user.first_name
+    await query.answer()
     
+    # Buttons setup (Variables define karna zaroori hai crash se bachne ke liye)
+    back_to_help_main = [[InlineKeyboardButton("🔙 Back to Help", callback_data="help_back_to_main")]]
+
+    # ==========================================
+    # 🏠 SECTION 1: START MENU (Photo Messages)
+    # ==========================================
+    if data == "start_features":
+        text = "📂 **Laila's Quick Features**\n\nI can do AI Chat, Image Generation, Lyrics, and more!\n\nUse `/help` to see the full list of commands."
+        keyboard = [[InlineKeyboardButton("🔙 Back", callback_data="start_back")]]
+        await query.edit_message_caption(caption=text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+
+    elif data == "start_games":
+        text = (
+            "🎮 **Laila's Game Zone**\n\n"
+            "• `/xoxo` - Tic-Tac-Toe ⚔️\n"
+            "• `/startgame` - Guess Number 🔢\n"
+            "• `/game` - RPG Menu 🏠\n"
+            "• `/work` | `/rob` | `/shop` 💰"
+        )
+        keyboard = [[InlineKeyboardButton("🔙 Back", callback_data="start_back")]]
+        await query.edit_message_caption(caption=text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+
+    elif data == "start_back":
+        bot_info = await context.bot.get_me()
+        text = f"Hey {user_name}! 👋\n\nI'm **Laila**, your advanced AI companion. 💖\nChoose an option below:"
+        keyboard = [
+            [InlineKeyboardButton("🚀 Features & Help", callback_data="start_features"),
+             InlineKeyboardButton("🎮 Game Zone", callback_data="start_games")],
+            [InlineKeyboardButton("➕ Add Me To Your Group", url=f"https://t.me/{bot_info.username}?startgroup=true")]
+        ]
+        await query.edit_message_caption(caption=text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+
+    # ==========================================
+    # 📂 SECTION 2: HELP MENU (Text Messages Only)
+    # ==========================================
+    elif data.startswith("help_"):
+        if data == "help_back_to_main" or data == "help_main":
+            text = "📂 **Laila's Help Menu**\n\nSelect a category to explore:"
+            keyboard = [
+                [InlineKeyboardButton("🤖 AI & Chat", callback_data="help_ai"),
+                 InlineKeyboardButton("🎨 Media & Gen", callback_data="help_media")],
+                [InlineKeyboardButton("🛠 Tools", callback_data="help_utils"),
+                 InlineKeyboardButton("👮 Admin", callback_data="help_admin")],
+                [InlineKeyboardButton("ℹ️ About", callback_data="help_about"),
+                 InlineKeyboardButton("❌ Close", callback_data="help_close_menu")]
+            ]
+        
+        elif data == "help_ai":
+            text = "🤖 **AI & Chat**\n\n• `/lyrics <song>` 🎵\n• `/tr <lang>` 🌍\n• `/advice` 💡\n• Chat & Voice"
+            keyboard = back_to_help_main
+
+        elif data == "help_media":
+            text = "🎨 **Media & Gen**\n\n• `/gen <prompt>` 🖼\n• `/img <query>` 🔍\n• `/youtube <link>` 📥\n• `/meme` 😂"
+            keyboard = back_to_help_main
+
+        elif data == "help_utils":
+            text = "🛠 **Utility Tools**\n\n• `/weather` ☁️\n• `/define` 📖\n• `/qr` 📱\n• `/shorten` 🔗"
+            keyboard = back_to_help_main
+
+        elif data == "help_admin":
+            text = "👮 **Admin Controls**\n\n• `/on` | `/off` ⚙️\n• `/ban` | `/kick` | `/mute` 🚫"
+            keyboard = back_to_help_main
+
+        elif data == "help_about":
+            text = "ℹ️ **About Laila**\n\nDeveloped by **Adhyan**.\nPowered by Gemini & DeepSeek."
+            keyboard = back_to_help_main
+
+        elif data == "help_close_menu":
+            await query.message.delete()
+            return
+
+        # Execute Help Edits (Text only)
+        try:
+            await query.edit_message_text(text=text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+        except:
+            pass  
 
 '''async def help_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
@@ -2209,124 +2291,7 @@ async def help_callback_handler(update: Update, context: ContextTypes.DEFAULT_TY
             await query.edit_message_text(text=text, reply_markup=reply_markup, parse_mode='Markdown')
         except Exception:
             pass'''
-async def help_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    query = update.callback_query
-    data = query.data
-    await query.answer()
-    
-    # 🔙 Buttons Setup
-    # Ye button hamesha main start screen pe wapas le jayega
-    back_to_start_btn = [InlineKeyboardButton("🔙 Back to Start", callback_data="help_close")]
-    # Ye button Features menu pe wapas le jayega
-    back_to_main_btn = [InlineKeyboardButton("🔙 Back to Features", callback_data="help_main")]
 
-    # --- 1. HELP MAIN (Features Category) ---
-    if data == "help_main":
-        text = (
-            "📂 **Laila's Features & Tools**\n\n"
-            "Select a category to explore my commands:"
-        )
-        keyboard = [
-            [
-                InlineKeyboardButton("🤖 AI & Chat", callback_data="help_ai"),
-                InlineKeyboardButton("🎨 Media & Gen", callback_data="help_media")
-            ],
-            [
-                InlineKeyboardButton("🛠 Tools", callback_data="help_utils"),
-                InlineKeyboardButton("👮 Admin", callback_data="help_admin")
-            ],
-            [
-                InlineKeyboardButton("ℹ️ About", callback_data="help_about"),
-                back_to_start_btn # Yahan Back to Start aayega
-            ]
-        ]
-
-    # --- 2. GAME ZONE ---
-    elif data == "help_games":
-        text = (
-            "🎮 **Laila's Game Zone**\n\n"
-            "**RPG Economy:**\n"
-            "• `/game` | `/profile` 🏠\n"
-            "• `/work` | `/farm` | `/rob` 💰\n"
-            "• `/shop` | `/daily` 🛒\n\n"
-            "**Mini Games:**\n"
-            "• `/xoxo` - Tic-Tac-Toe ⚔️\n"
-            "• `/startgame` - Guess Number 🔢\n"
-            "• `/truth`, `/dare`, `/roast` 🔥"
-        )
-        keyboard = [back_to_start_btn] # Games se direct Start pe wapas
-
-    # --- 3. SUB-MENUS (AI, Media, Tools, Admin) ---
-    elif data == "help_ai":
-        text = (
-            "🤖 **AI & Chat**\n\n"
-            "• **Chat**: Reply to me or tag Laila\n"
-            "• **Voice**: I reply to voice notes!\n"
-            "• `/lyrics <song>` - Get lyrics 🎵\n"
-            "• `/tr <lang>` - Translator 🌍"
-        )
-        keyboard = [back_to_main_btn]
-
-    elif data == "help_media":
-        text = (
-            "🎨 **Media & Generation**\n\n"
-            "• `/gen <prompt>` - AI Art 🖼\n"
-            "• `/img <query>` - Image Search 🔍\n"
-            "• `/youtube <link>` - Downloader 📥\n"
-            "• `/meme` - Random Memes 😂"
-        )
-        keyboard = [back_to_main_btn]
-
-    elif data == "help_utils":
-        text = (
-            "🛠 **Utility Tools**\n\n"
-            "• `/weather <city>` - Live Weather ☁️\n"
-            "• `/define <word>` - Dictionary 📖\n"
-            "• `/shorten <url>` - Link Shortener 🔗"
-        )
-        keyboard = [back_to_main_btn]
-
-    elif data == "help_admin":
-        text = (
-            "👮 **Admin Controls**\n\n"
-            "• `/on` / `/off` - Toggle Bot\n"
-            "• `/ban`, `/kick`, `/mute`\n"
-            "• `/setwelcome` - Custom Welcome"
-        )
-        keyboard = [back_to_main_btn]
-
-    # --- 4. BACK TO START (The Reset/Close Logic) ---
-    elif data == "help_close":
-        bot_info = await context.bot.get_me()
-        user_name = update.effective_user.first_name
-        add_url = f"https://t.me/{bot_info.username}?startgroup=true"
-        
-        text = (
-            f"Hey {user_name}! 👋\n\n"
-            f"I'm **Laila**, your advanced AI companion. 💖\n"
-            f"I can chat, generate images, and host RPG games!\n\n"
-            f"👇 **Choose an option to get started:**"
-        )
-        keyboard = [
-            [
-                InlineKeyboardButton("🚀 Features & Help", callback_data="help_main"),
-                InlineKeyboardButton("🎮 Game Zone", callback_data="help_games") 
-            ],
-            [InlineKeyboardButton("➕ Add Me To Your Group", url=add_url)]
-        ]
-
-    # --- 🚀 EXECUTE THE EDIT ---
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    
-    try:
-        # Agar message photo ke saath hai (Start command ki tarah)
-        if query.message.photo:
-            await query.edit_message_caption(caption=text, reply_markup=reply_markup, parse_mode='Markdown')
-        # Agar sirf text message hai (Help command ki tarah)
-        else:
-            await query.edit_message_text(text=text, reply_markup=reply_markup, parse_mode='Markdown')
-    except Exception as e:
-        print(f"Callback Error: {e}")
 '''async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     chat_id = update.effective_chat.id
     ping_start = time.time()
