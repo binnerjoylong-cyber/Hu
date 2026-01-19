@@ -1318,69 +1318,75 @@ import httpx
 import asyncio
 import re
 
-# --- CONFIGURATION ---
-# Cobalt ek open-source API hai, ye uska ek public instance hai.
-COBALT_API_URL = "https://api.cobalt.tools/api/json"
-YT_REGEX = r'(https?://)?(www\.)?(youtube\.com|youtu\.be|youtube-nocookie\.com)/[^\s]+'
+# Cobalt v10 Instances (Jo abhi working hain)
+COBALT_INSTANCES = [
+    "https://api.cobalt.tools/api/json",
+    "https://cobalt-api.v06.io/api/json",
+    "https://api.v06.io/api/json"
+]
+
+YT_REGEX = r'(https?://)?(www\.)?(youtube\.com|youtu\.be|instagram\.com|tiktok\.com)/[^\s]+'
 
 async def get_cobalt_video(url: str):
-    """Cobalt API se direct download link fetch karta hai."""
+    """Multiple instances check karega jab tak link na mil jaye."""
     headers = {
         "Accept": "application/json",
         "Content-Type": "application/json"
     }
     payload = {
         "url": url,
-        "vQuality": "720",  # Aap 1080 ya 480 bhi kar sakte ho
+        "vQuality": "720", 
         "filenameStyle": "pretty"
     }
     
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        try:
-            response = await client.post(COBALT_API_URL, json=payload, headers=headers)
-            data = response.json()
-            
-            # Cobalt 'stream' ya 'video' status deta hai direct link ke liye
-            if data.get("status") in ["stream", "redirect"]:
-                return data.get("url"), None
-            elif data.get("status") == "error":
-                return None, data.get("text")
-            return None, "Video link nahi mil paya."
-        except Exception as e:
-            return None, str(e)
+    async with httpx.AsyncClient(timeout=40.0) as client:
+        for instance in COBALT_INSTANCES:
+            try:
+                response = await client.post(instance, json=payload, headers=headers)
+                # Agar instance shut down hai ya error hai toh next check karega
+                if response.status_code != 200:
+                    continue
+                
+                data = response.json()
+                if data.get("status") in ["stream", "redirect", "picker"]:
+                    # Picker mode mein pehla link uthayega
+                    final_url = data.get("url") or data.get("picker")[0].get("url")
+                    return final_url, None
+                elif data.get("status") == "error":
+                    continue # Try next instance
+            except Exception:
+                continue
+                
+        return None, "Sabhi API instances busy hain ya band ho gaye hain. 😔"
 
 async def handle_youtube_link(update: Update, context: ContextTypes.DEFAULT_TYPE, url: str):
-    """Core logic: Link leta hai, download karta hai aur bhejta hai."""
     chat_id = update.effective_chat.id
     
-    # 1. User ko update do
-    msg = await context.bot.send_message(chat_id=chat_id, text="🚀 **Laila is fetching your video...**", parse_mode='Markdown')
+    # Message send karke reference save karo
+    msg = await context.bot.send_message(chat_id=chat_id, text="🔍 **Searching for the best link...**", parse_mode='Markdown')
     await context.bot.send_chat_action(chat_id=chat_id, action="upload_video")
 
-    # 2. Cobalt se direct link nikalo
     video_url, error = await get_cobalt_video(url)
 
     if video_url:
         try:
-            await msg.edit_text("📥 **Direct link found! Uploading to Telegram...**", parse_mode='Markdown')
+            await msg.edit_text("📥 **Got it! Sending video...**", parse_mode='Markdown')
             
-            # 3. Telegram par video bhejna (Direct URL se)
+            # Direct URL se Telegram ko upload karne do
             await context.bot.send_video(
                 chat_id=chat_id,
                 video=video_url,
-                caption=f"🎥 **Enjoy your video, Adhyan!**\n\n_Powered by Laila Bot_",
+                caption=f"🎥 **Ye raha aapka video!**\n\n_Generated for Adhyan_ ✨",
                 parse_mode='Markdown'
             )
             await msg.delete()
         except Exception as e:
-            await msg.edit_text(f"❌ **Upload Error:** Telegram ne file accept nahi ki (Shayad 50MB se badi hai).")
-            print(f"Upload error: {e}")
+            await msg.edit_text("❌ **Upload Error:** File size limit se badi ho sakti hai (Max 50MB).")
     else:
-        await msg.edit_text(f"❌ **Download Failed:** {error}")
+        await msg.edit_text(f"❌ **Failed:** {error}")
 
 # --- Auto Message Handler ---
 async def auto_youtube_msg_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Detects YouTube links in any message and downloads them."""
     if not update.message or not update.message.text:
         return
 
@@ -1389,17 +1395,7 @@ async def auto_youtube_msg_handler(update: Update, context: ContextTypes.DEFAULT
     
     if match:
         url = match.group(0)
-        # Background task chalao taaki bot busy na ho
         asyncio.create_task(handle_youtube_link(update, context, url))
-
-# --- Command Handler (Optional) ---
-async def youtube_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Manual command /youtube <link>"""
-    if not context.args:
-        await update.message.reply_text("Adhyan, link toh do! `/youtube <link>`")
-        return
-    await handle_youtube_link(update, context, context.args[0])
-
 
     # --- Name query handler ---
 async def handle_name_query(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
