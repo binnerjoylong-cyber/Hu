@@ -37,7 +37,8 @@ import glob
 # --- NEW: IMPORT THE GAME MODULE ---
 import game
 from yt_bypass import handle_youtube_link, youtube_auto_handler
-
+# Agar tumhari file ka naam yt_bypass.py hai
+from yt_bypass import youtube_command
 
 # Load environment variables from .env file
 load_dotenv()
