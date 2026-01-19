@@ -1214,13 +1214,14 @@ async def img_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 # --- Lyrics Command (/lyrics) ---
 # --- Lyrics Command (/lyrics) ---
 import httpx
+
 async def lyrics_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not context.args:
-        await update.message.reply_text("Bhai, gaane ka naam to likho! Example: `/lyrics Tum Hi Ho`")
+        await update.message.reply_text("Bhai, gaane ka naam to likho! Example: <code>/lyrics Tum Hi Ho</code>", parse_mode='HTML')
         return
 
     query = " ".join(context.args)
-    msg = await update.message.reply_text(f"🔍 Searching for lyrics: **{query}**...")
+    msg = await update.message.reply_text(f"🔍 Searching for: <b>{query}</b>...", parse_mode='HTML')
 
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
@@ -1228,34 +1229,37 @@ async def lyrics_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             results = response.json()
 
             if results:
-                # 💡 SMART FIX: Pehla result mat uthao, wo result uthao jisme lyrics hon!
-                best_match = None
-                for song in results:
-                    if song.get('plainLyrics') and len(song.get('plainLyrics')) > 10:
-                        best_match = song
-                        break
+                # Sirf wahi result uthao jisme lyrics hon
+                best_match = next((s for s in results if s.get('plainLyrics')), None)
                 
                 if best_match:
                     title = best_match.get('trackName', 'Unknown')
                     artist = best_match.get('artistName', 'Unknown')
                     lyrics = best_match.get('plainLyrics')
 
-                    # Telegram formatting fix (escaping special characters)
-                    lyrics = lyrics.replace("_", "\\_").replace("*", "\\*")
-                    
-                    if len(lyrics) > 4000:
-                        lyrics = lyrics[:4000] + "\n\n...(Truncated)"
-                    
-                    final_text = f"🎶 *{title}* — *{artist}*\n\n{lyrics}"
-                    await msg.edit_text(final_text, parse_mode='Markdown')
+                    # Telegram 4096 character limit check
+                    if len(lyrics) > 3800:
+                        lyrics = lyrics[:3800] + "\n\n...(Lyrics Truncated)"
+
+                    # --- SINGLE BLOCK LAYOUT ---
+                    # <code> block tap karte hi pura copy ho jata hai
+                    final_layout = (
+                        f"🎵 <b>{title}</b>\n"
+                        f"👤 <b>{artist}</b>\n\n"
+                        f"<blockquote>{lyrics}</blockquote>\n\n"
+                        f"✨ <b>Tap to Copy Full Lyrics:</b>\n"
+                        f"<code>{lyrics}</code>"
+                    )
+
+                    await msg.edit_text(final_layout, parse_mode='HTML')
                 else:
-                    await msg.edit_text(f"❌ '{query}' ke lyrics database mein nahi mile.")
+                    await msg.edit_text("❌ Lyrics nahi mile is gaane ke.")
             else:
-                await msg.edit_text(f"❌ '{query}' naam ka koi gaana nahi mila.")
+                await msg.edit_text("❌ Gaana nahi mila.")
 
     except Exception as e:
         print(f"Error: {e}")
-        await msg.edit_text("⚠️ API Error! Phir se try karo.")
+        await msg.edit_text("⚠️ Kuch error aa gaya, phir se try karo!")
 # Temporary directory jahan files download hongi
 # Temporary directory jahan files download hongi
 
