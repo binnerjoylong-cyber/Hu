@@ -1319,46 +1319,70 @@ import asyncio
 import re
 
 # Cobalt v10 Instances (Jo abhi working hain)
-COBALT_INSTANCES = [
-    "https://api.cobalt.tools/api/json",
-    "https://cobalt-api.v06.io/api/json",
-    "https://api.v06.io/api/json"
-]
+async def get_video_universal(url: str):
+    """Cobalt + Alternative APIs ka maha-sangam. Ek fail toh agla taiyar!"""
+    
+    # 1. Sabse pehle Cobalt ke multiple instances check karenge
+    cobalt_instances = [
+        "https://api.cobalt.tools/api/json",
+        "https://cobalt-api.v06.io/api/json",
+        "https://api.v06.io/api/json",
+        "https://cobalt.crushulon.com/api/json",
+        "https://api.cobalt.run/api/json",
+        "https://cobalt.shizuku.io/api/json"
+    ]
+    
+    # 2. Alternative APIs (Agar Cobalt poora band ho jaye)
+    # Note: Ye backup links hain jo different servers use karte hain
+    alt_gateways = [
+        "https://co.wuk.sh/api/json", # Purana Cobalt engine
+        "https://api.download.com/v1/fetch", # Example placeholder for other engines
+    ]
 
-YT_REGEX = r'(https?://)?(www\.)?(youtube\.com|youtu\.be|instagram\.com|tiktok\.com)/[^\s]+'
-
-async def get_cobalt_video(url: str):
-    """Multiple instances check karega jab tak link na mil jaye."""
     headers = {
         "Accept": "application/json",
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
     }
-    payload = {
-        "url": url,
-        "vQuality": "720", 
-        "filenameStyle": "pretty"
-    }
-    
-    async with httpx.AsyncClient(timeout=40.0) as client:
-        for instance in COBALT_INSTANCES:
-            try:
-                response = await client.post(instance, json=payload, headers=headers)
-                # Agar instance shut down hai ya error hai toh next check karega
-                if response.status_code != 200:
-                    continue
-                
-                data = response.json()
-                if data.get("status") in ["stream", "redirect", "picker"]:
-                    # Picker mode mein pehla link uthayega
-                    final_url = data.get("url") or data.get("picker")[0].get("url")
-                    return final_url, None
-                elif data.get("status") == "error":
-                    continue # Try next instance
-            except Exception:
-                continue
-                
-        return None, "Sabhi API instances busy hain ya band ho gaye hain. 😔"
 
+    async with httpx.AsyncClient(timeout=25.0, follow_redirects=True) as client:
+        # --- PHASE 1: COBALT INSTANCES ---
+        for api in cobalt_instances:
+            try:
+                payload = {"url": url, "vQuality": "720", "filenameStyle": "pretty"}
+                res = await client.post(api, json=payload, headers=headers)
+                if res.status_code == 200:
+                    data = res.json()
+                    if data.get("status") in ["stream", "redirect"]:
+                        return data.get("url"), None
+                    if data.get("status") == "picker":
+                        return data.get("picker")[0].get("url"), None
+            except:
+                continue
+
+        # --- PHASE 2: FALLBACK TO OTHER SERVICES (Invidious/Direct Fetch) ---
+        # Agar Cobalt fail ho jaye, toh hum Invidious API se link nikalne ki koshish karenge
+        video_id_match = re.search(r'(?:v=|youtu\.be/|watch\?v=)([a-zA-Z0-9_-]{11})', url)
+        if video_id_match:
+            video_id = video_id_match.group(1)
+            invidious_instances = ["https://inv.tux.pizza", "https://invidious.nerdvpn.de", "https://yewtu.be"]
+            
+            for inv in invidious_instances:
+                try:
+                    # Invidious API se direct MP4 link nikalna
+                    inv_api = f"{inv}/api/v1/videos/{video_id}"
+                    res = await client.get(inv_api)
+                    if res.status_code == 200:
+                        data = res.json()
+                        # Best quality format dhoondna
+                        formats = data.get("formatStreams", [])
+                        if formats:
+                            return formats[0]["url"], None
+                except:
+                    continue
+
+    return None, "Bhai, saare servers ne haath khade kar diye! 🏳️ YouTube ki security aaj bahut tight hai."
+    
 async def handle_youtube_link(update: Update, context: ContextTypes.DEFAULT_TYPE, url: str):
     chat_id = update.effective_chat.id
     
@@ -1366,7 +1390,8 @@ async def handle_youtube_link(update: Update, context: ContextTypes.DEFAULT_TYPE
     msg = await context.bot.send_message(chat_id=chat_id, text="🔍 **Searching for the best link...**", parse_mode='Markdown')
     await context.bot.send_chat_action(chat_id=chat_id, action="upload_video")
 
-    video_url, error = await get_cobalt_video(url)
+    # Aise update karo handle_youtube_link mein:
+    video_url, error = await get_video_universal(url)
 
     if video_url:
         try:
