@@ -1215,54 +1215,8 @@ async def img_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 # --- Lyrics Command (/lyrics) ---
 import httpx
 
+
 async def lyrics_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if not context.args:
-        await update.message.reply_text("Bhai, gaane ka naam to likho! Example: <code>/lyrics Tum Hi Ho</code>", parse_mode='HTML')
-        return
-
-    query = " ".join(context.args)
-    msg = await update.message.reply_text(f"🔍 Searching for: <b>{query}</b>...", parse_mode='HTML')
-
-    try:
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            response = await client.get(f"https://lrclib.net/api/search?q={query}")
-            results = response.json()
-
-            if results:
-                best_match = next((s for s in results if s.get('plainLyrics')), None)
-                
-                if best_match:
-                    title = best_match.get('trackName', 'Unknown')
-                    artist = best_match.get('artistName', 'Unknown')
-                    lyrics = best_match.get('plainLyrics')
-
-                    # Header aur Footer ke sath ek single block
-                    # Is block pe kahin bhi touch karoge, poora song copy ho jayega
-                    copyable_content = (
-                        f"🎵 {title}\n"
-                        f"👤 {artist}\n\n"
-                        f"{lyrics}"
-                    )
-
-                    if len(copyable_content) > 3800:
-                        copyable_content = copyable_content[:3800] + "\n\n...(Truncated)"
-
-                    # --- FINAL LOOK ---
-                    final_layout = (
-                        f"🎶 <b>{title}</b> — <i>{artist}</i>\n\n"
-                        f"👇 <b>TAP THE BLOCK BELOW TO COPY ALL</b>\n\n"
-                        f"<code>{copyable_content}</code>"
-                    )
-
-                    await msg.edit_text(final_layout, parse_mode='HTML')
-                else:
-                    await msg.edit_text("❌ Lyrics nahi mile.")
-            else:
-                await msg.edit_text("❌ Gaana nahi mila.")
-
-    except Exception as e:
-        await msg.edit_text("⚠️ API down hai shayad, phir try karo!")
-'''async def lyrics_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not context.args:
         await update.message.reply_text("Bhai, gaane ka naam to likho! Example: <code>/lyrics Tum Hi Ho</code>", parse_mode='HTML')
         return
@@ -1309,7 +1263,7 @@ async def lyrics_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     except Exception as e:
         print(f"Error: {e}")
-        await msg.edit_text("⚠️ Kuch error aa gaya!")'''
+        await msg.edit_text("⚠️ Kuch error aa gaya!")
 # Temporary directory jahan files download hongi
 # Temporary directory jahan files download hongi
 
