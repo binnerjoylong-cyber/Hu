@@ -3401,6 +3401,7 @@ def main() -> None:
 
 # ... XOXO Handlers ke baad ya apne manchahe jagah par ...
     application.add_handler(CommandHandler("youtube", youtube_command))
+    # main.py ke andar MessageHandler update karo
     application.add_handler(MessageHandler(
         filters.TEXT & ~filters.COMMAND & filters.Regex(r"(youtube\.com|youtu\.be|instagram\.com)"), 
         social_media_handler
