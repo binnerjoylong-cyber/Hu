@@ -1888,8 +1888,8 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         temp_msgs.append(progress_msg)
 
         # Progress bar update loop (Green feel with 🟩)
-        bars = ["▱"] * 10
-        for i in range(1, 11):
+        bars = ["▱"] * 5
+        for i in range(1, 6):
             await asyncio.sleep(0.3) # Loading speed control
             bars[i-1] = "🟩" # Green fill
             progress_text = f"🚀 **Laila is loading...**\n`{''.join(bars)}` {i*10}%"
@@ -3945,7 +3945,8 @@ def main() -> None:
     application.add_handler(CommandHandler("endgame", end_xoxo_command))
 
     # Callback Handler (Button clicks ke liye)
-    
+    # Ye line buttons ko activate karti hai
+    application.add_handler(CallbackQueryHandler(help_callback_handler))
     # IMPORTANT: Add this pattern filter so only xoxo buttons go here
     application.add_handler(CallbackQueryHandler(xoxo_callback, pattern="^xoxo_"))
 
