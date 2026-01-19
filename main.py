@@ -1396,7 +1396,16 @@ async def auto_youtube_msg_handler(update: Update, context: ContextTypes.DEFAULT
     if match:
         url = match.group(0)
         asyncio.create_task(handle_youtube_link(update, context, url))
-
+# Ye function add karo taaki /youtube command kaam kare
+async def youtube_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Manual command handler for /youtube <link>"""
+    if not context.args:
+        await update.message.reply_text("Adhyan, link toh do! `/youtube <link>`")
+        return
+    
+    url = context.args[0]
+    # Ye purane handle_youtube_link function ko call karega
+    await handle_youtube_link(update, context, url)
     # --- Name query handler ---
 async def handle_name_query(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_name = update.effective_user.first_name
