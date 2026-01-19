@@ -8,53 +8,44 @@ RAPID_API_KEY = "37c6bbf0b8msh8958361d209856ep1583d8jsnb0a351252afd"
 API_HOST = "social-media-video-downloader.p.rapidapi.com"
 
 async def get_video_data(url: str):
-    regex = r'(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})'
-    video_id_match = re.search(regex, url)
-    
+    video_id_match = re.search(r'(?:v=|youtu\.be/|watch\?v=|shorts/)([a-zA-Z0-9_-]{11})', url)
     if not video_id_match:
         return None, "Invalid URL"
     
     video_id = video_id_match.group(1)
     api_url = "https://social-media-video-downloader.p.rapidapi.com/youtube/v3/video/details"
-    
-    # Renderable formats ko badal kar dekhte hain
-    params = {
-        "videoId": video_id,
-        "urlAccess": "proxied"
-    }
-    
-    headers = {
-        "x-rapidapi-key": RAPID_API_KEY,
-        "x-rapidapi-host": API_HOST
-    }
+    params = {"videoId": video_id, "urlAccess": "proxied"}
+    headers = {"x-rapidapi-key": RAPID_API_KEY, "x-rapidapi-host": API_HOST}
 
     async with httpx.AsyncClient(timeout=40.0) as client:
         try:
             response = await client.get(api_url, headers=headers, params=params)
             data = response.json()
             
-            # Debugging ke liye title print karte hain
-            title = data.get("title", "YouTube Video")
-            print(f"DEBUG: Processing -> {title}")
+            # --- Naya Parsing Logic (As per your JSON) ---
+            contents = data.get("contents", [])
+            if not contents:
+                return None, "No contents found in API response."
+            
+            video_list = contents[0].get("videos", [])
+            if not video_list:
+                return None, "No video links available."
 
-            # Sabse pehle 'formats' check karo
-            formats = data.get("formats", [])
-            # Phir 'adaptiveFormats' bhi check karo (Video + Audio)
-            adaptive = data.get("adaptiveFormats", [])
-            
-            # Combine both lists to search everywhere
-            all_formats = formats + adaptive
-            
-            # Hum sirf wo links chahiye jisme 'url' ho aur jo MP4 type ho
-            for f in all_formats:
-                link = f.get("url")
-                if link:
-                    # Agar link mil gaya toh wahi return kar do
-                    return link, title
-            
-            return None, "API didn't provide a valid MP4 link."
+            # Priority 1: 720p dhoondo (Best balance of quality + audio)
+            for v in video_list:
+                if v.get("label") == "720p":
+                    return v.get("url"), data.get("title", "Video")
+
+            # Priority 2: 360p dhoondo
+            for v in video_list:
+                if v.get("label") == "360p":
+                    return v.get("url"), data.get("title", "Video")
+
+            # Priority 3: Jo bhi pehla link mile (kisi bhi quality ka)
+            return video_list[0].get("url"), data.get("title", "Video")
+
         except Exception as e:
-            return None, f"Error: {str(e)}"
+            return None, f"Parsing Error: {str(e)}"
             
 async def handle_youtube_link(update: Update, context: ContextTypes.DEFAULT_TYPE, url: str):
     chat_id = update.effective_chat.id
