@@ -1320,96 +1320,83 @@ import re
 
 # Cobalt v10 Instances (Jo abhi working hain)
 async def get_video_universal(url: str):
-    """Cobalt + Alternative APIs ka maha-sangam. Ek fail toh agla taiyar!"""
+    """Ultimate Fallback: Cobalt + Invidious + Direct Gateways."""
     
-    # 1. Sabse pehle Cobalt ke multiple instances check karenge
-    cobalt_instances = [
+    # 1. New Working Cobalt Instances (Updated Jan 2026)
+    gateways = [
         "https://api.cobalt.tools/api/json",
         "https://cobalt-api.v06.io/api/json",
         "https://api.v06.io/api/json",
         "https://cobalt.crushulon.com/api/json",
-        "https://api.cobalt.run/api/json",
-        "https://cobalt.shizuku.io/api/json"
+        "https://api.cobalt.red/api/json",
+        "https://cobalt.shizuku.io/api/json",
+        "https://api.cobalt.run/api/json"
     ]
     
-    # 2. Alternative APIs (Agar Cobalt poora band ho jaye)
-    # Note: Ye backup links hain jo different servers use karte hain
-    alt_gateways = [
-        "https://co.wuk.sh/api/json", # Purana Cobalt engine
-        "https://api.download.com/v1/fetch", # Example placeholder for other engines
-    ]
-
     headers = {
         "Accept": "application/json",
         "Content-Type": "application/json",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
     }
 
-    async with httpx.AsyncClient(timeout=25.0, follow_redirects=True) as client:
-        # --- PHASE 1: COBALT INSTANCES ---
-        for api in cobalt_instances:
+    async with httpx.AsyncClient(timeout=20.0, follow_redirects=True) as client:
+        # --- PHASE 1: Try All Cobalt Instances ---
+        for api in gateways:
             try:
-                payload = {"url": url, "vQuality": "720", "filenameStyle": "pretty"}
-                res = await client.post(api, json=payload, headers=headers)
+                res = await client.post(api, json={"url": url, "vQuality": "720"}, headers=headers)
                 if res.status_code == 200:
                     data = res.json()
                     if data.get("status") in ["stream", "redirect"]:
                         return data.get("url"), None
                     if data.get("status") == "picker":
                         return data.get("picker")[0].get("url"), None
-            except:
-                continue
+            except: continue
 
-        # --- PHASE 2: FALLBACK TO OTHER SERVICES (Invidious/Direct Fetch) ---
-        # Agar Cobalt fail ho jaye, toh hum Invidious API se link nikalne ki koshish karenge
+        # --- PHASE 2: Try Direct Invidious Video Extraction ---
         video_id_match = re.search(r'(?:v=|youtu\.be/|watch\?v=)([a-zA-Z0-9_-]{11})', url)
         if video_id_match:
-            video_id = video_id_match.group(1)
-            invidious_instances = ["https://inv.tux.pizza", "https://invidious.nerdvpn.de", "https://yewtu.be"]
-            
-            for inv in invidious_instances:
+            v_id = video_id_match.group(1)
+            # Invidious instances that allow direct API video stream
+            inv_nodes = ["https://inv.tux.pizza", "https://invidious.nerdvpn.de", "https://yewtu.be"]
+            for node in inv_nodes:
                 try:
-                    # Invidious API se direct MP4 link nikalna
-                    inv_api = f"{inv}/api/v1/videos/{video_id}"
-                    res = await client.get(inv_api)
-                    if res.status_code == 200:
-                        data = res.json()
-                        # Best quality format dhoondna
-                        formats = data.get("formatStreams", [])
-                        if formats:
-                            return formats[0]["url"], None
-                except:
-                    continue
+                    api_url = f"{node}/api/v1/videos/{v_id}"
+                    inv_res = await client.get(api_url)
+                    if inv_res.status_code == 200:
+                        f_streams = inv_res.json().get("formatStreams", [])
+                        if f_streams: return f_streams[0]["url"], None
+                except: continue
 
-    return None, "Bhai, saare servers ne haath khade kar diye! 🏳️ YouTube ki security aaj bahut tight hai."
-    
+    # --- PHASE 3: Everything Failed ---
+    return None, "ALL_FAILED"
+
+# --- UPDATED: handle_youtube_link (With Button Fallback) ---
 async def handle_youtube_link(update: Update, context: ContextTypes.DEFAULT_TYPE, url: str):
     chat_id = update.effective_chat.id
-    
-    # Message send karke reference save karo
-    msg = await context.bot.send_message(chat_id=chat_id, text="🔍 **Searching for the best link...**", parse_mode='Markdown')
-    await context.bot.send_chat_action(chat_id=chat_id, action="upload_video")
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
-    # Aise update karo handle_youtube_link mein:
+    msg = await context.bot.send_message(chat_id=chat_id, text="🚀 **Laila is searching every corner of the web...**", parse_mode='Markdown')
+    
     video_url, error = await get_video_universal(url)
 
     if video_url:
         try:
-            await msg.edit_text("📥 **Got it! Sending video...**", parse_mode='Markdown')
-            
-            # Direct URL se Telegram ko upload karne do
-            await context.bot.send_video(
-                chat_id=chat_id,
-                video=video_url,
-                caption=f"🎥 **Ye raha aapka video!**\n\n_Generated for Adhyan_ ✨",
-                parse_mode='Markdown'
-            )
+            await context.bot.send_video(chat_id=chat_id, video=video_url, caption="🎥 **Video Ready!** ✨")
             await msg.delete()
-        except Exception as e:
-            await msg.edit_text("❌ **Upload Error:** File size limit se badi ho sakti hai (Max 50MB).")
+        except:
+            await msg.edit_text("❌ **Upload Error:** File size is too big for Telegram.")
     else:
-        await msg.edit_text(f"❌ **Failed:** {error}")
-
+        # AGAR SAB FAIL HO JAYE - Ek clickable button do user ko
+        # Ye buttons user ko aisi site pe bhejenge jahan se wo 1-click mein download kar sake
+        clean_url = url.replace("youtube.com", "ssyoutube.com").replace("youtu.be", "ssyoutube.com")
+        
+        keyboard = [[InlineKeyboardButton("📥 Download Manually", url=clean_url)]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await msg.edit_text(
+            "⚠️ **YouTube Security is too high right now!**\n\nMain direct file nahi bhej paa rahi hoon, lekin aap neeche diye gaye button se 1-click mein download kar sakte hain:",
+            reply_markup=reply_markup
+        )
 # --- Auto Message Handler ---
 async def auto_youtube_msg_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not update.message or not update.message.text:
