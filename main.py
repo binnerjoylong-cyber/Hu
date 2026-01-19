@@ -1109,7 +1109,79 @@ def sync_generate_image(query: str) -> str | None:
         return None
 
 # --- MODIFIED: /gen command to run in background ---
+import httpx  # Isse install kar lena: pip install httpx
+
 async def gen_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Generates an image using Stable Horde API without blocking."""
+    chat_id = update.effective_chat.id
+    
+    if not context.args:
+        await update.message.reply_text("Adhyan, prompt toh do! Example: `/gen a cute cat` 😉", parse_mode='Markdown')
+        return
+
+    query = " ".join(context.args)
+
+    if not STABLE_HORDE_API_KEY:
+        await update.message.reply_text("Owner ne API key set nahi ki hai, unhe bolo check karein! 🙄")
+        return
+
+    # User ko update do
+    msg = await update.message.reply_text("Bas ek minute Adhyan, aapki image generate kar rahi hoon... 🎨")
+    
+    # Chat action (Typing/Uploading photo)
+    await context.bot.send_chat_action(chat_id=chat_id, action="upload_photo")
+
+    try:
+        # ASYNC HTTP CALL: Isse bot block nahi hoga
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            # Note: Yahan aapko Stable Horde ka actual API logic dalna hoga.
+            # Main ek example async structure de rahi hoon:
+            payload = {
+                "prompt": query,
+                "params": {"steps": 20, "width": 512, "height": 512}
+            }
+            headers = {"apikey": STABLE_HORDE_API_KEY}
+            
+            # Ye call background mein chalega, bot doosre messages handle kar payega
+            response = await client.post("https://stablehorde.net/api/v2/generate/async", json=payload, headers=headers)
+            
+            if response.status_code == 202:
+                # Yahan aapko thoda wait karke image URL fetch karna padega
+                # Kyunki Stable Horde async hai, aapko polling karni hogi.
+                # Main assume kar rahi hoon aapka purana logic image_url deta tha.
+                image_url = await poll_stable_horde(response.json()['id']) # Ek helper function
+            else:
+                image_url = None
+
+        await msg.delete()
+
+        if image_url:
+            await context.bot.send_photo(
+                chat_id=chat_id, 
+                photo=image_url, 
+                caption=f"Lo Adhyan, aapki image taiyar hai! ✨\nPrompt: `{query}`", 
+                parse_mode='Markdown'
+            )
+        else:
+            await update.message.reply_text("Sorry yaar, server busy lag raha hai. Thodi der baad try karein? 😅")
+
+    except Exception as e:
+        logger.error(f"Error: {e}")
+        if 'msg' in locals(): await msg.delete()
+        await update.message.reply_text("Kuch toh gadbad ho gayi... 🙄")
+
+# --- Ek chota sa helper function for Background Polling ---
+async def poll_stable_horde(gen_id):
+    # Ye function background mein check karega ki image bani ya nahi
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        for _ in range(10): # 10 baar try karega
+            await asyncio.sleep(10) # 10 second wait
+            check = await client.get(f"https://stablehorde.net/api/v2/generate/status/{gen_id}")
+            data = check.json()
+            if data.get('done'):
+                return data['generations'][0]['img']
+    return None
+'''async def gen_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Generates an image using Stable Horde API without blocking."""
     chat_id = update.effective_chat.id
     
@@ -1138,7 +1210,7 @@ async def gen_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     else:
         await update.message.reply_text("Sorry, I was unable to generate the image. The service might be busy. Please try again later.")
         logger.warning(f"[{chat_id}] Failed to generate image for query: {query}")
-
+'''
 # --- MODIFIED: Background task for /img command ---
 def sync_fetch_pexels_image(query: str) -> str | None:
     """Synchronous function to handle Pexels API requests."""
