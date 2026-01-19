@@ -1229,7 +1229,6 @@ async def lyrics_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             results = response.json()
 
             if results:
-                # Sirf wahi result uthao jisme lyrics hon
                 best_match = next((s for s in results if s.get('plainLyrics')), None)
                 
                 if best_match:
@@ -1237,29 +1236,33 @@ async def lyrics_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                     artist = best_match.get('artistName', 'Unknown')
                     lyrics = best_match.get('plainLyrics')
 
-                    # Telegram 4096 character limit check
-                    if len(lyrics) > 3800:
-                        lyrics = lyrics[:3800] + "\n\n...(Lyrics Truncated)"
+                    if len(lyrics) > 3500:
+                        lyrics = lyrics[:3500] + "\n\n...(Truncated)"
 
-                    # --- SINGLE BLOCK LAYOUT ---
-                    # <code> block tap karte hi pura copy ho jata hai
+                    # --- UI DESIGN ---
                     final_layout = (
                         f"🎵 <b>{title}</b>\n"
                         f"👤 <b>{artist}</b>\n\n"
                         f"<blockquote>{lyrics}</blockquote>\n\n"
-                        f"✨ <b>Tap to Copy Full Lyrics:</b>\n"
-                        f"<code>{lyrics}</code>"
+                        f"<i>Tip: Tap the lyrics above or use the button below to copy.</i>"
                     )
 
-                    await msg.edit_text(final_layout, parse_mode='HTML')
+                    # Button Logic: Is button par click karte hi 
+                    # user ke type-box mein lyrics aa jayenge copy karne ke liye
+                    keyboard = [
+                        [InlineKeyboardButton("📋 Copy Full Lyrics", switch_inline_query_current_chat=f"{title} - {artist}\n\n{lyrics[:200]}...")]
+                    ]
+                    reply_markup = InlineKeyboardMarkup(keyboard)
+
+                    await msg.edit_text(final_layout, parse_mode='HTML', reply_markup=reply_markup)
                 else:
-                    await msg.edit_text("❌ Lyrics nahi mile is gaane ke.")
+                    await msg.edit_text("❌ Lyrics nahi mile.")
             else:
                 await msg.edit_text("❌ Gaana nahi mila.")
 
     except Exception as e:
         print(f"Error: {e}")
-        await msg.edit_text("⚠️ Kuch error aa gaya, phir se try karo!")
+        await msg.edit_text("⚠️ Kuch error aa gaya!")
 # Temporary directory jahan files download hongi
 # Temporary directory jahan files download hongi
 
