@@ -1215,46 +1215,47 @@ async def img_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 # --- Lyrics Command (/lyrics) ---
 import httpx
 async def lyrics_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    chat_id = update.effective_chat.id
     if not context.args:
-        await update.message.reply_text("Usage: `/lyrics Song Name`", parse_mode='Markdown')
+        await update.message.reply_text("Bhai, gaane ka naam to likho! Example: `/lyrics Tum Hi Ho`")
         return
 
     query = " ".join(context.args)
-    msg = await update.message.reply_text(f"🔍 Searching for **{query}**...", parse_mode='Markdown')
+    msg = await update.message.reply_text(f"🔍 Searching for lyrics: **{query}**...")
 
     try:
-        # 1. LRCLIB API use kar rahe hain (Ye open-source aur official database hai)
-        # Isme block hone ka koi tension nahi hai
-        api_url = f"https://lrclib.net/api/search?q={query}"
-        
-        async with httpx.AsyncClient(timeout=20.0) as client:
-            response = await client.get(api_url)
-            data = response.json()
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            response = await client.get(f"https://lrclib.net/api/search?q={query}")
+            results = response.json()
 
-            if data:
-                # Sabse pehla result uthao
-                song = data[0]
-                title = song.get('trackName')
-                artist = song.get('artistName')
-                # Pehle check karo agar 'plainLyrics' hain (official lyrics)
-                lyrics = song.get('plainLyrics') or song.get('syncedLyrics')
+            if results:
+                # 💡 SMART FIX: Pehla result mat uthao, wo result uthao jisme lyrics hon!
+                best_match = None
+                for song in results:
+                    if song.get('plainLyrics') and len(song.get('plainLyrics')) > 10:
+                        best_match = song
+                        break
+                
+                if best_match:
+                    title = best_match.get('trackName', 'Unknown')
+                    artist = best_match.get('artistName', 'Unknown')
+                    lyrics = best_match.get('plainLyrics')
 
-                if lyrics:
-                    # Formatting
-                    if len(lyrics) > 4000:
-                        lyrics = lyrics[:4000] + "..."
+                    # Telegram formatting fix (escaping special characters)
+                    lyrics = lyrics.replace("_", "\\_").replace("*", "\\*")
                     
-                    final_text = f"🎶 *{title}* - *{artist}*\n\n{lyrics}"
+                    if len(lyrics) > 4000:
+                        lyrics = lyrics[:4000] + "\n\n...(Truncated)"
+                    
+                    final_text = f"🎶 *{title}* — *{artist}*\n\n{lyrics}"
                     await msg.edit_text(final_text, parse_mode='Markdown')
                 else:
-                    await msg.edit_text("❌ Lyrics found but they are empty.")
+                    await msg.edit_text(f"❌ '{query}' ke lyrics database mein nahi mile.")
             else:
-                await msg.edit_text(f"❌ No lyrics found for '{query}'.")
+                await msg.edit_text(f"❌ '{query}' naam ka koi gaana nahi mila.")
 
     except Exception as e:
-        logger.error(f"Lyrics Error: {e}")
-        await msg.edit_text("⚠️ API Error! Please try again later.")
+        print(f"Error: {e}")
+        await msg.edit_text("⚠️ API Error! Phir se try karo.")
 # Temporary directory jahan files download hongi
 # Temporary directory jahan files download hongi
 
