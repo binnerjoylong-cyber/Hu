@@ -1940,14 +1940,14 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         )
     except Exception:
         await context.bot.send_message(chat_id=chat_id, text=welcome_message, reply_markup=reply_markup, parse_mode='Markdown')
-        
-  async def help_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+
+async def help_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     data = query.data
     user_name = update.effective_user.first_name
     await query.answer()
     
-    # Buttons setup (Variables define karna zaroori hai crash se bachne ke liye)
+    # Buttons setup
     back_to_help_main = [[InlineKeyboardButton("🔙 Back to Help", callback_data="help_back_to_main")]]
 
     # ==========================================
@@ -1988,8 +1988,8 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             keyboard = [
                 [InlineKeyboardButton("🤖 AI & Chat", callback_data="help_ai"),
                  InlineKeyboardButton("🎨 Media & Gen", callback_data="help_media")],
-                [InlineKeyboardButton("🛠 Tools", callback_data="help_utils"),
-                 InlineKeyboardButton("👮 Admin", callback_data="help_admin")],
+                [InlineKeyboardButton("🛠 Utility Tools", callback_data="help_utils"),
+                 InlineKeyboardButton("👮 Admin Panel", callback_data="help_admin")],
                 [InlineKeyboardButton("ℹ️ About", callback_data="help_about"),
                  InlineKeyboardButton("❌ Close", callback_data="help_close_menu")]
             ]
@@ -2022,7 +2022,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         try:
             await query.edit_message_text(text=text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
         except:
-            pass  
+            pass
 
 '''async def help_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
