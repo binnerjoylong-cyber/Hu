@@ -1877,32 +1877,50 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         
         
     ]
-    
+    temp_msgs = []
     try:
-        # Pehle sticker bhejo
-        await context.bot.send_sticker(chat_id=chat_id, sticker=random.choice(stickers))
-        # Fir typing effect dikhao 1.5 seconds ke liye
-        await context.bot.send_chat_action(chat_id=chat_id, action="typing")
-        await asyncio.sleep(1.5)
-    except:
-        pass
+        # 1. Sticker bhejo aur track karo
+        sticker_msg = await context.bot.send_sticker(chat_id=chat_id, sticker=random.choice(stickers))
+        temp_msgs.append(sticker_msg)
 
+        # 2. Progress Bar Animation
+        progress_msg = await context.bot.send_message(chat_id=chat_id, text="🚀 **Laila is loading...**\n`▱▱▱▱▱▱▱▱▱▱` 0%", parse_mode='Markdown')
+        temp_msgs.append(progress_msg)
+
+        # Progress bar update loop (Green feel with 🟩)
+        bars = ["▱"] * 10
+        for i in range(1, 11):
+            await asyncio.sleep(0.3) # Loading speed control
+            bars[i-1] = "🟩" # Green fill
+            progress_text = f"🚀 **Laila is loading...**\n`{''.join(bars)}` {i*10}%"
+            await progress_msg.edit_text(text=progress_text, parse_mode='Markdown')
+
+        # 3. "Typing..." action for final touch
+        await context.bot.send_chat_action(chat_id=chat_id, action="typing")
+        await asyncio.sleep(0.5)
+
+        # 4. Cleanup: Sticker aur Progress Bar delete kar do
+        for msg in temp_msgs:
+            try:
+                await msg.delete()
+            except:
+                pass
+    except Exception as e:
+        print(f"Animation Error: {e}")
+
+    # --- 🏠 FINAL START MENU (Your Original Part) ---
     bot_info = await context.bot.get_me()
     add_to_group_url = f"https://t.me/{bot_info.username}?startgroup=true"
     
-    # Updated Buttons
     keyboard = [
         [
             InlineKeyboardButton("🚀 Features & Help", callback_data="help_main"),
             InlineKeyboardButton("🎮 Game Zone", callback_data="help_games") 
         ],
-        [
-            InlineKeyboardButton("➕ Add Me To Your Group", url=add_to_group_url)
-        ]
+        [InlineKeyboardButton("➕ Add Me To Your Group", url=add_to_group_url)]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
-    # Updated message without crypto and with lyrics/animation mention
     welcome_message = (
         f"Hey {user_name}! 👋\n\n"
         f"I'm **Laila**, your advanced AI companion. 💖\n"
@@ -1921,12 +1939,8 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             parse_mode='Markdown'
         )
     except Exception:
-        await context.bot.send_message(
-            chat_id=chat_id, 
-            text=welcome_message, 
-            reply_markup=reply_markup, 
-            parse_mode='Markdown'
-        )
+        await context.bot.send_message(chat_id=chat_id, text=welcome_message, reply_markup=reply_markup, parse_mode='Markdown')
+    
 
 '''async def help_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
