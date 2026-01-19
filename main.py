@@ -36,8 +36,7 @@ import io
 import glob
 # --- NEW: IMPORT THE GAME MODULE ---
 import game
-from youtube_handler import youtube_command, auto_youtube_msg_handler
-import youtube_handler
+from yt_bypass import handle_youtube_link, youtube_auto_handler
 
 
 # Load environment variables from .env file
