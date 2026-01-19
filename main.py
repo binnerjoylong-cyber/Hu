@@ -1213,55 +1213,48 @@ async def img_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
 # --- Lyrics Command (/lyrics) ---
 # --- Lyrics Command (/lyrics) ---
+import httpx
 async def lyrics_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Fetches and displays lyrics from Genius API."""
     chat_id = update.effective_chat.id
     if not context.args:
-        await update.message.reply_text("Please provide a song name. Example: `/lyrics Shape of You`", parse_mode='Markdown')
+        await update.message.reply_text("Usage: `/lyrics Song Name`", parse_mode='Markdown')
         return
-    query = " ".join(context.args)
-    if not GENIUS_ACCESS_TOKEN:
-        await update.message.reply_text("Sorry, the Genius API key is not configured. Please contact the bot owner.")
-        return
-    
-    msg = None # Initialize msg for the finally block
-    
-    try:
-        genius = lg.Genius(GENIUS_ACCESS_TOKEN, verbose=False, remove_section_headers=True)
-        msg = await update.message.reply_text(f"Searching for lyrics for **{query}**...")
-        await context.bot.send_chat_action(chat_id=chat_id, action="typing")
-        
-        # Blocking search operation run in a thread
-        song = await asyncio.to_thread(genius.search_song, query)
-        
-        await msg.delete() # Delete the 'Searching' message
-        
-        if song:
-            lyrics = song.lyrics
-            
-            # Formatting logic for lyrics
-            lyrics_text = f"🎶 **{song.title}** by **{song.artist}** 🎶\n\n{lyrics}"
-            
-            # Telegram message limit is 4096 characters
-            if len(lyrics_text) > 4096:
-                lyrics_text = lyrics_text[:4000] + "\n\n...(Lyrics truncated due to Telegram limit.)"
-            
-            await update.message.reply_text(lyrics_text, parse_mode='Markdown')
-            logger.info(f"[{chat_id}] Sent lyrics for: {song.title}")
-        else:
-            await update.message.reply_text(f"Sorry, could not find any song or lyrics for **{query}**.")
-            
-    except Exception as e:
-        # If the initial search message exists, try to delete it
-        try:
-            if msg:
-                await msg.delete() 
-        except:
-            pass
-            
-        logger.error(f"[{chat_id}l] Error in /lyrics command: {e}", exc_info=True)
-        await update.message.reply_text("An error occurred while fetching the lyrics. Please try again later.")
 
+    query = " ".join(context.args)
+    msg = await update.message.reply_text(f"🔍 Searching for **{query}**...", parse_mode='Markdown')
+
+    try:
+        # 1. LRCLIB API use kar rahe hain (Ye open-source aur official database hai)
+        # Isme block hone ka koi tension nahi hai
+        api_url = f"https://lrclib.net/api/search?q={query}"
+        
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            response = await client.get(api_url)
+            data = response.json()
+
+            if data:
+                # Sabse pehla result uthao
+                song = data[0]
+                title = song.get('trackName')
+                artist = song.get('artistName')
+                # Pehle check karo agar 'plainLyrics' hain (official lyrics)
+                lyrics = song.get('plainLyrics') or song.get('syncedLyrics')
+
+                if lyrics:
+                    # Formatting
+                    if len(lyrics) > 4000:
+                        lyrics = lyrics[:4000] + "..."
+                    
+                    final_text = f"🎶 *{title}* - *{artist}*\n\n{lyrics}"
+                    await msg.edit_text(final_text, parse_mode='Markdown')
+                else:
+                    await msg.edit_text("❌ Lyrics found but they are empty.")
+            else:
+                await msg.edit_text(f"❌ No lyrics found for '{query}'.")
+
+    except Exception as e:
+        logger.error(f"Lyrics Error: {e}")
+        await msg.edit_text("⚠️ API Error! Please try again later.")
 # Temporary directory jahan files download hongi
 # Temporary directory jahan files download hongi
 
