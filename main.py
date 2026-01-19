@@ -3924,6 +3924,7 @@ def main() -> None:
     # main() function ke andar...
 
 # ... XOXO Handlers ke baad ya apne manchahe jagah par ...
+    application.add_handler(CallbackQueryHandler(help_callback_handler))
     application.add_handler(CommandHandler("youtube", youtube_command))
     # main.py ke andar MessageHandler update karo
     application.add_handler(MessageHandler(
@@ -3944,9 +3945,6 @@ def main() -> None:
     application.add_handler(CommandHandler("endxoxo", end_xoxo_command))
     application.add_handler(CommandHandler("endgame", end_xoxo_command))
 
-    # Callback Handler (Button clicks ke liye)
-    # Ye line buttons ko activate karti hai
-    application.add_handler(CallbackQueryHandler(help_callback_handler))
     # IMPORTANT: Add this pattern filter so only xoxo buttons go here
     application.add_handler(CallbackQueryHandler(xoxo_callback, pattern="^xoxo_"))
 
