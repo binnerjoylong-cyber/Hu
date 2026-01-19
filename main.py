@@ -948,7 +948,8 @@ COUPLE_IMAGES = [
 async def couple_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Selects a random couple from the chat members and mentions them."""
     chat_id = update.effective_chat.id
-    SPECIAL_USER_ID = 8178838574
+    SPECIAL_USER_ID_1 = 6086655225
+    SPECIAL_USER_ID_2 = 8178838574
     
     if update.effective_chat.type == 'private':
         await update.message.reply_text("Yaar, couple banne ke liye group mein aana padega! Akele kaise couple banoge? 😂")
@@ -993,13 +994,13 @@ async def couple_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
         # MODIFIED: Names clearly visible at the TOP
             messages = [
-                f"❤️ **COUPLE OF THE DAY** ❤️\n\n{user1_mention} 💘 {user2_mention}\n\n_Uff! Kya jodi hai! Nazar na lage kisi ki!_ ✨",
+                f"❤️ **COUPLE OF THE DAY** ❤️\n\n{user1_mention} 💘 {user2_mention}\n\n_Wow! What a perfect couple! May no one cast an evil eye on them!_✨",
             
-                f"💍 **MATCH MADE IN HEAVEN** 💍\n\n{user1_mention} 💍 {user2_mention}\n\n_Rab ne bana di jodi... Asli wali!_ 😍",
+                f"💍 **MATCH MADE IN HEAVEN** 💍\n\n{user1_mention} 💍 {user2_mention}\n\n_God has made this couple… the true one!_ 😍",
             
-                f"✨ **OFFICIAL SHIP ALERT** ✨\n\n{user1_mention} x {user2_mention}\n\n_Ab mithai kab khila rahe ho tum dono?_ 🍬",
+                f"✨ **OFFICIAL SHIP ALERT** ✨\n\n{user1_mention} x {user2_mention}\n\n_When are you two going to treat us with sweets?_🍬",
             
-                f"🌟 **PERFECT PAIR** 🌟\n\n{user1_mention} 💖 {user2_mention}\n\n_Lagta hai aaj hawa mein thoda pyaar hai!_ 🥰"
+                f"🌟 **PERFECT PAIR** 🌟\n\n{user1_mention} 💖 {user2_mention}\n\n_Love is in the air!_💕"
             ]
         
             couple_message = random.choice(messages)
@@ -1019,55 +1020,6 @@ async def couple_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await update.message.reply_text("Oops, couple choose karne mein kuch gadbad ho gayi. Phir se try karo!")
         logger.error(f"[{chat_id}] Error in /couple command: {e}")
 
-'''async def couple_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Selects a random couple from the chat members and mentions them."""
-    chat_id = update.effective_chat.id
-    
-    if update.effective_chat.type == 'private':
-        await update.message.reply_text("This command only works in groups. 😊")
-        return
-
-    current_chat_members = chat_members.get(chat_id, {})
-    
-    if len(current_chat_members) < 2:
-        await update.message.reply_text("I need at least two people to have chatted recently to choose a couple! Talk more and try again. 😉")
-        return
-        
-    try:
-        user_ids = list(current_chat_members.keys())
-        couple_ids = random.sample(user_ids, 2)
-        
-        user1_id, user2_id = couple_ids[0], couple_ids[1]
-        user1_name, user2_name = current_chat_members[user1_id], current_chat_members[user2_id]
-        
-        # Create mentions using Markdown format
-        user1_mention = f"[{user1_name}](tg://user?id={user1_id})"
-        user2_mention = f"[{user2_name}](tg://user?id={user2_id})"
-
-        # MODIFIED: New, fun English messages with mentions
-        messages = [
-            f"Love is in the air! 💘 Our chosen couple for today is the wonderful {user1_mention} and the amazing {user2_mention}! ✨",
-            f"Match made in heaven! 👼 By the power vested in me, I now pronounce {user1_mention} and {user2_mention} as the cutest couple in the group! 💖",
-            f"Some things are just meant to be. 💫 Today, destiny has chosen {user1_mention} and {user2_mention} as our power couple! Congratulations! 🎉",
-            f"Get ready to say 'aww'! 🥰 The stars have aligned for {user1_mention} and {user2_mention}. What a perfect pair! 🌟"
-        ]
-        
-        couple_message = random.choice(messages)
-        
-        photo_file_id = 'AgACAgUAAxkBAAId5GjLxQv_BxOm3_RGmB9j4WceUFg7AALdyzEb-tJgVuOn7v3_BWvqAQADAgADeQADNgQ'
-
-        await context.bot.send_photo(
-            chat_id=chat_id,
-            photo=photo_file_id,
-            caption=couple_message,
-            parse_mode='Markdown'
-        )
-        logger.info(f"[{chat_id}] /couple command used. Selected {user1_name} and {user2_name}.")
-
-    except Exception as e:
-        await update.message.reply_text("Oops, something went wrong while choosing a couple. Please try again!")
-        logger.error(f"[{chat_id}] Error in /couple command: {e}")
-'''
 # --- MODIFIED: Background task for /gen command ---
 def sync_generate_image(query: str) -> str | None:
     """Synchronous function to handle Stable Horde API requests."""
