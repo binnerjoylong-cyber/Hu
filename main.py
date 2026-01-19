@@ -1678,8 +1678,83 @@ async def get_photo_id(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         await context.bot.send_message(chat_id=update.effective_chat.id, text="Please reply to a photo with this command to get its ID.")
 
 # --- FIXED: Start Command Logic (Used context.bot.get_me()) ---
+import random
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user_name = update.effective_user.first_name
+    chat_id = update.effective_chat.id
+    
+    # User ko database mein save karna
+    if str(chat_id) not in known_users:
+        known_users.add(str(chat_id))
+        save_chat_id(chat_id)
+    
+    # --- 🎭 ANIMATION START ---
+    # Random animated stickers (Laila style)
+    stickers = [
+        "CAACAgIAAxkBAAEL_Zpl_mG0S1...", # Hello Panda
+        "CAACAgUAAxkBAAEL_Ztl_mH5A...", # Cute Cat
+        "CAACAgQAAxkBAAEL_Zxl_mI9S...", # Heart
+        "CAACAgIAAxkBAAEL_Z1l_mJqS..."  # Wave
+    ]
+    
+    try:
+        # 1. Random sticker bhejo
+        await context.bot.send_sticker(chat_id=chat_id, sticker=random.choice(stickers))
+        # 2. Typing action dikhao
+        await context.bot.send_chat_action(chat_id=chat_id, action="typing")
+        await asyncio.sleep(2) # 2 seconds ka wait animation feel ke liye
+    except:
+        pass
+
+    # --- ⚙️ PREPARE DATA ---
+    bot_info = await context.bot.get_me()
+    add_to_group_url = f"https://t.me/{bot_info.username}?startgroup=true"
+    
+    # Crypto hata diya, Lyrics ko AI & Chat ke sath highlight kiya hai
+    welcome_message = (
+        f"Hey **{user_name}**! 👋\n\n"
+        f"I'm **Laila**, your ultimate AI companion. 💖\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n"
+        f"🤖 **AI Chat** - Smart & Fast\n"
+        f"🎨 **AI Art** - Text to Image\n"
+        f"🎵 **Lyrics** - Find any song\n"
+        f"🎥 **Social Media** - Video Downloader\n"
+        f"🎮 **Games Zone** - XOXO & RPG\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"👇 **Choose an option to explore:**"
+    )
+
+    keyboard = [
+        [
+            InlineKeyboardButton("🚀 Features & Help", callback_data="help_main"),
+            InlineKeyboardButton("🎮 Game Zone", callback_data="help_games") 
+        ],
+        [
+            InlineKeyboardButton("➕ Add Me To Your Group", url=add_to_group_url)
+        ]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    photo_file_id = 'AgACAgUAAxkBAAIIKGigVdAK07aRr9QiXpRalahcPO2pAAIL0DEblXUBVSY5LS31XxPSAQADAgADeAADNgQ'
+    
+    # --- 🚀 SEND FINAL MESSAGE ---
+    try:
+        await context.bot.send_photo(
+            chat_id=chat_id,
+            photo=photo_file_id,
+            caption=welcome_message,
+            reply_markup=reply_markup,
+            parse_mode='Markdown'
+        )
+    except Exception:
+        await context.bot.send_message(
+            chat_id=chat_id, 
+            text=welcome_message, 
+            reply_markup=reply_markup, 
+            parse_mode='Markdown'
+        )
+'''async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_name = update.effective_user.first_name
     chat_id = update.effective_chat.id
     
@@ -1725,8 +1800,142 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             text=welcome_message, 
             reply_markup=reply_markup, 
             parse_mode='Markdown'
-        )
+        )'''
 async def help_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    data = query.data
+    await query.answer()
+    
+    # Buttons setup
+    back_to_start = [[InlineKeyboardButton("🔙 Back to Start", callback_data="help_close")]]
+    back_to_main = [[InlineKeyboardButton("🔙 Back to Features", callback_data="help_main")]]
+
+    # --- 1. HELP MAIN ---
+    if data == "help_main":
+        text = (
+            "📂 **Laila's Features & Tools**\n\n"
+            "Select a category to explore commands:"
+        )
+        keyboard = [
+            [
+                InlineKeyboardButton("🤖 AI & Chat", callback_data="help_ai"),
+                InlineKeyboardButton("🎨 Media & Gen", callback_data="help_media")
+            ],
+            [
+                InlineKeyboardButton("🛠 Tools", callback_data="help_utils"),
+                InlineKeyboardButton("👮 Admin", callback_data="help_admin")
+            ],
+            [
+                InlineKeyboardButton("ℹ️ About", callback_data="help_about"),
+                InlineKeyboardButton("🔙 Back to Start", callback_data="help_close")
+            ]
+        ]
+
+    # --- 2. GAME ZONE (Full List Updated) ---
+    elif data == "help_games":
+        text = (
+            "🎮 **Laila's Ultimate Game Zone** 🎮\n\n"
+            "💰 **RPG & Economy:**\n"
+            "• `/game` | `/profile` - Your RPG Menu 🏠\n"
+            "• `/daily` - Get your daily reward 🎁\n"
+            "• `/work` | `/farm` - Earn money 💼\n"
+            "• `/rob` | `/kill` - Be the outlaw 🦹\n"
+            "• `/shop` - Buy cool items 🛒\n"
+            "• `/bounty` - Claim rewards 🎯\n"
+            "• `/slots` - Gamble your luck 🎰\n"
+            "• `/leaderboard` - Top richest players 🏆\n\n"
+            "⚔️ **Mini Games:**\n"
+            "• `/xoxo` - Tic-Tac-Toe (Multiplayer)\n"
+            "• `/startgame` - Guess the Number 🔢\n"
+            "• `/coinflip` - Flip a coin 🪙\n"
+            "• `/roll` - Roll a dice 🎲\n\n"
+            "❤️ **Social & Family:**\n"
+            "• `/marry` | `/divorce` - Manage relationships\n"
+            "• `/adopt` - Start a family\n"
+            "• `/couple` - Find a match in group\n\n"
+            "🔥 **Fun Commands:**\n"
+            "• `/truth` | `/dare` - Classic T&D\n"
+            "• `/slap` | `/roast` - Playful banter"
+        )
+        keyboard = back_to_start
+
+    # --- 3. SUB-MENUS ---
+    elif data == "help_ai":
+        text = (
+            "🤖 **AI & Chat Capabilities**\n\n"
+            "• **Smart Chat**: Reply to me or tag Laila\n"
+            "• **Voice Chat**: I can talk in voice notes\n"
+            "• `/lyrics <song>` - Get song lyrics 🎵\n"
+            "• `/tr <lang>` - Translator 🌍\n"
+            "• `/advice` - Get random life advice"
+        )
+        keyboard = back_to_main
+
+    elif data == "help_media":
+        text = (
+            "🎨 **Media & Generation**\n\n"
+            "• `/gen <prompt>` - Generate AI Art 🖼\n"
+            "• `/img <query>` - HD Photo Search 🔍\n"
+            "• `/youtube <link>` - Video Downloader 📥\n"
+            "• `/meme` - Random memes 😂\n"
+            "• `/qr <text>` - Make QR Codes 📱"
+        )
+        keyboard = back_to_main
+
+    elif data == "help_utils":
+        text = (
+            "🛠 **Utility Tools**\n\n"
+            "• `/weather <city>` - Live Weather ☁️\n"
+            "• `/define <word>` - Dictionary 📖\n"
+            "• `/shorten <url>` - Link Shortener 🔗\n"
+            "• `/paste` - Paste text online 📋"
+        )
+        keyboard = back_to_main
+
+    elif data == "help_admin":
+        text = (
+            "👮 **Admin Controls**\n\n"
+            "• `/on` | `/off` - Toggle Bot\n"
+            "• `/ban`, `/kick`, `/mute` - User control\n"
+            "• `/setwelcome` - Custom Welcome message\n"
+            "• `/reset` - Clear group chat memory"
+        )
+        keyboard = back_to_main
+
+    elif data == "help_about":
+        text = (
+            "ℹ️ **About Laila**\n\n"
+            "Developed by **Adhyan**.\n"
+            "A fast and smart AI bot built to make your Telegram experience better."
+        )
+        keyboard = back_to_main
+
+    # --- 4. CLOSE / RESET TO START ---
+    elif data == "help_close":
+        bot_info = await context.bot.get_me()
+        add_url = f"https://t.me/{bot_info.username}?startgroup=true"
+        text = (
+            "Hey! 👋\n\n"
+            "I'm **Laila**, your AI companion. Choose an option below:"
+        )
+        keyboard = [
+            [
+                InlineKeyboardButton("🚀 Features & Help", callback_data="help_main"),
+                InlineKeyboardButton("🎮 Game Zone", callback_data="help_games") 
+            ],
+            [InlineKeyboardButton("➕ Add Me To Your Group", url=add_url)]
+        ]
+
+    # --- EXECUTE EDIT ---
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    try:
+        if query.message.photo:
+            await query.edit_message_caption(caption=text, reply_markup=reply_markup, parse_mode='Markdown')
+        else:
+            await query.edit_message_text(text=text, reply_markup=reply_markup, parse_mode='Markdown')
+    except Exception:
+        pass
+'''async def help_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     data = query.data
     await query.answer()
@@ -1858,9 +2067,8 @@ async def help_callback_handler(update: Update, context: ContextTypes.DEFAULT_TY
         try:
             await query.edit_message_text(text=text, reply_markup=reply_markup, parse_mode='Markdown')
         except Exception:
-            pass
-
-async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+            pass'''
+'''async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     chat_id = update.effective_chat.id
     ping_start = time.time()
     msg = await context.bot.send_message(chat_id=chat_id, text="Calculating stats...")
@@ -1894,7 +2102,66 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         )
     except Exception as e:
         logger.error(f"Failed to send photo with stats command: {e}")
-        await context.bot.send_message(chat_id=chat_id, text=response_text, parse_mode='Markdown')
+        await context.bot.send_message(chat_id=chat_id, text=response_text, parse_mode='Markdown')'''
+import time
+import psutil
+from datetime import datetime
+
+async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    chat_id = update.effective_chat.id
+    
+    # 1. Ping Calculation
+    ping_start = time.time()
+    # Chat action dikhana cool lagta hai stats load hote waqt
+    await context.bot.send_chat_action(chat_id=chat_id, action="typing")
+    ping_end = time.time()
+    ping_ms = int((ping_end - ping_start) * 1000)
+    
+    # 2. Uptime Calculation
+    uptime = datetime.now() - start_time
+    days = uptime.days
+    hours, remainder = divmod(uptime.seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    uptime_str = f"{days}d {hours}h {minutes}m"
+
+    # 3. System Usage
+    ram = psutil.virtual_memory().percent
+    cpu = psutil.cpu_percent(interval=None) # Interval 1 second bot ko slow kar deta hai, isliye None rakhein
+    disk = psutil.disk_usage('/').percent
+
+    # 4. Progress Bars Logic (Custom level indicator)
+    def get_bar(percentage):
+        filled = int(percentage / 10)
+        bar = "▰" * filled + "▱" * (10 - filled)
+        return bar
+
+    # --- PREMIUM LAYOUT ---
+    response_text = (
+        "📊 <b>Laila's System Health</b>\n\n"
+        f"⚡ <b>Latency</b>: <code>{ping_ms}ms</code>\n"
+        f"⏱️ <b>Uptime</b>: <code>{uptime_str}</code>\n\n"
+        f"🖥️ <b>CPU Load</b> [{get_bar(cpu)}]\n"
+        f"└ <code>{cpu}%</code>\n\n"
+        f"🧠 <b>RAM Usage</b> [{get_bar(ram)}]\n"
+        f"└ <code>{ram}%</code>\n\n"
+        f"💾 <b>Disk Space</b> [{get_bar(disk)}]\n"
+        f"└ <code>{disk}%</code>\n\n"
+        f"✨ <b>Maintained by Adhyan</b>"
+    )
+
+    photo_file_id = 'AgACAgUAAxkBAAIIKGigVdAK07aRr9QiXpRalahcPO2pAAIL0DEblXUBVSY5LS31XxPSAQADAgADeAADNgQ'
+    
+    try:
+        await context.bot.send_photo(
+            chat_id=chat_id,
+            photo=photo_file_id,
+            caption=response_text,
+            parse_mode='HTML' # HTML use kiya hai clean styling ke liye
+        )
+    except Exception as e:
+        logger.error(f"Stats Error: {e}")
+        await context.bot.send_message(chat_id=chat_id, text=response_text, parse_mode='HTML')
+
 
 async def admin_stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Shows detailed bot stats for the admin/sudo user only."""
