@@ -3628,35 +3628,39 @@ def main() -> None:
     application.add_handler(CommandHandler("endxoxo", end_xoxo_command))
     application.add_handler(CommandHandler("endgame", end_xoxo_command))
 
-    # IMPORTANT: Add this pattern filter so only xoxo buttons go here
+    # 2. Phir saare Callback Handlers (Buttons ke liye)
+    # Order: XOXO -> Start -> Help -> Game.py
     application.add_handler(CallbackQueryHandler(xoxo_callback, pattern="^xoxo_"))
-
-    # --- NEW: Help/Start Menu Handler ---
-    # This pattern matches any callback data starting with "help_"
     application.add_handler(CallbackQueryHandler(start_callback_handler, pattern="^start_"))
     application.add_handler(CallbackQueryHandler(help_callback_handler, pattern="^help_"))
+    application.add_handler(CallbackQueryHandler(game.handle_game_callback)) # Ye baki sab pakad lega
 
-    # ... existing CallbackQueryHandler for game.py ...
-    # application.add_handler(CallbackQueryHandler(game.handle_game_callback))
-    # ✨ ADDED THE NEW WELCOME HANDLER HERE ✨
+    # 3. Phir Status Updates (Welcome message)
     application.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, welcome_new_members))
+
+    # 4. Phir Special Text Filters (YouTube/Insta links)
+    application.add_handler(MessageHandler(
+        (filters.TEXT | filters.CAPTION) & (~filters.UpdateType.EDITED_MESSAGE) & (~filters.COMMAND), 
+        process_message
+    ))
     
-    # --- FIX: Added filters.EDITED_MESSAGE to handle edits ---
+
+    # 5. Phir Voice Messages
+    application.add_handler(MessageHandler(filters.VOICE, handle_voice_message))
+
+    # 6. SABSE NICHE: General AI Chat (process_message)
+    # Isko upar rakhoge toh buttons aur baki cheezein block ho jayengi
     application.add_handler(MessageHandler(
         (filters.TEXT | filters.CAPTION) & (~filters.UpdateType.EDITED_MESSAGE), 
         process_message
     ))
+    
     application.add_handler(MessageHandler(
         (filters.UpdateType.EDITED_MESSAGE & (filters.TEXT | filters.CAPTION)), 
         process_message
     ))
-    
-    application.add_handler(MessageHandler(filters.VOICE, handle_voice_message))
-    
-    # --- NEW: Add the CallbackQueryHandler for the game ---
-    # This will catch all button presses and send them to game.py
-    application.add_handler(CallbackQueryHandler(game.handle_game_callback))
 
+    # Error handling
     application.add_error_handler(error_handler)
     
     if WEBHOOK_URL:
