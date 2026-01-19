@@ -36,6 +36,7 @@ import io
 import glob
 # --- NEW: IMPORT THE GAME MODULE ---
 import game
+import youtube_handler
 
 
 # Load environment variables from .env file
@@ -1314,127 +1315,6 @@ async def lyrics_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
 TEMP_DIR = "temp_downloads" 
 
-import httpx
-import asyncio
-import re
-
-# Cobalt v10 Instances (Jo abhi working hain)
-async def get_video_universal(url: str):
-    """Ultimate Fallback: Cobalt + Invidious + Direct Gateways."""
-    
-    # 1. New Working Cobalt Instances (Updated Jan 2026)
-    gateways = [
-        "https://api.cobalt.tools/api/json",
-        "https://cobalt-api.v06.io/api/json",
-        "https://api.v06.io/api/json",
-        "https://cobalt.crushulon.com/api/json",
-        "https://api.cobalt.red/api/json",
-        "https://cobalt.shizuku.io/api/json",
-        "https://api.cobalt.run/api/json"
-    ]
-    
-    headers = {
-        "Accept": "application/json",
-        "Content-Type": "application/json",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
-    }
-
-    async with httpx.AsyncClient(timeout=20.0, follow_redirects=True) as client:
-        # --- PHASE 1: Try All Cobalt Instances ---
-        for api in gateways:
-            try:
-                res = await client.post(api, json={"url": url, "vQuality": "720"}, headers=headers)
-                if res.status_code == 200:
-                    data = res.json()
-                    if data.get("status") in ["stream", "redirect"]:
-                        return data.get("url"), None
-                    if data.get("status") == "picker":
-                        return data.get("picker")[0].get("url"), None
-            except: continue
-
-        # --- PHASE 2: Try Direct Invidious Video Extraction ---
-        video_id_match = re.search(r'(?:v=|youtu\.be/|watch\?v=)([a-zA-Z0-9_-]{11})', url)
-        if video_id_match:
-            v_id = video_id_match.group(1)
-            # Invidious instances that allow direct API video stream
-            inv_nodes = ["https://inv.tux.pizza", "https://invidious.nerdvpn.de", "https://yewtu.be"]
-            for node in inv_nodes:
-                try:
-                    api_url = f"{node}/api/v1/videos/{v_id}"
-                    inv_res = await client.get(api_url)
-                    if inv_res.status_code == 200:
-                        f_streams = inv_res.json().get("formatStreams", [])
-                        if f_streams: return f_streams[0]["url"], None
-                except: continue
-
-    # --- PHASE 3: Everything Failed ---
-    return None, "ALL_FAILED"
-
-# --- UPDATED: handle_youtube_link (With Button Fallback) ---
-async def handle_youtube_link(update: Update, context: ContextTypes.DEFAULT_TYPE, url: str):
-    chat_id = update.effective_chat.id
-    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-
-    msg = await context.bot.send_message(chat_id=chat_id, text="🚀 **Laila is searching every corner of the web...**", parse_mode='Markdown')
-    
-    video_url, error = await get_video_universal(url)
-
-    if video_url:
-        try:
-            await context.bot.send_video(chat_id=chat_id, video=video_url, caption="🎥 **Video Ready!** ✨")
-            await msg.delete()
-        except:
-            await msg.edit_text("❌ **Upload Error:** File size is too big for Telegram.")
-    else:
-        # AGAR SAB FAIL HO JAYE - Ek clickable button do user ko
-        # Ye buttons user ko aisi site pe bhejenge jahan se wo 1-click mein download kar sake
-        clean_url = url.replace("youtube.com", "ssyoutube.com").replace("youtu.be", "ssyoutube.com")
-        
-        keyboard = [[InlineKeyboardButton("📥 Download Manually", url=clean_url)]]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        await msg.edit_text(
-            "⚠️ **YouTube Security is too high right now!**\n\nMain direct file nahi bhej paa rahi hoon, lekin aap neeche diye gaye button se 1-click mein download kar sakte hain:",
-            reply_markup=reply_markup
-        )
-# --- Auto Message Handler ---
-async def auto_youtube_msg_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if not update.message or not update.message.text:
-        return
-
-    text = update.message.text
-    match = re.search(YT_REGEX, text)
-    
-    if match:
-        url = match.group(0)
-        asyncio.create_task(handle_youtube_link(update, context, url))
-# Ye function add karo taaki /youtube command kaam kare
-async def youtube_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Manual command handler for /youtube <link>"""
-    if not context.args:
-        await update.message.reply_text("Adhyan, link toh do! `/youtube <link>`")
-        return
-    
-    url = context.args[0]
-    # Ye purane handle_youtube_link function ko call karega
-    await handle_youtube_link(update, context, url)
-    # --- Name query handler ---
-async def handle_name_query(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    user_name = update.effective_user.first_name
-    chat_id = update.effective_chat.id
-    
-    # --- FIX: Get message object ---
-    message = update.message or update.edited_message
-    if not message:
-        return
-    
-    if user_name:
-        response_text = f"Your name is **{user_name}**. I can call you by this name. 😊"
-    else:
-        response_text = "I don't know your name yet. Perhaps you haven't set it on Telegram. 🤔"
-    
-    await message.reply_text(response_text, parse_mode='Markdown')
-    logger.info(f"[{chat_id}] Successfully handled name query for user {user_name} ({update.effective_user.id}).")
 
 # --- AI check to see if a message is a name query ---
 # --- NOTE: This function is no longer called by process_message to save quota ---
