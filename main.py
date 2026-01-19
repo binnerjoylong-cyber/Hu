@@ -1126,7 +1126,7 @@ async def gen_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         return
 
     # User ko update do
-    msg = await update.message.reply_text("Bas ek minute Adhyan, aapki image generate kar rahi hoon... 🎨")
+    msg = await update.message.reply_text("wait a minute, your image is generating... 🎨")
     
     # Chat action (Typing/Uploading photo)
     await context.bot.send_chat_action(chat_id=chat_id, action="upload_photo")
@@ -1159,7 +1159,7 @@ async def gen_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             await context.bot.send_photo(
                 chat_id=chat_id, 
                 photo=image_url, 
-                caption=f"Lo Adhyan, aapki image taiyar hai! ✨\nPrompt: `{query}`", 
+                caption=f"Your image is ready! ✨\nPrompt: `{query}`", 
                 parse_mode='Markdown'
             )
         else:
@@ -1168,7 +1168,7 @@ async def gen_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     except Exception as e:
         logger.error(f"Error: {e}")
         if 'msg' in locals(): await msg.delete()
-        await update.message.reply_text("Kuch toh gadbad ho gayi... 🙄")
+        await update.message.reply_text("Something is wrong... 🙄")
 
 # --- Ek chota sa helper function for Background Polling ---
 async def poll_stable_horde(gen_id):
