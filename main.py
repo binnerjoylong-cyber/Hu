@@ -797,9 +797,60 @@ async def xoxo_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
                 parse_mode='Markdown'
             )
 
-
-
 async def get_file_id_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """
+    Retrieves the file_id for the replied-to media including Stickers.
+    """
+    # Check if the command is a reply to a message
+    if not update.message.reply_to_message:
+        await update.message.reply_text(
+            "❌ **Usage Error!**\n"
+            "Please **Reply** to a video, photo, sticker, document, or audio file.\n"
+            "*(गलत इस्तेमाल! कृपया किसी मीडिया फाइल या Sticker पर Reply करें।)*",
+            parse_mode='Markdown'
+        )
+        return
+
+    replied_message = update.message.reply_to_message
+    file_id = None
+    media_type = None
+
+    # Check for different media types in the replied message
+    if replied_message.video:
+        file_id = replied_message.video.file_id
+        media_type = "Video 🎬"
+    elif replied_message.photo:
+        file_id = replied_message.photo[-1].file_id
+        media_type = "Photo 🖼️"
+    elif replied_message.sticker:
+        # --- NEW: Sticker Support Added ---
+        file_id = replied_message.sticker.file_id
+        media_type = "Sticker 🎨"
+    elif replied_message.document:
+        file_id = replied_message.document.file_id
+        media_type = "Document 📄"
+    elif replied_message.audio:
+        file_id = replied_message.audio.file_id
+        media_type = "Audio 🎧"
+    elif replied_message.voice:
+        file_id = replied_message.voice.file_id
+        media_type = "Voice Message 🎤"
+    
+    if file_id:
+        await update.message.reply_text(
+            f"✅ **File ID Found!**\n"
+            f"Type: {media_type}\n\n"
+            f"**File ID:**\n<code>{file_id}</code>\n\n"
+            f"*Is ID ko copy karke apne start_command ki sticker list mein daal do!*",
+            parse_mode='HTML' # HTML use kiya hai tap-to-copy ke liye
+        )
+    else:
+        await update.message.reply_text(
+            "🤔 **Media Not Found!**\n"
+            "The message you replied to does not contain a supported media file."
+        )
+
+'''async def get_file_id_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """
     Retrieves the file_id for the replied-to media (Video, Photo, etc.).
     किसी भी मीडिया (वीडियो/फोटो) का file_id ढूंढता है।
@@ -848,7 +899,9 @@ async def get_file_id_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         await update.message.reply_text(
             "🤔 **Media Not Found!**\n"
             "The message you replied to does not contain a supported media file (video, photo, document, audio, or voice message)."
-        )
+        )'''
+
+
 # --- MODIFIED: /couple Command ---
 # Is list mein aap jitni chahein photos (URLs ya File IDs) daal sakte hain
 COUPLE_IMAGES = [
