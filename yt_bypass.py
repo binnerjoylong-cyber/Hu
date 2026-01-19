@@ -73,3 +73,12 @@ async def youtube_auto_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     match = re.search(r'(https?://)?(www\.)?(youtube\.com|youtu\.be)/[^\s]+', update.message.text)
     if match:
         await handle_youtube_link(update, context, match.group(0))
+# yt_bypass.py ke andar
+async def youtube_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Manual command: /youtube <link>"""
+    if not context.args:
+        await update.message.reply_text("Bhai, link toh do! Format: /youtube <link>")
+        return
+    
+    url = context.args[0]
+    await handle_youtube_link(update, context, url)
