@@ -37,8 +37,8 @@ import glob
 # --- NEW: IMPORT THE GAME MODULE ---
 import game
 # Agar file ka naam yt_bypass.py hai toh:
-from yt_bypass import youtube_auto_handler, youtube_command
-
+# main.py ke top par
+from yt_bypass import social_media_handler, youtube_command
 # Load environment variables from .env file
 load_dotenv()
 
@@ -3401,7 +3401,10 @@ def main() -> None:
 
 # ... XOXO Handlers ke baad ya apne manchahe jagah par ...
     application.add_handler(CommandHandler("youtube", youtube_command))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, youtube_auto_handler))
+    application.add_handler(MessageHandler(
+        filters.TEXT & ~filters.COMMAND & filters.Regex(r"(youtube\.com|youtu\.be|instagram\.com)"), 
+        social_media_handler
+    ))
 # --- NEW: File ID Finder Com
     application.add_handler(CommandHandler("getfileid", get_file_id_command))
     application.add_handler(CommandHandler("fid", get_file_id_command)) # Optional short alias
