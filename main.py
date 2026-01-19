@@ -969,9 +969,9 @@ async def couple_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
         is_special = False
         # --- SPECIAL LOGIC FOR TAKI & MITSUHA ---
-        if user1_id == SPECIAL_USER_ID or user2_id == SPECIAL_USER_ID:
+        if user1_id in [SPECIAL_USER_ID_1,SPECIAL_USER_ID_2] or user2_id in [SPECIAL_USER_ID_1, SPECIAL_USER_ID_2]:
             is_special = True
-            if user1_id == SPECIAL_USER_ID:
+            if user1_id in [SPECIAL_USER_ID_1, SPECIAL_USER_ID_2]:
                 user1_name = "Adhyan"
                 user2_name = "Kavya"
             else:
