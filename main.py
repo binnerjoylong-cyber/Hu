@@ -2367,36 +2367,49 @@ async def weather_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
 
 async def crypto_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Gets the price of a cryptocurrency."""
     if not context.args:
-        # --- FIX: Changed example from 'btc' to 'bitcoin' ---
-        await update.message.reply_text("Please provide a crypto symbol. Example: `/crypto bitcoin`")
+        await update.message.reply_text("Bhai, symbol likho! Example: <code>/crypto btc</code>", parse_mode='HTML')
         return
         
-    symbol = context.args[0].lower()
-    url = f"https://api.coingecko.com/api/v3/simple/price?ids={symbol}&vs_currencies=usd,inr&include_24hr_change=true"
+    symbol = context.args[0].upper()
     
     try:
-        response = requests.get(url).json()
-        if symbol in response:
-            data = response[symbol]
-            usd_price = data.get('usd', 'N/A')
-            inr_price = data.get('inr', 'N/A')
-            change_24h = data.get('usd_24h_change', 0)
-            emoji = "📈" if change_24h >= 0 else "📉"
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            # 1. Sabse pehle Live USD to INR Rate uthate hain (Binance USDTINR pair)
+            # Agar ye fail ho to 83.50 backup rakhenge
+            inr_rate_response = await client.get("https://api.binance.com/api/v3/ticker/price?symbol=USDTINR")
+            usd_to_inr = float(inr_rate_response.json().get('price', 83.50)) if inr_rate_response.status_code == 200 else 83.50
+
+            # 2. Ab Crypto ka Live Price (BTC/ETH etc. in USDT)
+            crypto_response = await client.get(f"https://api.binance.com/api/v3/ticker/24hr?symbol={symbol}USDT")
             
-            crypto_text = (
-                f"**Crypto Price for {symbol.upper()}**\n\n"
-                f"🇺🇸 **USD**: `${usd_price:,.2f}`\n"
-                f"🇮🇳 **INR**: `₹{inr_price:,.2f}`\n"
-                f"{emoji} **24h Change**: `{change_24h:.2f}%`"
-            )
-            await update.message.reply_text(crypto_text, parse_mode='Markdown')
-        else:
-            await update.message.reply_text(f"Could not find price data for `{symbol}`. Make sure to use the coin's ID (e.g., 'bitcoin', 'ethereum').")
+            if crypto_response.status_code == 200:
+                data = crypto_response.json()
+                last_price = float(data.get('lastPrice', 0))
+                price_change = float(data.get('priceChangePercent', 0))
+                
+                # Conversion
+                inr_price = last_price * usd_to_inr
+                
+                emoji = "📈" if price_change >= 0 else "📉"
+                status_color = "🟢" if price_change >= 0 else "🔴"
+
+                # --- PREMIUM UI ---
+                crypto_text = (
+                    f"💰 <b>{symbol} Market Status</b>\n\n"
+                    f"🇺🇸 <b>Price (USD)</b>: <code>${last_price:,.2f}</code>\n"
+                    f"🇮🇳 <b>Price (INR)</b>: <code>₹{inr_price:,.2f}</code>\n"
+                    f"💵 <b>Exchange Rate</b>: <code>1$ = ₹{usd_to_inr:.2f}</code>\n\n"
+                    f"{status_color} <b>24h Change</b>: <code>{price_change:.2f}%</code> {emoji}\n\n"
+                    f"✨ <i>Tap prices to copy. Live data from Binance.</i>"
+                )
+                await update.message.reply_text(crypto_text, parse_mode='HTML')
+            else:
+                await update.message.reply_text(f"❌ <code>{symbol}</code> nahi mila. (Use: BTC, ETH, SOL, DOGE)")
+
     except Exception as e:
-        await update.message.reply_text("An error occurred while fetching crypto data.")
-        logger.error(f"Error in /crypto command: {e}")
+        print(f"Crypto Error: {e}")
+        await update.message.reply_text("⚠️ Server busy hai, thodi der baad try karo.")
         
 async def define_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Gets the definition of a word."""
@@ -2496,40 +2509,6 @@ async def ud_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         logger.error(f"Error in /ud command: {e}")
 
 # --- FIXED: /paste command ---
-async def paste_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Pastes replied text to a pastebin service."""
-    if not update.message.reply_to_message or not update.message.reply_to_message.text:
-        await update.message.reply_text("Please reply to a text message to paste it.")
-        return
-    
-    text_to_paste = update.message.reply_to_message.text
-    url = "https://spaceb.in/api/v1/documents" # This is a POST endpoint, not for direct data sending
-    
-    try:
-        # The correct way is to send the text as the 'data' payload
-        response = requests.post(url, data=text_to_paste.encode('utf-8'))
-        response.raise_for_status() # Will raise an exception for bad status codes
-        
-        # Check if the response is JSON and has the expected structure
-        if "application/json" in response.headers.get("Content-Type", ""):
-            json_response = response.json()
-            if json_response.get("payload") and json_response["payload"].get("id"):
-                paste_id = json_response["payload"]["id"]
-                paste_url = f"https://spaceb.in/{paste_id}"
-                await update.message.reply_text(f"Text has been pasted successfully:\n{paste_url}")
-            else:
-                await update.message.reply_text(f"Failed to paste text. Unexpected API response.")
-                logger.error(f"Unexpected JSON response from Spacebin: {response.text}")
-        else:
-            await update.message.reply_text(f"Failed to paste text. Service returned a non-JSON response.")
-            logger.error(f"Non-JSON response from Spacebin: {response.text}")
-            
-    except requests.exceptions.RequestException as e:
-        await update.message.reply_text("An error occurred while connecting to the paste service.")
-        logger.error(f"Error in /paste command (RequestException): {e}")
-    except Exception as e:
-        await update.message.reply_text("An unexpected error occurred while pasting the text.")
-        logger.error(f"Error in /paste command: {e}", exc_info=True)
 
 
 # Fun Commands
@@ -3032,7 +3011,102 @@ async def reset_welcome_command(update: Update, context: ContextTypes.DEFAULT_TY
         await update.message.reply_text("❌ An error occurred (or no settings were found to reset).")
 
 # --- REVAMPED HELP Command (with new welcome commands) ---
+
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user_id = str(update.effective_user.id)
+    # Header Image ya Emojis se start karte hain
+    help_text = (
+        "✨ **Laila Bot Help Menu** ✨\n\n"
+        "Bhai, main aapka all-in-one assistant hoon! Neeche diye gaye buttons par click karke commands check karein.\n\n"
+        "💡 *Tip: Category select karein!*"
+    )
+
+    keyboard = [
+        [
+            InlineKeyboardButton("💬 General", callback_data="help_gen"),
+            InlineKeyboardButton("🎨 AI & Media", callback_data="help_media")
+        ],
+        [
+            InlineKeyboardButton("🛠️ Utilities", callback_data="help_util"),
+            InlineKeyboardButton("🎮 Games", callback_data="help_game")
+        ],
+        [
+            InlineKeyboardButton("🔒 Admin", callback_data="help_admin")
+        ]
+    ]
+
+    # Sudo button sirf admin ko dikhega
+    if user_id == str(BROADCAST_ADMIN_ID) or user_id in sudo_users:
+        keyboard.append([InlineKeyboardButton("👑 Sudo Panel", callback_data="help_sudo")])
+
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    # Agar ye callback se aaya hai toh edit karega, warna naya message
+    if update.callback_query:
+        await update.callback_query.edit_message_text(help_text, reply_markup=reply_markup, parse_mode='Markdown')
+    else:
+        await update.message.reply_text(help_text, reply_markup=reply_markup, parse_mode='Markdown')
+
+
+async def help_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    await query.answer()
+    data = query.data
+
+    # Back button setup
+    back_button = [[InlineKeyboardButton("⬅️ Back to Menu", callback_data="help_main")]]
+    
+    texts = {
+        "help_gen": (
+            "**💬 General Commands**\n\n"
+            "• `/start` - Bot start karein\n"
+            "• `/stats` - Live performance\n"
+            "• `/id` - Your & Chat ID\n"
+            "• `/about` - Mere baare mein jaano"
+        ),
+        "help_media": (
+            "**🎨 AI & Media**\n\n"
+            "• `/gen <prompt>` - AI Image banayein\n"
+            "• `/lyrics <song>` - Song lyrics (Tap to Copy)\n"
+            "• `/youtube <link>` - Video download karein\n"
+            "• `/img <query>` - HD Photo search"
+        ),
+        "help_util": (
+            "**🛠️ Utility Commands**\n\n"
+            "• `/crypto <symbol>` - Live Crypto Rates\n"
+            "• `/tr <lang> <text>` - Translation\n"
+            "• `/weather <city>` - Mausam ka haal\n"
+            "• `/qr <text>` - Generate QR Code\n"
+            "• `/shorten <url>` - URL chhota karein"
+        ),
+        "help_game": (
+            "**🎮 Games (Only Best Ones)**\n\n"
+            "• `/xoxo` - Tic-Tac-Toe khelien doston ke saath\n"
+            "• `/startgame` - Number guessing game start karein\n"
+            "• `/stopgame` - Game band karein\n"
+            "• `/endxoxo` - Tic-Tac-Toe khatam karein"
+        ),
+        "help_admin": (
+            "**🔒 Admin Only**\n\n"
+            "• `/on` | `/off` - Group mein bot activate/deactivate\n"
+            "• `/ban` | `/mute` | `/kick` - User management\n"
+            "• `/setwelcome` - Custom welcome message"
+        ),
+        "help_sudo": (
+            "👑 **Sudo / Owner Only**\n\n"
+            "• `/broadcast` - Sabko message bhejein\n"
+            "• `/poweroff` - Global Shutdown\n"
+            "• `/adminstats` - Health report"
+        )
+    }
+
+    if data == "help_main":
+        await help_command(update, context)
+    elif data in texts:
+        await query.edit_message_text(texts[data], reply_markup=InlineKeyboardMarkup(back_button), parse_mode='Markdown')
+
+
+'''async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_id = str(update.effective_user.id)
     is_sudo = user_id == str(BROADCAST_ADMIN_ID) or user_id in sudo_users
 
@@ -3123,7 +3197,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     
     await update.message.reply_text(help_text, parse_mode='Markdown', disable_web_page_preview=True)
     logger.info(f"[{update.effective_chat.id}] /help command used.")
-
+'''
 async def spawn_boss_event(context: ContextTypes.DEFAULT_TYPE):
     """Randomly drops a treasure in a group chat."""
     # List of group IDs the bot is active in (from your known_users/groups)
@@ -3258,7 +3332,6 @@ def main() -> None:
     application.add_handler(CommandHandler("qr", qr_command))
     application.add_handler(CommandHandler("shorten", shorten_command))
     application.add_handler(CommandHandler("ud", ud_command))
-    application.add_handler(CommandHandler("paste", paste_command))
 
     # Fun & Game Commands
     application.add_handler(CommandHandler("couple", couple_command))
