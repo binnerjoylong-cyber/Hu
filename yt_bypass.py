@@ -13,17 +13,11 @@ async def get_video_data(url: str):
         "x-rapidapi-host": API_HOST
     }
 
-    # 1. URL Cleaning (Kachra saaf karo)
-    # Isse ?igsh=... jaise tracking parameters hat jayenge
+    # URL Cleaning
     clean_url = url.split('?')[0].strip()
-    print(f"DEBUG: Cleaning URL -> {clean_url}")
-
-    # 2. Platform Detection
-    is_insta = "instagram.com" in clean_url
-    is_youtube = any(x in clean_url for x in ["youtube.com", "youtu.be"])
 
     # --- Case 1: INSTAGRAM ---
-    if is_insta:
+    if "instagram.com" in clean_url:
         api_url = "https://social-media-video-downloader.p.rapidapi.com/instagram/v1/post/details"
         params = {"url": clean_url}
         
@@ -32,20 +26,28 @@ async def get_video_data(url: str):
                 response = await client.get(api_url, headers=headers, params=params)
                 data = response.json()
                 
-                # Insta response check
+                # Naya Parsing Logic: Insta kabhi 'items' bhejta hai kabhi seedha data
                 items = data.get("items", [])
+                video_url = None
+                
                 if items:
-                    video_url = items[0].get("video_url")
+                    # Pehle item ki video dhoondo
+                    video_url = items[0].get("video_url") or items[0].get("video_versions", [{}])[0].get("url")
+                
+                if not video_url:
+                    # Agar items mein nahi mila toh pure response mein dhoondo
+                    video_url = data.get("video_url")
+                
+                if video_url:
                     return video_url, "Instagram Reel"
-                return None, "Insta video link not found."
+                return None, "Insta link found but it's not a video (maybe a photo?)."
             except Exception as e:
                 return None, f"Insta API Error: {str(e)}"
 
     # --- Case 2: YOUTUBE ---
-    elif is_youtube:
+    elif any(x in clean_url for x in ["youtube.com", "youtu.be"]):
         video_id_match = re.search(r'(?:v=|youtu\.be/|watch\?v=|shorts/|live/|reel/)([a-zA-Z0-9_-]{11})', clean_url)
-        if not video_id_match: 
-            return None, "YouTube ID not found."
+        if not video_id_match: return None, "YT ID Error"
         
         video_id = video_id_match.group(1)
         api_url = "https://social-media-video-downloader.p.rapidapi.com/youtube/v3/video/details"
@@ -56,22 +58,35 @@ async def get_video_data(url: str):
                 response = await client.get(api_url, headers=headers, params=params)
                 data = response.json()
                 contents = data.get("contents", [])
-                if not contents: return None, "YT contents empty."
+                if not contents: return None, "YT contents empty"
                 
                 video_list = contents[0].get("videos", [])
                 
-                # Audio + Video Combined Fix
+                # --- AAWAZ KA PAKKA ILAJ (Combined Formats Only) ---
+                # YouTube ITAG 22 (720p) aur 18 (360p) humesha combined hote hain (Video+Audio)
+                # Hum pehle unko filter karenge
+                
+                # Priority 1: ITAG 22 (720p Combined)
+                for v in video_list:
+                    if v.get("metadata", {}).get("itag") == 22:
+                        return v.get("url"), data.get("title", "YT Video")
+                
+                # Priority 2: ITAG 18 (360p Combined)
+                for v in video_list:
+                    if v.get("metadata", {}).get("itag") == 18:
+                        return v.get("url"), data.get("title", "YT Video")
+                
+                # Priority 3: Label check agar itag na mile
                 for v in video_list:
                     meta = v.get("metadata", {})
-                    if (meta.get("has_audio") and meta.get("has_video")) or v.get("label") in ["720p", "360p"]:
-                        return v.get("url"), data.get("title", "YouTube Video")
-                
-                if video_list:
-                    return video_list[0].get("url"), data.get("title", "YouTube Video")
-            except Exception as e:
-                return None, f"YouTube API Error: {str(e)}"
+                    if meta.get("has_audio") and meta.get("has_video"):
+                        return v.get("url"), data.get("title", "YT Video")
 
-    return None, f"Platform not supported! Clean URL: {clean_url}"
+                return None, "No Video+Audio combined link found."
+            except Exception as e:
+                return None, f"YT API Error: {str(e)}"
+
+    return None, "Platform not supported."
             
 async def handle_youtube_link(update: Update, context: ContextTypes.DEFAULT_TYPE, url: str):
     chat_id = update.effective_chat.id
