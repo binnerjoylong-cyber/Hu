@@ -3401,8 +3401,8 @@ def main() -> None:
 
 # ... XOXO Handlers ke baad ya apne manchahe jagah par ...
     application.add_handler(CommandHandler("youtube", youtube_command))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, auto_youtube_msg_handler))
-# --- NEW: File ID Finder Command ---
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, youtube_auto_handler))
+# --- NEW: File ID Finder Com
     application.add_handler(CommandHandler("getfileid", get_file_id_command))
     application.add_handler(CommandHandler("fid", get_file_id_command)) # Optional short alias
     # XOXO Handlers
