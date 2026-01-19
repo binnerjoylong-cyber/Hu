@@ -947,7 +947,7 @@ COUPLE_IMAGES = [
 async def couple_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Selects a random couple from the chat members and mentions them."""
     chat_id = update.effective_chat.id
-    SPECIAL_USER_ID = 6086655225
+    SPECIAL_USER_ID = 8178838574
     
     if update.effective_chat.type == 'private':
         await update.message.reply_text("Yaar, couple banne ke liye group mein aana padega! Akele kaise couple banoge? 😂")
