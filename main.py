@@ -1680,7 +1680,7 @@ async def get_photo_id(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 # --- FIXED: Start Command Logic (Used context.bot.get_me()) ---
 import random
 
-async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+'''async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_name = update.effective_user.first_name
     chat_id = update.effective_chat.id
     
@@ -1753,19 +1753,39 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             text=welcome_message, 
             reply_markup=reply_markup, 
             parse_mode='Markdown'
-        )
-'''async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        )'''
+import asyncio
+import random
+
+async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_name = update.effective_user.first_name
     chat_id = update.effective_chat.id
     
     if str(chat_id) not in known_users:
         known_users.add(str(chat_id))
         save_chat_id(chat_id)
+        
+    # --- RANDOM STICKER LOGIC ---
+    # In IDs ko /fid command se nikaal kar replace kar lena
+    stickers = [
+        "CAACAgIAAxkBAAEL_Zpl_mG0S1...", # Sticker 1
+        "CAACAgUAAxkBAAEL_Ztl_mH5A...", # Sticker 2
+        "CAACAgQAAxkBAAEL_Zxl_mI9S...", # Sticker 3
+    ]
     
+    try:
+        # Pehle sticker bhejo
+        await context.bot.send_sticker(chat_id=chat_id, sticker=random.choice(stickers))
+        # Fir typing effect dikhao 1.5 seconds ke liye
+        await context.bot.send_chat_action(chat_id=chat_id, action="typing")
+        await asyncio.sleep(1.5)
+    except:
+        pass
+
     bot_info = await context.bot.get_me()
     add_to_group_url = f"https://t.me/{bot_info.username}?startgroup=true"
     
-    # --- UPDATED BUTTONS: Games are now on the main screen ---
+    # Updated Buttons
     keyboard = [
         [
             InlineKeyboardButton("🚀 Features & Help", callback_data="help_main"),
@@ -1777,10 +1797,11 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
+    # Updated message without crypto and with lyrics/animation mention
     welcome_message = (
         f"Hey {user_name}! 👋\n\n"
         f"I'm **Laila**, your advanced AI companion. 💖\n"
-        f"I can chat, generate images, and host RPG games!\n\n"
+        f"I can chat, generate images, find lyrics, and host games!\n\n"
         f"👇 **Choose an option to get started:**"
     )
     
@@ -1800,8 +1821,9 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             text=welcome_message, 
             reply_markup=reply_markup, 
             parse_mode='Markdown'
-        )'''
-async def help_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        )
+
+'''async def help_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     data = query.data
     await query.answer()
@@ -1934,8 +1956,8 @@ async def help_callback_handler(update: Update, context: ContextTypes.DEFAULT_TY
         else:
             await query.edit_message_text(text=text, reply_markup=reply_markup, parse_mode='Markdown')
     except Exception:
-        pass
-'''async def help_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        pass'''
+async def help_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     data = query.data
     await query.answer()
@@ -2067,7 +2089,7 @@ async def help_callback_handler(update: Update, context: ContextTypes.DEFAULT_TY
         try:
             await query.edit_message_text(text=text, reply_markup=reply_markup, parse_mode='Markdown')
         except Exception:
-            pass'''
+            pass
 '''async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     chat_id = update.effective_chat.id
     ping_start = time.time()
