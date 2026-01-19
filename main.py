@@ -2367,49 +2367,70 @@ async def weather_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
 
 async def crypto_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    # 1. Input Check & Cleaning
     if not context.args:
-        await update.message.reply_text("Bhai, symbol likho! Example: <code>/crypto btc</code>", parse_mode='HTML')
+        await update.message.reply_text("❌ <b>Bhai, symbol to likho!</b>\nExample: <code>/crypto btc</code>", parse_mode='HTML')
         return
         
-    symbol = context.args[0].upper()
+    # Strip spaces and make uppercase
+    symbol = context.args[0].strip().upper()
     
-    try:
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            # 1. Sabse pehle Live USD to INR Rate uthate hain (Binance USDTINR pair)
-            # Agar ye fail ho to 83.50 backup rakhenge
-            inr_rate_response = await client.get("https://api.binance.com/api/v3/ticker/price?symbol=USDTINR")
-            usd_to_inr = float(inr_rate_response.json().get('price', 83.50)) if inr_rate_response.status_code == 200 else 83.50
+    # Simple check for length to avoid unnecessary API calls
+    if len(symbol) > 10:
+        await update.message.reply_text("❌ Symbol bahut bada hai bhai!")
+        return
 
-            # 2. Ab Crypto ka Live Price (BTC/ETH etc. in USDT)
-            crypto_response = await client.get(f"https://api.binance.com/api/v3/ticker/24hr?symbol={symbol}USDT")
+    msg = await update.message.reply_text(f"🔍 Fetching <b>{symbol}</b> prices...", parse_mode='HTML')
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            # 2. Get Live USDT to INR Rate (Binance P2P/Spot Average)
+            try:
+                inr_res = await client.get("https://api.binance.com/api/v3/ticker/price?symbol=USDTINR")
+                usd_to_inr = float(inr_res.json().get('price', 83.50))
+            except:
+                usd_to_inr = 83.50 # Global Backup Rate
+
+            # 3. Get Crypto Price
+            crypto_url = f"https://api.binance.com/api/v3/ticker/24hr?symbol={symbol}USDT"
+            response = await client.get(crypto_url)
             
-            if crypto_response.status_code == 200:
-                data = crypto_response.json()
+            if response.status_code == 200:
+                data = response.json()
                 last_price = float(data.get('lastPrice', 0))
                 price_change = float(data.get('priceChangePercent', 0))
+                high_24h = float(data.get('highPrice', 0))
+                low_24h = float(data.get('lowPrice', 0))
                 
-                # Conversion
                 inr_price = last_price * usd_to_inr
                 
-                emoji = "📈" if price_change >= 0 else "📉"
-                status_color = "🟢" if price_change >= 0 else "🔴"
+                # Visual Cues
+                emoji = "🚀" if price_change >= 0 else "🔻"
+                graph = "📈" if price_change >= 0 else "📉"
+                status = "🟢 Bullish" if price_change >= 0 else "🔴 Bearish"
 
-                # --- PREMIUM UI ---
+                # --- ENGAGING LAYOUT ---
                 crypto_text = (
-                    f"💰 <b>{symbol} Market Status</b>\n\n"
-                    f"🇺🇸 <b>Price (USD)</b>: <code>${last_price:,.2f}</code>\n"
-                    f"🇮🇳 <b>Price (INR)</b>: <code>₹{inr_price:,.2f}</code>\n"
-                    f"💵 <b>Exchange Rate</b>: <code>1$ = ₹{usd_to_inr:.2f}</code>\n\n"
-                    f"{status_color} <b>24h Change</b>: <code>{price_change:.2f}%</code> {emoji}\n\n"
-                    f"✨ <i>Tap prices to copy. Live data from Binance.</i>"
+                    f"✨ <b>{symbol} Market Report</b> {emoji}\n\n"
+                    f"💰 <b>Price (USD)</b>: <code>${last_price:,.2f}</code>\n"
+                    f"🇮🇳 <b>Price (INR)</b>: <code>₹{inr_price:,.2f}</code>\n\n"
+                    f"📊 <b>24h Change</b>: <code>{price_change:.2f}%</code> {graph}\n"
+                    f"🌡️ <b>Status</b>: <b>{status}</b>\n\n"
+                    f"🏔️ <b>High</b>: <code>${high_24h:,.2f}</code>\n"
+                    f"🌋 <b>Low</b>: <code>${low_24h:,.2f}</code>\n\n"
+                    f"ℹ️ <i>Click price to copy. Live via Binance.</i>"
                 )
-                await update.message.reply_text(crypto_text, parse_mode='HTML')
+                await msg.edit_text(crypto_text, parse_mode='HTML')
             else:
-                await update.message.reply_text(f"❌ <code>{symbol}</code> nahi mila. (Use: BTC, ETH, SOL, DOGE)")
-
+                await msg.edit_text(
+                    f"❌ <b>Symbol '{symbol}' nahi mila!</b>\n\n"
+                    f"Sahi tarika: <code>/crypto btc</code>, <code>/crypto sol</code>, <code>/crypto eth</code>", 
+                    parse_mode='HTML'
+                )
+                
     except Exception as e:
         print(f"Crypto Error: {e}")
-        await update.message.reply_text("⚠️ Server busy hai, thodi der baad try karo.")
+        await msg.edit_text("⚠️ API respond nahi kar rahi. Thodi der baad try karein.")
         
 async def define_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Gets the definition of a word."""
