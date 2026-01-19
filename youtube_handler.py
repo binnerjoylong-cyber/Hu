@@ -7,77 +7,62 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 
 # --- 1. PROXY ROTATOR (Render IP Block Se Bachne Ke Liye) ---
-async def get_working_proxy():
-    """Public proxy list se ek random proxy uthata hai."""
-    try:
-        # Free proxy list API
-        proxy_api = "https://api.proxyscrape.com/v2/?request=displayproxies&protocol=http&timeout=1000&country=all&ssl=all&anonymity=all"
-        async with httpx.AsyncClient() as client:
-            res = await client.get(proxy_api)
-            if res.status_code == 200:
-                proxies = res.text.strip().split('\r\n')
-                return random.choice(proxies)
-    except:
-        return None
-    return None
-
-# --- 2. PRIVATE DOWNLOADER (With Advanced Headers) ---
-def sync_extract_video(url, proxy=None):
-    """Bina download kiye direct stream link nikalta hai."""
-    ydl_opts = {
-        'format': 'bestvideo[ext=mp4][filesize<=50M]+bestaudio[ext=m4a]/best[ext=mp4][filesize<=50M]',
-        'quiet': True,
-        'no_warnings': True,
-        'nocheckcertificate': True,
-        'proxy': f"http://{proxy}" if proxy else None,
-        'http_headers': {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.5',
-            'Referer': 'https://www.google.com/',
-        }
+async def get_video_direct(url: str):
+    """
+    Direct API Bridge: Ye yt-dlp use nahi karta, isliye Render block nahi hoga.
+    """
+    # Naye stable gateways
+    gateways = [
+        "https://api.cobalt.tools/api/json",
+        "https://cobalt-api.v06.io/api/json",
+        "https://api.v06.io/api/json"
+    ]
+    
+    headers = {
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/121.0.0.0"
     }
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(url, download=False)
-        return info.get('url'), info.get('title', 'Video')
+    
+    payload = {"url": url, "vQuality": "720"}
 
-# --- 3. CORE HANDLER (Main Logic) ---
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        for api in gateways:
+            try:
+                res = await client.post(api, json=payload, headers=headers)
+                if res.status_code == 200:
+                    data = res.json()
+                    # Direct link status check
+                    if data.get("status") in ["stream", "redirect"]:
+                        return data.get("url"), "Video"
+                    if data.get("status") == "picker":
+                        return data["picker"][0]["url"], "Video"
+            except:
+                continue
+    return None, None
+
+# --- Core Handler Update ---
 async def handle_youtube_link(update: Update, context: ContextTypes.DEFAULT_TYPE, url: str):
     chat_id = update.effective_chat.id
-    msg = await context.bot.send_message(chat_id=chat_id, text="🛰️ **Laila is bypassing YouTube Firewall...**", parse_mode='Markdown')
-    
-    # Proxy fetch karo
-    proxy = await get_working_proxy()
-    
-    try:
-        # Step 1: Extract Video Link
-        # Hum ise thread mein chalayenge taaki bot freeze na ho
-        video_url, title = await asyncio.to_thread(sync_extract_video, url, proxy)
-        
-        if video_url:
-            await msg.edit_text(f"📥 **Bypassed!** Sending: `{title[:40]}...`", parse_mode='Markdown')
-            
-            # Step 2: Upload to Telegram
-            await context.bot.send_video(
-                chat_id=chat_id,
-                video=video_url,
-                caption=f"🎥 **{title}**\n\n_Bypassed Render Restriction_ ✅",
-                parse_mode='Markdown'
-            )
+    msg = await context.bot.send_message(chat_id=chat_id, text="🚀 **Bypassing with API Bridge...**")
+
+    # Yahan hum direct API call kar rahe hain, yt-dlp nahi
+    video_url, title = await get_video_direct(url)
+
+    if video_url:
+        try:
+            await context.bot.send_video(chat_id=chat_id, video=video_url, caption="✅ **Done!**")
             await msg.delete()
-            return
-            
-    except Exception as e:
-        print(f"Bypass Failed: {e}")
+        except:
+            await msg.edit_text("❌ Size too big for Telegram.")
+    else:
+        # Last resort button
+        ss_url = url.replace("youtube.com", "ssyoutube.com").replace("youtu.be", "ssyoutube.com")
+        keyboard = [[InlineKeyboardButton("📥 Download Manually", url=ss_url)]]
+        await msg.edit_text("🛑 Security High! Use button:", reply_markup=InlineKeyboardMarkup(keyboard))
         
     # --- FINAL FALLBACK: Agar sab kuch fail ho jaye ---
-    ss_url = url.replace("youtube.com", "ssyoutube.com").replace("youtu.be", "ssyoutube.com")
-    keyboard = [[InlineKeyboardButton("📥 Direct Download Link", url=ss_url)]]
     
-    await msg.edit_text(
-        "💀 **YouTube Security is extremely tight!**\n\nDirect file nahi ja rahi, par aap is link se turant download kar sakte hain:",
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
 
 # --- 4. MESSAGE HANDLER (Auto Detect) ---
 async def auto_youtube_msg_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
