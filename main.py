@@ -1916,7 +1916,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         [InlineKeyboardButton("➕ Add Me To Your Group", url=f"https://t.me/{bot_info.username}?startgroup=true")]
     ]
     
-    photo_url = 'AgACAgUAAxkBAAIIKGigVdAK07aRr9QiXpRalahcPO2pAAIL0DEblXUBVSY5LS31XxPSAQADAgADeAADNgQ'
+    photo_url = 'AgACAgUAAxkBAAIDFGlvJaVog3MvCbWKqpe5eHrE2KClAAKfDWsbast5V5BQuOJvSm-4AQADAgADeQADOAQ'
     welcome_text = f"Hey {user_name}! 👋\n\nI'm **Laila**, your advanced AI companion. 💖\n\n👇 **Choose an option:**"
 
     try:
