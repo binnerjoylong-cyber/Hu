@@ -1208,36 +1208,7 @@ async def poll_stable_horde(gen_id):
             if data.get('done'):
                 return data['generations'][0]['img']
     return None
-'''async def gen_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Generates an image using Stable Horde API without blocking."""
-    chat_id = update.effective_chat.id
-    
-    if not context.args:
-        await update.message.reply_text("Please provide a prompt to generate an image. Example: `/gen a black cat in space`", parse_mode='Markdown')
-        return
 
-    query = " ".join(context.args)
-
-    if not STABLE_HORDE_API_KEY:
-        await update.message.reply_text("Sorry, the image generator API key is not configured. Please contact the bot owner.")
-        return
-
-    # Inform user that the process has started
-    msg = await update.message.reply_text("Your image is being generated. This might take a minute, please wait... 🎨")
-    await context.bot.send_chat_action(chat_id=chat_id, action="upload_photo")
-
-    # Run the blocking function in a background thread
-    image_url = await asyncio.to_thread(sync_generate_image, query)
-
-    await msg.delete() # Remove the "generating..." message
-
-    if image_url:
-        await context.bot.send_photo(chat_id=chat_id, photo=image_url, caption=f"Here is your generated image for: **{query}**", parse_mode='Markdown')
-        logger.info(f"[{chat_id}] Generated and sent image for query: {query}")
-    else:
-        await update.message.reply_text("Sorry, I was unable to generate the image. The service might be busy. Please try again later.")
-        logger.warning(f"[{chat_id}] Failed to generate image for query: {query}")
-'''
 # --- MODIFIED: Background task for /img command ---
 def sync_fetch_pexels_image(query: str) -> str | None:
     """Synchronous function to handle Pexels API requests."""
@@ -1898,7 +1869,110 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         
         
     ]
+    
     temp_msgs = []
+    try:
+        # 1. Fast Sticker
+        sticker_msg = await context.bot.send_sticker(chat_id=chat_id, sticker=random.choice(stickers))
+        temp_msgs.append(sticker_msg)
+
+        # 2. Smooth & Fast Progress Bar
+        # Hum 5 steps use karenge par 100% tak jayenge (20% each step)
+        progress_msg = await context.bot.send_message(
+            chat_id=chat_id, 
+            text="🚀 **Laila is loading...**\n`░░░░░░░░░░` 0%", 
+            parse_mode='Markdown'
+        )
+        temp_msgs.append(progress_msg)
+
+        for i in range(1, 6):
+            await asyncio.sleep(0.1)  # Super fast speed
+            percent = i * 20          # 20, 40, 60, 80, 100
+            # 10 blocks total (2 blocks per 20%)
+            bar = "█" * (i * 2) + "░" * (10 - (i * 2))
+            try:
+                await progress_msg.edit_text(
+                    text=f"🚀 **Laila is loading...**\n`{bar}` {percent}%", 
+                    parse_mode='Markdown'
+                )
+            except:
+                pass
+
+        # 3. Cleanup: Sticker aur Bar hatao
+        for msg in temp_msgs:
+            try: await msg.delete()
+            except: pass
+            
+    except Exception as e:
+        print(f"Animation Error: {e}")
+
+    # --- 🏠 FINAL START MENU ---
+    bot_info = await context.bot.get_me()
+    keyboard = [
+        [
+            InlineKeyboardButton("🚀 Features", callback_data="start_features"),
+            InlineKeyboardButton("🎮 Game Zone", callback_data="start_games")
+        ],
+        [InlineKeyboardButton("➕ Add Me To Your Group", url=f"https://t.me/{bot_info.username}?startgroup=true")]
+    ]
+    
+    photo_url = 'AgACAgUAAxkBAAIIKGigVdAK07aRr9QiXpRalahcPO2pAAIL0DEblXUBVSY5LS31XxPSAQADAgADeAADNgQ'
+    welcome_text = f"Hey {user_name}! 👋\n\nI'm **Laila**, your advanced AI companion. 💖\n\n👇 **Choose an option:**"
+
+    try:
+        await context.bot.send_photo(
+            chat_id=chat_id, 
+            photo=photo_url, 
+            caption=welcome_text, 
+            reply_markup=InlineKeyboardMarkup(keyboard), 
+            parse_mode='Markdown'
+        )
+    except:
+        await context.bot.send_message(
+            chat_id=chat_id, 
+            text=welcome_text, 
+            reply_markup=InlineKeyboardMarkup(keyboard), 
+            parse_mode='Markdown'
+        )
+
+# --- 🛠 FIXED CALLBACK HANDLER ---
+async def start_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    data = query.data
+    user_name = update.effective_user.first_name
+    await query.answer()
+    
+    # Safety Check: Message photo hai ya text?
+    is_photo = bool(query.message.photo or query.message.caption)
+
+    if data == "start_features":
+        text = "📂 **Laila's Quick Features**\n\nI can do AI Chat, Image Gen, Lyrics, and more!\n\nUse `/help` for all commands."
+        kb = [[InlineKeyboardButton("🔙 Back", callback_data="start_back")]]
+        
+    elif data == "start_games":
+        text = "🎮 **Laila's Game Zone**\n\n• `/xoxo` - Tic-Tac-Toe\n• `/game` - RPG Menu\n• `/work` - Earn Money"
+        kb = [[InlineKeyboardButton("🔙 Back", callback_data="start_back")]]
+        
+    elif data == "start_back":
+        bot_info = await context.bot.get_me()
+        text = f"Hey {user_name}! 👋\n\nI'm **Laila**, your advanced AI companion. 💖"
+        kb = [
+            [InlineKeyboardButton("🚀 Features", callback_data="start_features"),
+             InlineKeyboardButton("🎮 Game Zone", callback_data="start_games")],
+            [InlineKeyboardButton("➕ Add Me To Your Group", url=f"https://t.me/{bot_info.username}?startgroup=true")]
+        ]
+
+    try:
+        if is_photo:
+            await query.edit_message_caption(caption=text, reply_markup=InlineKeyboardMarkup(kb), parse_mode='Markdown')
+        else:
+            await query.edit_message_text(text=text, reply_markup=InlineKeyboardMarkup(kb), parse_mode='Markdown')
+    except Exception as e:
+        print(f"Button Error: {e}")
+
+
+    
+   ''' temp_msgs = []
     try:
         # 1. Sticker bhejo aur track karo
         sticker_msg = await context.bot.send_sticker(chat_id=chat_id, sticker=random.choice(stickers))
@@ -1995,43 +2069,9 @@ async def start_callback_handler(update: Update, context: ContextTypes.DEFAULT_T
             ]
             await query.edit_message_caption(caption=text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
     except Exception as e:
-        print(f"Start Callback Error: {e}")
+        print(f"Start Callback Error: {e}")'''
 
-'''async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    chat_id = update.effective_chat.id
-    ping_start = time.time()
-    msg = await context.bot.send_message(chat_id=chat_id, text="Calculating stats...")
-    ping_end = time.time()
-    
-    uptime = datetime.now() - start_time
-    hours, remainder = divmod(uptime.seconds, 3600)
-    minutes, seconds = divmod(remainder, 60)
-    uptime_str = f"{uptime.days}d {hours}h {minutes}m {seconds}s"
-    ram_usage = psutil.virtual_memory().percent
-    cpu_usage = psutil.cpu_percent(interval=1)
-    disk_usage = psutil.disk_usage('/').percent
-    response_text = (
-        "❤️ **Laila's Live Stats** ❤️\n\n"
-        f"⚡️ **Ping**: `{int((ping_end - ping_start) * 1000)}ms`\n"
-        f"⏳ **Uptime**: `{uptime_str}`\n"
-        f"🧠 **RAM**: `{ram_usage}%`\n"
-        f"💻 **CPU**: `{cpu_usage}%`\n"
-        f"💾 **Disk**: `{disk_usage}%`\n\n"
-        "✨ by Adhyan ✨"
-    )
-    
-    await msg.delete() # Delete "Calculating stats..." message
-    photo_file_id = 'AgACAgUAAxkBAAIIKGigVdAK07aRr9QiXpRalahcPO2pAAIL0DEblXUBVSY5LS31XxPSAQADAgADeAADNgQ'
-    try:
-        await context.bot.send_photo(
-            chat_id=chat_id,
-            photo=photo_file_id,
-            caption=response_text,
-            parse_mode='Markdown'
-        )
-    except Exception as e:
-        logger.error(f"Failed to send photo with stats command: {e}")
-        await context.bot.send_message(chat_id=chat_id, text=response_text, parse_mode='Markdown')'''
+
 import time
 import psutil
 from datetime import datetime
@@ -3561,12 +3601,7 @@ def main() -> None:
     application.add_handler(CommandHandler("endgame", end_xoxo_command))
 
     # 2. Phir saare Callback Handlers (Buttons ke liye)
-    # Order: XOXO -> Start -> Help -> Game.py
-    application.add_handler(CallbackQueryHandler(xoxo_callback, pattern="^xoxo_"))
-    application.add_handler(CallbackQueryHandler(start_callback_handler, pattern="^start_"))
-    application.add_handler(CallbackQueryHandler(help_callback_handler, pattern="^help_"))
-    application.add_handler(CallbackQueryHandler(game.handle_game_callback)) # Ye baki sab pakad lega
-
+    # 
     # 3. Phir Status Updates (Welcome message)
     application.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, welcome_new_members))
 
