@@ -3473,7 +3473,17 @@ def main() -> None:
     # Owner-Only Sudo Management Commands (BROADCAST_ADMIN_ID required)
     application.add_handler(CommandHandler("addsudo", add_sudo_command))
     application.add_handler(CommandHandler("removesudo", remove_sudo_command))
+    # 1. Pehle Commands
+    # 2. Phir Callbacks (Dhyan se order dekho)
+    # Pattern dena zaroori hai taaki ye sirf start buttons pakde
+    application.add_handler(CallbackQueryHandler(start_callback_handler, pattern="^start_"))
+    application.add_handler(CallbackQueryHandler(xoxo_callback, pattern="^xoxo_"))
+    application.add_handler(CallbackQueryHandler(help_callback_handler, pattern="^help_"))
+    
+    # 3. Game callback sabse last mein kyunki usme pattern nahi hai
+    application.add_handler(CallbackQueryHandler(game.handle_game_callback))
 
+    # ... baki code ...
     # --- Message handlers ---
     # ... existing handlers ...
     # main() function ke andar...
