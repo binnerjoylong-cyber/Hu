@@ -3219,7 +3219,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     # Header Image ya Emojis se start karte hain
     help_text = (
         "✨ **Laila Bot Help Menu** ✨\n\n"
-        “I am your all-in-one assistant! Click the buttons below to check the commands.\n\n"
+        " I am your all-in-one assistant! Click the buttons below to check the commands.\n\n"
         "💡 *Tip:  Select the Category !*"
     )
 
@@ -3309,98 +3309,8 @@ async def help_callback_handler(update: Update, context: ContextTypes.DEFAULT_TY
         await query.edit_message_text(texts[data], reply_markup=InlineKeyboardMarkup(back_button), parse_mode='Markdown')
 
 
-'''async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    user_id = str(update.effective_user.id)
-    is_sudo = user_id == str(BROADCAST_ADMIN_ID) or user_id in sudo_users
 
-    help_text = (
-        "❤️ **Laila Bot Commands** ❤️\n\n"
-        "Here's a list of everything I can do!\n\n"
-        
-        "**💬 General Commands**\n"
-        "`/start` - Start a conversation with me.\n"
-        "`/help` - Shows this help message.\n"
-        "`/about` - Learn more about me.\n"
-        "`/stats` - Check my live performance status.\n"
-        "`/id` - Get your User ID and the current Chat ID.\n\n"
-
-        "**🎨 Media & AI Commands**\n"
-        "`/gen <prompt>` - Generate an AI image from text.\n"
-        "`/img <query>` - Search for a high-quality photo.\n"
-        "`/lyrics <song>` - Find the lyrics for a song.\n"
-        "`/youtube <link>` - Download a YouTube video.\n"
-        "  -> *Tip: Just send a YouTube link and I'll download it automatically!* 😉\n\n"
-        
-        "**💡 Utility Commands**\n"
-        "`/tr <lang> <text>` - Translate text (or reply).\n"
-        "`/weather <city>` - Get the current weather.\n"
-        "`/crypto <symbol>` - Check cryptocurrency prices. (e.g., `/crypto bitcoin`)\n"
-        "`/define <word>` - Get the definition of a word.\n"
-        "`/ud <term>` - Search Urban Dictionary.\n"
-        "`/qr <text>` - Generate a QR code.\n"
-        "`/shorten <url>` - Shorten a long URL.\n"
-        "`/paste` - Reply to a message to paste it online.\n\n"
-        
-        "**🎮 Fun & Games**\n"
-        "`/meme` - Get a random meme.\n"
-        "`/joke` - I'll tell you a joke.\n"
-        "`/quote` - Get an inspirational quote.\n"
-        "`/advice` - Get a random piece of advice.\n"
-        "`/catfact` - Get a random cat fact.\n"
-        "`/dogfact` - Get a random dog fact with a picture.\n"
-        "`/couple` - Select a random couple in the group.\n"
-        "`/truth` - Get a random truth question.\n"
-        "`/dare` - Get a random dare.\n"
-        "`/slap` - Slap a user (reply to their message).\n"
-        "`/roast` - Roast a user (reply to their message).\n"
-        "`/rate- rate any thing`\n"
-        "`/roll` - Roll a dice (1-6).\n"
-        "`/coinflip` - Flip a coin.\n"
-        "`/startgame` - Start a number guessing game.\n"
-        "`/stopgame` - Stop the current game.\n\n"
-        
-        "**💸 Economy & Family Game (NEW!)**\n"
-        "`/game` or `/profile` - Open your main game menu.\n"
-        "`/leaderboard` - Show the global richest players.\n"
-        "`/marry` - Reply to a user to propose marriage.\n"
-        "`/adopt` - Reply to a user to adopt them.\n"
-        "`/divorce` - End your current marriage.\n"
-        "  -> *All other actions (work, farm, shop) are inside the /game menu!*\n\n"
-        
-        "**🔒 Admin Commands (For Group Admins)**\n"
-        "`/on` | `/off` - Turn me on or off in the group.\n"
-        "`/reboot` - Reboot me for the group.\n"
-        "`/reset` - Clear my conversation history for the group.\n"
-        "`/ban` | `/unban` - Ban or unban a user (reply).\n"
-        "`/kick` - Kick a user from the group (reply).\n"
-        "`/mute` | `/unmute` - Mute or unmute a user (reply).\n"
-        "`/setwelcome <msg>` - Set a custom welcome message.\n"
-        "`/setwelcomemedia` - Reply to media to set welcome media.\n"
-        "`/resetwelcome` - Reset welcome settings to default.\n"
-    )
-
-    if is_sudo:
-        sudo_help_text = (
-            "\n👑 **SUDO / OWNER Commands** 👑\n"
-            "`/poweron` | `/poweroff` - Turn me on/off globally.\n"
-            "`/broadcast` - Broadcast a message to all chats (reply).\n"
-            "`/adminstats` - Get a detailed bot health report.\n"
-            "`/show_chats` - List all chats I'm in (sent privately).\n"
-            "`/s_ban <chat> <user>` - Ban a user with my rights.\n"
-            "`/s_unban <chat> <user>` - Unban a user with my rights.\n"
-            "`/s_send <chat> <msg>` - Send a message to any chat.\n"
-            "`/forcedynamic` - Reset AI model to dynamic mode.\n"
-            "`/forcegemma` - Force AI model to Gemma-only.\n"
-            "`/forcedeepseek` - Force AI model to DeepSeek-only.\n"
-            "`/addsudo <id>` | `/removesudo <id>` - Manage Sudo users.\n"
-        )
-        help_text += sudo_help_text
-        
-    help_text += "\n\n✨ by Adhyan ✨"
     
-    await update.message.reply_text(help_text, parse_mode='Markdown', disable_web_page_preview=True)
-    logger.info(f"[{update.effective_chat.id}] /help command used.")
-'''
 async def spawn_boss_event(context: ContextTypes.DEFAULT_TYPE):
     """Randomly drops a treasure in a group chat."""
     # List of group IDs the bot is active in (from your known_users/groups)
