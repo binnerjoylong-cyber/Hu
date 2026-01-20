@@ -251,7 +251,7 @@ def get_google_sheet_connection():
         
         # --- FIX: setup_game ko call kiya jo game.py mein hai ---
         try:
-            game.setup_game(client) # spreadsheet ki jagah client bhejo zyada stable rehta hai
+            game.init_game_module(spreadsheet) # spreadsheet ki jagah client bhejo zyada stable rehta hai
         except Exception as e:
             logger.error(f"Game Init Error: {e}")
         
@@ -303,7 +303,7 @@ def get_google_sheet_connection():
         return client, None
     except Exception as e:
         logger.error(f"Error connecting to Google Sheets: {e}")
-        return None, f"Error connecting to Google Sheets: {e}"
+        return None, f"Error connecting to Google Sheets: {e}" '''
 
 # --- Function to clean message before logging ---
 def clean_message_for_logging(message: str, bot_username: str) -> str:
@@ -345,7 +345,7 @@ def load_known_users():
             known_users = set()
         logger.info(f"Loaded {len(known_users)} chats from Google Sheets.")
     except Exception as e:
-        logger.error(f"Error loading known users from Google Sheet: {e}")'''
+        logger.error(f"Error loading known users from Google Sheet: {e}")
 
 # --- NEW: Function to load sudo users from Google Sheets ---
 def load_sudo_users():
