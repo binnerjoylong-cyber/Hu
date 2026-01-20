@@ -3219,8 +3219,8 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     # Header Image ya Emojis se start karte hain
     help_text = (
         "✨ **Laila Bot Help Menu** ✨\n\n"
-        "Bhai, main aapka all-in-one assistant hoon! Neeche diye gaye buttons par click karke commands check karein.\n\n"
-        "💡 *Tip: Category select karein!*"
+        “I am your all-in-one assistant! Click the buttons below to check the commands.\n\n"
+        "💡 *Tip:  Select the Category !*"
     )
 
     keyboard = [
@@ -3264,40 +3264,41 @@ async def help_callback_handler(update: Update, context: ContextTypes.DEFAULT_TY
             "• `/start` - Bot start karein\n"
             "• `/stats` - Live performance\n"
             "• `/id` - Your & Chat ID\n"
-            "• `/about` - Mere baare mein jaano"
+            "• `/about` - about Laila"
         ),
         "help_media": (
             "**🎨 AI & Media**\n\n"
-            "• `/gen <prompt>` - AI Image banayein\n"
+            "• `/gen <prompt>` - AI Image Generation\n"
             "• `/lyrics <song>` - Song lyrics (Tap to Copy)\n"
-            "• `/youtube <link>` - Video download karein\n"
+            "• `/youtube <link>` - Video downloader \n"
             "• `/img <query>` - HD Photo search"
         ),
         "help_util": (
             "**🛠️ Utility Commands**\n\n"
             "• `/crypto <symbol>` - Live Crypto Rates\n"
             "• `/tr <lang> <text>` - Translation\n"
-            "• `/weather <city>` - Mausam ka haal\n"
+            "• `/weather <city>` - Live Weather\n"
             "• `/qr <text>` - Generate QR Code\n"
-            "• `/shorten <url>` - URL chhota karein"
+            "• `/shorten <url>` - URL Shortner"
         ),
         "help_game": (
             "**🎮 Games (Only Best Ones)**\n\n"
-            "• `/xoxo` - Tic-Tac-Toe khelien doston ke saath\n"
-            "• `/startgame` - Number guessing game start karein\n"
-            "• `/stopgame` - Game band karein\n"
-            "• `/endxoxo` - Tic-Tac-Toe khatam karein"
+            "• `/xoxo` - Tic-Tac-Toe \n"
+            "• `/startgame` - Number guessing game\n"
+            "• `/stopgame` - Game stop\n"
+            "• `/endxoxo` - Tic-Tac-Toe end"
         ),
         "help_admin": (
             "**🔒 Admin Only**\n\n"
-            "• `/on` | `/off` - Group mein bot activate/deactivate\n"
+            "• `/on` | `/off` -  bot activate/deactivate\n"
             "• `/ban` | `/mute` | `/kick` - User management\n"
             "• `/setwelcome` - Custom welcome message"
         ),
         "help_sudo": (
             "👑 **Sudo / Owner Only**\n\n"
-            "• `/broadcast` - Sabko message bhejein\n"
+            "• `/broadcast` - broadcast\n"
             "• `/poweroff` - Global Shutdown\n"
+            "• `/poweron` - Global Poweron\n"
             "• `/adminstats` - Health report"
         )
     }
