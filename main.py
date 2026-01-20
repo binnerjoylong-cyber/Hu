@@ -1966,23 +1966,80 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     welcome_text = f"Hey {user_name}! 👋\n\nI'm **Laila**, your advanced AI companion. 💖\n\n👇 **Choose an option:**"
 
     try:
-        await context.bot.send_photo(
+        # Pehle Video bhejte hain, agar ye video file hai toh chal jayega
+        await context.bot.send_video(
             chat_id=chat_id, 
-            photo=photo_url, 
+            video=media_url, 
             caption=welcome_text, 
-            reply_markup=InlineKeyboardMarkup(keyboard), 
+            reply_markup=reply_markup, 
             parse_mode='Markdown'
         )
-    except:
-        await context.bot.send_message(
-            chat_id=chat_id, 
-            text=welcome_text, 
-            reply_markup=InlineKeyboardMarkup(keyboard), 
-            parse_mode='Markdown'
-        )
+    except Exception:
+        try:
+            # Agar video fail hua, toh Photo try karein
+            await context.bot.send_photo(
+                chat_id=chat_id, 
+                photo=media_url, 
+                caption=welcome_text, 
+                reply_markup=reply_markup, 
+                parse_mode='Markdown'
+            )
+        except Exception:
+            # Dono fail hue toh sirf Text message
+            await context.bot.send_message(
+                chat_id=chat_id, 
+                text=welcome_text, 
+                reply_markup=reply_markup, 
+                parse_mode='Markdown'
+            )
 
 # --- 🛠 FIXED CALLBACK HANDLER ---
 async def start_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    data = query.data
+    user_name = update.effective_user.first_name
+    await query.answer()
+    
+    # 1. Check karein ki message mein koi bhi media (photo/video/animation) hai ya nahi
+    is_media = bool(query.message.photo or query.message.video or query.message.animation or query.message.caption)
+
+    if data == "start_features":
+        text = "📂 **Laila's Quick Features**\n\nI can do AI Chat, Image Gen, Lyrics, and more!\n\nUse `/help` for all commands."
+        kb = [[InlineKeyboardButton("🔙 Back", callback_data="start_back")]]
+        
+    elif data == "start_games":
+        text = "🎮 **Laila's Game Zone**\n\n• `/xoxo` - Tic-Tac-Toe\n• `/game` - RPG Menu\n• `/work` - Earn Money"
+        kb = [[InlineKeyboardButton("🔙 Back", callback_data="start_back")]]
+        
+    elif data == "start_back":
+        bot_info = await context.bot.get_me()
+        text = f"Hey {user_name}! 👋\n\nI'm **Laila**, your advanced AI companion. 💖"
+        kb = [
+            [InlineKeyboardButton("🚀 Features", callback_data="start_features"),
+             InlineKeyboardButton("🎮 Game Zone", callback_data="start_games")],
+            [InlineKeyboardButton("➕ Add Me To Your Group", url=f"https://t.me/{bot_info.username}?startgroup=true")]
+        ]
+
+    try:
+        # 2. Agar media hai toh edit_message_caption use karein
+        if is_media:
+            await query.edit_message_caption(
+                caption=text, 
+                reply_markup=InlineKeyboardMarkup(kb), 
+                parse_mode='Markdown'
+            )
+        else:
+            # 3. Agar normal text message hai
+            await query.edit_message_text(
+                text=text, 
+                reply_markup=InlineKeyboardMarkup(kb), 
+                parse_mode='Markdown'
+            )
+    except Exception as e:
+        # Kai baar text same hone par Telegram error deta hai, usse bachne ke liye print
+        print(f"Button Error: {e}")
+        
+'''async def start_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     data = query.data
     user_name = update.effective_user.first_name
@@ -2014,7 +2071,7 @@ async def start_callback_handler(update: Update, context: ContextTypes.DEFAULT_T
         else:
             await query.edit_message_text(text=text, reply_markup=InlineKeyboardMarkup(kb), parse_mode='Markdown')
     except Exception as e:
-        print(f"Button Error: {e}")
+        print(f"Button Error: {e}")'''
 
 
 import time
