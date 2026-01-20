@@ -1204,6 +1204,61 @@ async def display_leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE
     except Exception as e:
         logger.error(f"Error in display_leaderboard: {e}", exc_info=True)
         await query.edit_message_text(text="An error occurred while fetching the leaderboard.")
+async def work_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    # 1. Fetch player data
+    data = await get_player_data(user.id, user.first_name)
+    if not data:
+        return await update.effective_message.reply_text("❌ Error: Could not retrieve your data.")
+
+    now = time.time()
+    last_work = data.get("LastWork", 0)
+
+    # 2. Cooldown Check (20 Minutes)
+    if now - last_work < COOLDOWNS["work"]:
+        remaining = int((COOLDOWNS["work"] - (now - last_work)) // 60)
+        return await update.effective_message.reply_text(
+            f"⏳ You are exhausted! Come back in {remaining} minutes."
+        )
+
+    # 3. Calculate Earnings and XP
+    gain = random.randint(EARNINGS["work"][0], EARNINGS["work"][1])
+    xp_gain = 50
+    
+    # Lucky Bonus (5% chance)
+    bonus_text = ""
+    if random.random() < 0.05:
+        bonus = random.randint(500, 1000)
+        gain += bonus
+        bonus_text = f"\n✨ **Jackpot!** You received an extra ₹{bonus} bonus!"
+
+    # 4. Update Data Object
+    data["Money"] += gain
+    data["XP"] += xp_gain
+    data["LastWork"] = now
+    
+    # Level Up Logic
+    old_level = data["Level"]
+    new_level = (data["XP"] // 1000) + 1
+    data["Level"] = new_level
+
+    # 5. Save to Google Sheets
+    success = await update_player_data(data)
+    
+    if success:
+        msg = (
+            f"👷‍♂️ **Work Complete!**\n\n"
+            f"💰 You earned: ₹{gain}\n"
+            f"⭐ XP Gained: +{xp_gain}\n"
+            f"{bonus_text}"
+        )
+        if new_level > old_level:
+            msg += f"\n\n🎊 **LEVEL UP!** You are now Level {new_level}!"
+            
+        await update.effective_message.reply_text(msg, parse_mode='Markdown')
+    else:
+        await update.effective_message.reply_text("❌ Database update failed. Please contact admin.")
+
 
 async def handle_heal(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Heals the user using items from their inventory."""
