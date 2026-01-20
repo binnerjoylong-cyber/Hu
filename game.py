@@ -254,8 +254,112 @@ def _get_player_row(user_id: int) -> gspread.Cell | None:
     except Exception as e:
         logger.error(f"Error finding user {user_id}: {e}", exc_info=True)
         return None
-
 async def get_player_data(user_id: int, user_name: str) -> dict | None:
+    """Fetches or creates a player's account. Returns a dictionary mapped by headers."""
+    global game_sheet
+    if game_sheet is None:
+        logger.error("Game sheet is not initialized!")
+        return None
+
+    # Use a thread for blocking gspread call
+    cell = await asyncio.to_thread(_get_player_row, user_id)
+    
+    player_data = {}
+    
+    if cell:
+        # --- USER FOUND: FETCH DATA ---
+        row_values = await asyncio.to_thread(game_sheet.row_values, cell.row)
+        
+        # Map values to headers
+        for i, header in enumerate(PLAYER_HEADERS):
+            try:
+                player_data[header] = row_values[i]
+            except IndexError:
+                # Agar koi naya column add hua hai jo sheet mein nahi hai
+                player_data[header] = "0" if header not in ["UserName", "Pet", "Weapon", "ClanName", "ClanRole"] else "None"
+        
+        # Update username if it changed
+        if player_data.get("UserName") != user_name:
+            try:
+                await asyncio.to_thread(game_sheet.update_cell, cell.row, 2, user_name)
+                player_data["UserName"] = user_name
+            except Exception as e:
+                logger.error(f"Failed to update username: {e}")
+                
+    else:
+        # --- USER NOT FOUND: CREATE NEW ACCOUNT (28 COLUMNS) ---
+        default_row = {
+            "UserID": str(user_id),
+            "UserName": user_name,
+            "Money": 500,
+            "Bank": 0,
+            "Health": 100,
+            "MarriedToID": "0",
+            "ChildrenIDs": "[]",
+            "Pet": "None",
+            "Inventory": "{}",
+            "Assets": "{}",
+            "Weapon": "None",
+            "LastWork": 0.0, "LastFarm": 0.0, "LastCrime": 0.0, "LastMine": 0.0,
+            "LastRob": 0.0, "LastKill": 0.0, "LastHeal": 0.0, "LastTask": 0.0, "LastDaily": 0.0,
+            "Kills": 0,
+            "Deaths": 0,
+            "StreakCount": 0,
+            "XP": 0,
+            "Level": 1,
+            "Bounty": 0,
+            "ClanName": "None",
+            "ClanRole": "None"
+        }
+        
+        # Ensure values are in the correct header order
+        new_row_values = [str(default_row.get(h, "0")) for h in PLAYER_HEADERS]
+        try:
+            await asyncio.to_thread(game_sheet.append_row, new_row_values)
+            logger.info(f"✅ Created new game account for {user_name} ({user_id})")
+            player_data = default_row
+        except Exception as e:
+            logger.error(f"❌ Failed to create account for {user_id}: {e}", exc_info=True)
+            return None
+
+    # --- SAFE TYPE CONVERSION & JSON PARSING ---
+    # Is part ko hamesha 'try-except' ke andar rakhte hain taaki string "100" number ban sake
+    try:
+        # Integer conversions
+        int_fields = ["UserID", "Money", "Bank", "Health", "Kills", "Deaths", "XP", "Level", "Bounty", "StreakCount"]
+        for field in int_fields:
+            if field in player_data:
+                try:
+                    # float conversion isliye taaki agar "100.0" likha ho toh crash na ho
+                    player_data[field] = int(float(player_data[field]))
+                except:
+                    player_data[field] = 0 if field != "Level" else 1
+
+        # Float/Time conversions
+        for h in PLAYER_HEADERS:
+            if h.startswith("Last"):
+                try:
+                    player_data[h] = float(player_data[h])
+                except:
+                    player_data[h] = 0.0
+
+        # JSON Fields Parsing (ChildrenIDs, Inventory, Assets)
+        json_fields = {"ChildrenIDs": [], "Inventory": {}, "Assets": {}}
+        for field, default_val in json_fields.items():
+            raw_val = player_data.get(field, str(default_val))
+            try:
+                parsed = json.loads(raw_val)
+                player_data[field] = parsed if isinstance(parsed, type(default_val)) else default_val
+            except:
+                player_data[field] = default_val
+        
+        return player_data
+
+    except Exception as e:
+        logger.error(f"Critical data parsing error for {user_id}: {e}")
+        return player_data
+
+'''async def get_player_data(user_id: int, user_name: str) -> dict | None:
     """Fetches or creates a player's account. Returns a dictionary mapped by headers."""
     
     # Use a thread for blocking gspread call
@@ -358,7 +462,8 @@ async def get_player_data(user_id: int, user_name: str) -> dict | None:
 
     except (ValueError, TypeError) as e:
         logger.error(f"Data type error for user {user_id}: {e}. Returning raw data.")
-        return player_data # Return as-is, let handler fail
+        return player_data # Return as-is, let handler fail'''
+
 async def profile_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     data = await get_player_data(user.id, user.full_name)
