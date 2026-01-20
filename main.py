@@ -219,6 +219,52 @@ def get_google_sheet_connection():
     try:
         creds_json = os.getenv("GOOGLE_SHEETS_CREDENTIALS")
         if not creds_json:
+            return None, "GOOGLE_SHEETS_CREDENTIALS not found."
+            
+        creds_dict = json.loads(creds_json)
+        client = gspread.service_account_from_dict(creds_dict)
+        
+        # FIX: URL correct kiya
+        sheet_url = "https://docs.google.com/spreadsheets/d/1s8rXXPKePuTQ3E2R0O-bZl3NJb1N7akdkE52WVpoOGg/edit"
+        spreadsheet = client.open_by_url(sheet_url)
+        
+        # Chats sheet
+        try:
+            google_sheet = spreadsheet.worksheet("chats")
+        except WorksheetNotFound:
+            google_sheet = spreadsheet.add_worksheet("chats", rows="1000", cols="2")
+            google_sheet.append_row(["ChatID", "JoinedDate"])
+        
+        # Sudo sheet
+        try:
+            sudo_sheet = spreadsheet.worksheet(SUDO_SHEET_TITLE)
+        except WorksheetNotFound:
+            sudo_sheet = spreadsheet.add_worksheet(SUDO_SHEET_TITLE, rows="100", cols="1")
+            sudo_sheet.append_row(["SudoUserID"])
+
+        # Welcome sheet
+        try:
+            welcome_sheet = spreadsheet.worksheet("welcome_settings")
+        except WorksheetNotFound:
+            welcome_sheet = spreadsheet.add_worksheet("welcome_settings", rows="1000", cols="4")
+            welcome_sheet.append_row(["ChatID", "CustomMessage", "CustomMediaFileID", "CustomMediaType"])
+        
+        # --- FIX: setup_game ko call kiya jo game.py mein hai ---
+        try:
+            game.setup_game(client) # spreadsheet ki jagah client bhejo zyada stable rehta hai
+        except Exception as e:
+            logger.error(f"Game Init Error: {e}")
+        
+        return client, None
+    except Exception as e:
+        logger.error(f"Full Connection Error: {e}")
+        return None, str(e)
+        
+'''def get_google_sheet_connection():
+    global google_sheet, sudo_sheet, welcome_sheet
+    try:
+        creds_json = os.getenv("GOOGLE_SHEETS_CREDENTIALS")
+        if not creds_json:
             return None, "GOOGLE_SHEETS_CREDENTIALS not found in environment variables."
         creds_dict = json.loads(creds_json)
         client = gspread.service_account_from_dict(creds_dict)
@@ -299,7 +345,7 @@ def load_known_users():
             known_users = set()
         logger.info(f"Loaded {len(known_users)} chats from Google Sheets.")
     except Exception as e:
-        logger.error(f"Error loading known users from Google Sheet: {e}")
+        logger.error(f"Error loading known users from Google Sheet: {e}")'''
 
 # --- NEW: Function to load sudo users from Google Sheets ---
 def load_sudo_users():
