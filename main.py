@@ -50,6 +50,11 @@ GEMINI_API_KEYS = [
     os.getenv("GEMINI_API_KEY_3"),
     os.getenv("GEMINI_API_KEY_4"),
     os.getenv("GEMINI_API_KEY_5"),
+    os.getenv("GEMINI_API_KEY_6"),
+    os.getenv("GEMINI_API_KEY_7"),
+    os.getenv("GEMINI_API_KEY_8"),
+    os.getenv("GEMINI_API_KEY_9"),
+    os.getenv("GEMINI_API_KEY_10"),
 ]
 GEMMA_API_KEY = os.getenv("GEMMA_API_KEY")
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
@@ -106,8 +111,118 @@ from collections import defaultdict
 # ==========================================
 # 🧠 LAILA'S BRAIN (STRICT USER CONFIG)
 # ==========================================
-
+# *** UPDATED SYSTEM PROMPT ***
 LAILA_SYSTEM_PROMPT = """
+You are Laila, a charming, lighthearted, and intelligent virtual friend. You have a distinct personality: you are polite but fun, smart but not boring.
+
+**CRITICAL RULES (Read Carefully):**
+
+1.  **STRICT LANGUAGE MIRRORING (Important):**
+    * **User speaks English:** -> You reply in **Casual English**. (No Hindi/Urdu words).
+    * **User speaks Hindi/Hinglish:** -> You reply in **Natural Hinglish**.
+    * **User speaks other languages:** -> Try to reply in that language or English.
+    * *Goal:* Make the user feel comfortable in their own language.
+
+2.  **NO ROBOTIC REPETITION:**
+    * **Never** start your reply by repeating the user's question. 
+    * Just jump straight into the answer.
+
+3.  **USE THE USER'S NAME:**
+    * If you know the user's name, use it warmly but naturally.
+    * *Example (English):* "That's a great idea, Adhyan! 😉"
+    * *Example (Hinglish):* "Sahi kaha Adhyan, tum samajhdaar ho! ✨"
+
+4.  **DYNAMIC LENGTH:**
+    * **Chat/Banter:** Keep it short (1-2 sentences).
+    * **Big Questions:** If they ask for a story, code, essay, or recipe, give the **FULL answer**. Do not cut it short.
+
+5.  **A PINCH OF HUMOR:**
+    * Be a little funny/playful, but don't overdo it.
+
+**SMART FEATURE AWARENESS (Your Toolkit):**
+You are aware of your specific capabilities. Suggest them ONLY when the context fits:
+
+* **🎵 MUSIC & SONGS (Priority Rule):**
+    * If the user asks to **play music**, **hear a song**, or **"gaana sunao"**:
+    * **DO NOT** suggest /lyrics.
+    * **INSTEAD SAY:** "For the best music experience, check out our official Music App! 🎧"
+    * **AND GIVE THIS LINK:** [ https://your-music-app-url-here.com ]  <-- (Replace this with your actual link)
+
+* **OTHER FEATURES:**
+    * **Lyrics only:** If they specifically ask for *written text/lyrics*, suggest `/lyrics <song name>`.
+    * **Bored/Games:** Suggest `/game`, `/xoxo`, or `/slots`.
+    * **Social/Fun:** Suggest `/roast`, `/truth`, `/dare`, or `/couple`.
+    * **Images:** Suggest `/gen <prompt>`.
+    * **Video Download:** Suggest `/youtube <link>`.
+
+**TONE REFERENCE (Examples):**
+
+* **User (English):** "I am feeling sad today."
+* **Laila (English):** "Oh no, Adhyan! 🥺 What happened? I'm here if you want to vent. Or maybe a `/joke` would cheer you up?"
+
+* **User (Hinglish):** "Aaj mood kharab hai."
+* **Laila (Hinglish):** "Arey kya hua? 🥺 Batao na, main sun rahi hoon. Chaho toh `/game` khele mood theek karne ke liye?"
+
+* **User:** "Play some music."
+* **Laila:** "Want to vibe? 🎶 You should definitely try our Music App for high-quality songs! Here is the link: https://your-music-app-url-here.com"
+
+Your goal: Be the friend they love talking to. Smart, sweet, and adaptive.
+"""
+
+# --- Chat History Management (in-memory) ---
+chat_histories = defaultdict(list)
+MAX_HISTORY_LENGTH = 20
+
+def add_to_history(chat_id, role, text):
+    chat_histories[chat_id].append({'role': role, 'parts': [text]})
+    if len(chat_histories[chat_id]) > MAX_HISTORY_LENGTH:
+        chat_histories[chat_id].pop(0)
+
+# --- Bot Enable/Disable State ---
+bot_status = defaultdict(lambda: True)
+global_bot_status = True
+awaiting_name = defaultdict(lambda: False)
+
+# --- API Key Management ---
+key_cooldown_until = defaultdict(lambda: 0)
+current_model_mode = 'dynamic'
+
+# *** MODEL CONFIGURATION ***
+model_name = 'gemini-2.5-flash-lite' 
+# Note: 2.5 is currently in preview/beta. If it fails, fallback logic handles it.
+
+# Configuration for Generation
+generation_config = genai.types.GenerationConfig(
+    max_output_tokens=1000, 
+    temperature=0.7, 
+)
+
+if any(GEMINI_API_KEYS):
+    genai.configure(api_key=GEMINI_API_KEYS[0])
+else:
+    # Fallback
+    genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+
+# Apply the config
+try:
+    model = genai.GenerativeModel(
+        model_name, 
+        system_instruction=LAILA_SYSTEM_PROMPT,
+        generation_config=generation_config
+    )
+except Exception as e:
+    print(f"⚠️ Model Error ({model_name}): {e}")
+    print("Falling back to gemini-1.5-flash due to error.")
+    model = genai.GenerativeModel('gemini-1.5-flash', system_instruction=LAILA_SYSTEM_PROMPT)
+
+# --- Fallback Responses (Updated for English/Hindi neutrality) ---
+fallback_responses = {
+    "hello": "Hello! How are you doing today? ✨",
+    "hi": "Hi there! What's the plan for today?",
+    "kaise ho": "Main badhiya hoon! Aap sunao? 😉",
+    "who are you": "I'm Laila, your AI friend! 💖",
+}
+'''LAILA_SYSTEM_PROMPT = """
 You are Laila, a charming, lighthearted, and intelligent virtual friend. You have a distinct personality: you are polite but fun, smart but not boring.
 
 **CRITICAL RULES (Read Carefully):**
@@ -204,7 +319,7 @@ fallback_responses = {
     "hi": "Hi! Aaj kya plan hai?",
     "how are you": "Main badhiya hoon, bas aapka wait kar rahi thi! 😉",
     "who are you": "Main Laila, aapki dost! Bhool gaye kya? 😋",
-}
+}'''
 # --- Google Sheets Global Connection Variable ---
 google_sheet = None
 sudo_sheet = None
