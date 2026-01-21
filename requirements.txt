@@ -16,3 +16,4 @@ aiohttp
 httpx
 pillow
 groq
+pymongo
