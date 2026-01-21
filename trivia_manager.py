@@ -12,29 +12,28 @@ from telegram.ext import ContextTypes, Application
 logger = logging.getLogger(__name__)
 
 # --- ⚙️ CONFIGURATION ---
+# In emojis ko hum use karenge
 EMOJI_POOL = ["🍎", "🚀", "💎", "🐱", "🎸", "🍕", "🌈", "🔥", "🦄", "🍦", "⚽", "🎮", "🔔", "🎁", "🧿", "🍀", "🍩", "🍹", "🎈", "🧸"]
 
-# Yahan apni Frame ki Telegram FILE ID paste karein
+# Apni Frame ki File ID yahan daalein
 FRAME_FILE_ID = "AgACAgUAAyEFAATHcBuEAAICvGlwh5iWzzYJvgSuOE-EPOtjTa7XAAJnDWsb5FOJVwFVYd7UN29_AQADAgADeQADOAQ" 
 
 class TriviaGame:
     def __init__(self, application: Application, known_users_list):
         self.application = application
-        self.known_users = known_users_list # Yeh main.py ki known_users list hai
-        self.current_mode = "emoji" # Sabse pehle Emoji game aayega
+        self.known_users = known_users_list
+        self.current_mode = "emoji"
         self.active_games = {} 
         self.cached_frame = None
 
     async def get_frame_from_telegram(self):
-        """Telegram se frame download karke memory me cache karta hai"""
         if self.cached_frame is None:
             try:
                 file = await self.application.bot.get_file(FRAME_FILE_ID)
                 photo_bytes = await file.download_as_bytearray()
                 self.cached_frame = bytes(photo_bytes)
-                logger.info("✅ Game Frame cached successfully!")
             except Exception as e:
-                logger.error(f"❌ Error fetching File ID: {e}")
+                logger.error(f"Error fetching Frame: {e}")
         return self.cached_frame
 
     async def create_emoji_image(self, target_emoji):
@@ -43,31 +42,34 @@ class TriviaGame:
             if not frame_data: return None
 
             img = Image.open(io.BytesIO(frame_data)).convert("RGBA")
+            
+            # --- FIXED: EMOJI RENDERING ---
+            # Hum ek naya canvas banayenge emoji ke liye
+            # Taki font issue ki wajah se 'white bot' na dikhe
             draw = ImageDraw.Draw(img)
             
-            # Font Logic (Render/Linux support)
+            # Bada font size taaki clear dikhe
+            # Render/Linux par NotoColorEmoji font hona zaroori hai proper emoji ke liye
+            # Agar nahi hai toh ye default use karega
             try:
-                font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 160)
+                font = ImageFont.truetype("/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf", 150)
             except:
-                try: font = ImageFont.truetype("arial.ttf", 160)
+                try: font = ImageFont.truetype("arial.ttf", 150)
                 except: font = ImageFont.load_default()
             
-            # --- Emoji Center Logic ---
             width, height = img.size
-            bbox = draw.textbbox((0, 0), target_emoji, font=font)
-            tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
-            x, y = (width - tw) // 2, (height - th) // 2 - 10
-            
-            draw.text((x, y), target_emoji, font=font, fill=(255, 255, 255, 255))
+            # Center coordinates
+            # Emoji ko draw karne ka naya tarika (embedded color support check)
+            draw.text((width//2, height//2), target_emoji, font=font, anchor="mm", embedded_color=True)
             
             img_byte_arr = io.BytesIO()
             img.save(img_byte_arr, format='PNG')
             img_byte_arr.seek(0)
             return img_byte_arr
         except Exception as e:
-            logger.error(f"Pillow Error: {e}")
+            logger.error(f"Pillow Emoji Error: {e}")
             return None
-
+            
     def get_api_question(self):
         try:
             url = "https://opentdb.com/api.php?amount=1&type=multiple&difficulty=easy"
