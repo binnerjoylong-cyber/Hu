@@ -2155,39 +2155,6 @@ async def start_callback_handler(update: Update, context: ContextTypes.DEFAULT_T
         # Kai baar text same hone par Telegram error deta hai, usse bachne ke liye print
         print(f"Button Error: {e}")
         
-'''async def start_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    query = update.callback_query
-    data = query.data
-    user_name = update.effective_user.first_name
-    await query.answer()
-    
-    # Safety Check: Message photo hai ya text?
-    is_photo = bool(query.message.photo or query.message.caption)
-
-    if data == "start_features":
-        text = "📂 **Laila's Quick Features**\n\nI can do AI Chat, Image Gen, Lyrics, and more!\n\nUse `/help` for all commands."
-        kb = [[InlineKeyboardButton("🔙 Back", callback_data="start_back")]]
-        
-    elif data == "start_games":
-        text = "🎮 **Laila's Game Zone**\n\n• `/xoxo` - Tic-Tac-Toe\n• `/game` - RPG Menu\n• `/work` - Earn Money"
-        kb = [[InlineKeyboardButton("🔙 Back", callback_data="start_back")]]
-        
-    elif data == "start_back":
-        bot_info = await context.bot.get_me()
-        text = f"Hey {user_name}! 👋\n\nI'm **Laila**, your advanced AI companion. 💖"
-        kb = [
-            [InlineKeyboardButton("🚀 Features", callback_data="start_features"),
-             InlineKeyboardButton("🎮 Game Zone", callback_data="start_games")],
-            [InlineKeyboardButton("➕ Add Me To Your Group", url=f"https://t.me/{bot_info.username}?startgroup=true")]
-        ]
-
-    try:
-        if is_photo:
-            await query.edit_message_caption(caption=text, reply_markup=InlineKeyboardMarkup(kb), parse_mode='Markdown')
-        else:
-            await query.edit_message_text(text=text, reply_markup=InlineKeyboardMarkup(kb), parse_mode='Markdown')
-    except Exception as e:
-        print(f"Button Error: {e}")'''
 
 
 import time
@@ -2204,10 +2171,10 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     ping_ms = int((ping_end - ping_start) * 1000)
     
     # Ping Quality Indicator
-    if ping_ms < 60:
+    if ping_ms < 200:
         ping_status = "🟢 Smooth"
-    elif ping_ms < 150:
-        ping_status = "🟡 Fair"
+    elif ping_ms < 700:
+        ping_status = "🟡 Medium Load"
     else:
         ping_status = "🔴 High Load"
 
