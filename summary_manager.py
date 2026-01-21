@@ -90,42 +90,7 @@ class SummaryManager:
             except Exception as e:
                 logger.error(f"AI Prep Error for {chat_id}: {e}")
    
-   ''' async def prepare_summaries(self):
-        logger.info("--- 7:50 PM: PREPARING SUMMARIES ---")
-        collections = await self.db.list_collection_names()
-        for coll_name in collections:
-            if not coll_name.startswith("chat_"): continue
-            
-            chat_id = int(coll_name.replace("chat_", ""))
-            messages = await self.db[coll_name].find().sort("time", 1).to_list(length=3000)
-            
-            if not messages or len(messages) < 5: continue
-
-            formatted_logs = "\n".join([f"{m['user']}: {m['text']}" for m in messages])
-            
-            prompt = (
-                f"Narrate today's highlights as a witty storyteller. Title: 'THE DAILY CHRONICLES'. "
-                f"Rule: Short chat = 50-100 words, Long chat = 500-600 words. "
-                f"Tone: Elite British English. Mention key users and 'STAR OF THE NIGHT'.\n\nLOGS:\n{formatted_logs}"
-            )
-
-            try:
-                completion = self.ai_client.chat.completions.create(
-                    model="llama-3.1-8b-instant",
-                    messages=[{"role": "user", "content": prompt}],
-                    max_tokens=1000,
-                    temperature=0.7,
-                )
-                await self.db["pending_summaries"].update_one(
-                    {"chat_id": chat_id},
-                    {"$set": {"summary": completion.choices[0].message.content, "status": "ready"}},
-                    upsert=True
-                )
-                await self.db[coll_name].delete_many({})
-                logger.info(f"✅ Summary ready for {chat_id}")
-            except Exception as e:
-                logger.error(f"AI Prep Error: {e}")'''
-
+   
     async def deliver_summaries(self):
         logger.info("--- 8:00 PM: DELIVERING SUMMARIES ---")
         cursor = self.db["pending_summaries"].find({"status": "ready"})
