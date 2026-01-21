@@ -9,8 +9,8 @@ from telegram.ext import ContextTypes
 logger = logging.getLogger(__name__)
 
 # --- CONFIGURATION ---
-MONGO_URI = "YOUR_MONGODB_URI_HERE"
-GROQ_API_KEY = "YOUR_GROQ_API_KEY_HERE"
+MONGO_URI = "mongodb+srv://Lailamongo:Adhyan134@laila.o7zkcis.mongodb.net/?appName=Laila"
+GROQ_API_KEY = "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"
 
 class SummaryManager:
     def __init__(self, application):
