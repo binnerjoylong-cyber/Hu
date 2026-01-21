@@ -113,59 +113,64 @@ class SummaryManager:
                 logger.error(f"Post Error: {e}")
 
     
-            
-
     async def test_summary_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat_id = update.effective_chat.id
-    # Ek mast reacting message
-    status = await update.message.reply_text("🧐 Ruko bhai, poore din ka kissa nikaal rahi hoon...")
-    
-    # Logs uthana
-    messages = await self.db[f"chat_{chat_id}"].find().sort("time", 1).to_list(length=500)
-    
-    if not messages:
-        await status.edit_text("❌ Abe yaar, group mein koi baat hi nahi hui! Pehle thoda gup-shup karo.")
-        return
-
-    formatted_logs = "\n".join([f"{m['user']}: {m['text']}" for m in messages])
-    
-    try:
-        # AI se story banwana
-        completion = self.ai_client.chat.completions.create(
-            model="llama-3.1-8b-instant", # Groq ka naya aur tez model
-            messages=[
-                {
-                    "role": "system", 
-                    "content": """You are a chill Hinglish storyteller. 
-                    Narrate the chat history as a short, funny, and spicy story.
-                    Rules:
-                    1. No bullet points. Use 2-3 small paragraphs.
-                    2. Use very simple Hinglish/English. No hard words.
-                    3. ALWAYS wrap User Names in <b>Name</b> tags.
-                    4. Headline should be catchy. 
-                    5. Make it feel like 'Group ki Gossip'."""
-                },
-                {
-                    "role": "user", 
-                    "content": f"Bhai, is chat ki ek mast Hinglish story bana de simple words mein. Names bold rakhna: {formatted_logs}"
-                }
-            ],
-            max_tokens=800,
-            temperature=0.8
-        )
+        chat_id = update.effective_chat.id
         
-        story_result = completion.choices[0].message.content
+        # Ek mast reacting message
+        status = await update.message.reply_text("🧐 Ruko bhai, poore din ka kissa nikaal rahi hoon...")
+        
+        # Logs uthana
+        try:
+            messages = await self.db[f"chat_{chat_id}"].find().sort("time", 1).to_list(length=500)
+        except Exception as db_err:
+            logger.error(f"DB Error: {db_err}")
+            messages = []
 
-        # Final message bhejte waqt HTML mode zaroori hai
-        await status.edit_text(
-            text=story_result, 
-            parse_mode='HTML'
-        )
-        logger.info(f"✅ Test summary sent to {chat_id}")
+        if not messages:
+            await status.edit_text("❌ Abe yaar, group mein koi baat hi nahi hui! Pehle thoda gup-shup karo.")
+            return
 
-    except Exception as e:
-        logger.error(f"❌ Test Summary Error: {e}")
-        await status.edit_text("⚠️ Arre baap re! AI thoda thak gaya hai, baad mein try karo.")
+        formatted_logs = "\n".join([f"{m.get('user', 'Unknown')}: {m.get('text', '')}" for m in messages])
+        
+        try:
+            # AI se story banwana
+            completion = self.ai_client.chat.completions.create(
+                model="llama-3.1-8b-instant", # Groq ka naya aur tez model
+                messages=[
+                    {
+                        "role": "system", 
+                        "content": """You are a chill Hinglish storyteller. 
+                        Narrate the chat history as a short, funny, and spicy story.
+                        Rules:
+                        1. No bullet points. Use 2-3 small paragraphs.
+                        2. Use very simple Hinglish/English. No hard words.
+                        3. ALWAYS wrap User Names in <b>Name</b> tags.
+                        4. Headline should be catchy. 
+                        5. Make it feel like 'Group ki Gossip'."""
+                    },
+                    {
+                        "role": "user", 
+                        "content": f"Bhai, is chat ki ek mast Hinglish story bana de simple words mein. Names bold rakhna: {formatted_logs}"
+                    }
+                ],
+                max_tokens=800,
+                temperature=0.8
+            )
+            
+            story_result = completion.choices[0].message.content
+
+            # Final message bhejte waqt HTML mode zaroori hai
+            await status.edit_text(
+                text=story_result, 
+                parse_mode='HTML'
+            )
+            logger.info(f"✅ Test summary sent to {chat_id}")
+
+        except Exception as e:
+            logger.error(f"❌ Test Summary Error: {e}")
+            await status.edit_text("⚠️ Arre baap re! AI thoda thak gaya hai, baad mein try karo.")   
+
+    
 
     async def run_scheduler(self):
         while True:
