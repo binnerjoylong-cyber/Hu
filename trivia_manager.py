@@ -98,16 +98,17 @@ class TriviaGame:
         query = update.callback_query
         user = query.from_user
         msg_id = query.message.message_id
+        chat_id = query.message.chat_id
         data = query.data.split(":") 
 
         if msg_id not in self.active_games:
-            await query.answer("Session Expired!", show_alert=True)
+            await query.answer("This gaming session has concluded!", show_alert=True)
             return
 
         game = self.active_games[msg_id]
 
         if game.get('winner'):
-            await query.answer(f"⚠️ Quiz already solved by {game['winner_name']}!", show_alert=True)
+            await query.answer(f"Status: This challenge was already claimed by {game['winner_name']}.", show_alert=True)
             return
 
         if data[1] == "yes":
@@ -115,28 +116,64 @@ class TriviaGame:
             game['winner_name'] = user.first_name
             time_taken = round(time.time() - game['start_time'], 2)
             
-            await query.answer(f"🎉 Correct, {user.first_name}!", show_alert=True)
+            await query.answer(f"Excellent work, {user.first_name}!", show_alert=False)
             
+            # 1. Update Main Game Message with a sleek look
             status_text = (
-                f"🏆 <b>QUIZ SOLVED!</b>\n"
+                f"🏛 <b>CHALLENGE ARCHIVED</b>\n"
                 f"━━━━━━━━━━━━━━━━━━━\n"
-                f"👤 <b>Winner:</b> {user.mention_html()}\n"
-                f"🎯 <b>Answer:</b> <code>{data[2]}</code>\n"
-                f"⚡ <b>Solved In:</b> <code>{time_taken}s</code>\n"
+                f"👤 <b>Claimed By:</b> {user.mention_html()}\n"
+                f"🎯 <b>Objective:</b> <code>{data[2]}</code>\n"
                 f"━━━━━━━━━━━━━━━━━━━\n"
-                f"<i>Next challenge in 30 minutes!</i>"
+                f"<i>Stand by for the next elite challenge.</i>"
             )
             
             try:
-                # Buttons wahi rahenge, bas caption edit hoga
                 if query.message.photo:
                     await query.edit_message_caption(caption=status_text, parse_mode='HTML', reply_markup=query.message.reply_markup)
                 else:
                     await query.edit_message_text(text=status_text, parse_mode='HTML', reply_markup=query.message.reply_markup)
             except: pass
-        else:
-            await query.answer("❌ Wrong! Try again.", show_alert=False)
 
+            # 2. Grand Victory Shoutout (Proper English)
+            congrats_msg = (
+                f"✨ <b>PRESTIGIOUS VICTORY!</b> ✨\n\n"
+                f"A round of applause for {user.mention_html()}! 🏆\n\n"
+                f"With remarkable precision, you identified <b>'{data[2]}'</b> in a staggering <code>{time_taken}s</code>.\n\n"
+                f"⚜️ <i>Laila acknowledges your superior observation skills. You have set a new benchmark for the group!</i> 🧿"
+            )
+            
+            try:
+                # Sending the separate elite shoutout
+                sent_msg = await context.bot.send_message(
+                    chat_id=chat_id,
+                    text=congrats_msg,
+                    reply_to_message_id=msg_id,
+                    parse_mode='HTML'
+                )
+                
+                # 3. High-Intensity Reaction Burst (10 Premium Reactions)
+                # Note: We send the most important ones first
+                reactions_list = [
+                    {"type": "emoji", "emoji": e} 
+                    for e in ["🔥", "🏆", "👏", "⚡", "👑", "✨", "🎊", "😎", "💃", "🌟"]
+                ]
+                
+                try:
+                    await context.bot.set_message_reaction(
+                        chat_id=chat_id,
+                        message_id=sent_msg.message_id,
+                        reaction=reactions_list
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to set reactions: {e}")
+                    
+            except Exception as e:
+                logger.error(f"Error sending congrats: {e}")
+
+        else:
+            await query.answer("Incorrect attempt. Focus and try again!", show_alert=False)
+            
     async def send_alerts(self, chat_id, msg_id):
         """Countdown: 10m aur 5m bache hone par alerts"""
         try:
