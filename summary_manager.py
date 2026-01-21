@@ -13,8 +13,8 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
 logger = logging.getLogger(__name__)
 
 # --- CONFIGURATION ---
-MONGO_URI = "YOUR_MONGO_URI" 
-GROQ_API_KEY = "YOUR_GROQ_API_KEY"
+MONGO_URI = "mongodb+srv://Lailamongo:Adhyan134@laila.o7zkcis.mongodb.net/?appName=Laila" 
+GROQ_API_KEY = "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"
 
 # Timezone Configuration (India Standard Time)
 IST = pytz.timezone('Asia/Kolkata')
