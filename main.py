@@ -3622,12 +3622,22 @@ def check_sudo_wrapper(handler):
 
 async def post_init(application: Application) -> None:
     """Ye background tasks ko sahi event loop mein start karega"""
-    # Background tasks start karein
-    asyncio.create_task(trivia_bot.start_loop())
-    asyncio.create_task(summary_bot.run_scheduler())
-    logger.info("✅ Trivia and Summary schedulers started.")
+    # Global keyword use karna zaroori hai taaki function bahar ke objects ko pehchan sake
+    global trivia_bot, summary_bot
+    
+    try:
+        # Background tasks start karein
+        asyncio.create_task(trivia_bot.start_loop())
+        asyncio.create_task(summary_bot.run_scheduler())
+        logger.info("✅ Laila's Background Tasks (Trivia & Summary) Started.")
+    except Exception as e:
+        logger.error(f"❌ Error starting background tasks: {e}")
+        
 # --- Main function ---
 def main() -> None:
+    global trivia_bot, summary_bot
+    trivia_bot = TriviaGame(application)
+    summary_bot = SummaryManager(application, known_users)
     application = Application.builder().token(TELEGRAM_BOT_TOKEN).post_init(post_init).build()
     
     # --- NEW: Load all data from sheets on startup ---
