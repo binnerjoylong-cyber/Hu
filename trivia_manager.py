@@ -153,7 +153,7 @@ class TriviaGame:
         user = query.from_user
         msg_id = query.message.message_id
         chat_id = query.message.chat_id
-        data = query.data.split(":") # format: trivia:yes/no:answer
+        data = query.data.split(":") 
 
         if msg_id not in self.active_games:
             await query.answer("This game has already ended!", show_alert=True)
@@ -161,12 +161,10 @@ class TriviaGame:
 
         game = self.active_games[msg_id]
         
-        # If already won
         if game.get('winner'):
             await query.answer(f"Oops! {game['winner_name']} already found it!", show_alert=True)
             return
 
-        # Correct Answer Logic
         if data[1] == "yes":
             game['winner'] = user.id
             game['winner_name'] = user.first_name
@@ -174,7 +172,6 @@ class TriviaGame:
             
             await query.answer("Correct Answer! 🔥", show_alert=False)
             
-            # Short 1-line congrats message in English
             congrats_msg = f"🏆 {user.mention_html()} found <b>{data[2]}</b> in {time_taken}s!"
             
             try:
@@ -185,26 +182,30 @@ class TriviaGame:
                     parse_mode='HTML'
                 )
                 
-                # Store ID to delete it later
                 game['congrats_id'] = sent_msg.message_id
                 
-                # Random Reaction Logic
+                # --- FIXED REACTION LOGIC ---
                 try:
-                    chosen_reaction = random.choice(REACTION_POOL)
+                    chosen_emoji = random.choice(REACTION_POOL)
+                    # We use a delay because sometimes TG doesn't register the message ID immediately
+                    await asyncio.sleep(0.2) 
+                    
                     await context.bot.set_message_reaction(
                         chat_id=chat_id, 
                         message_id=sent_msg.message_id, 
-                        reaction=[{"type": "emoji", "emoji": chosen_reaction}]
+                        reaction=[{"type": "emoji", "emoji": chosen_emoji}],
+                        is_big=False
                     )
+                    logger.info(f"✅ Reaction {chosen_emoji} added to msg {sent_msg.message_id}")
                 except Exception as react_err:
-                    logger.error(f"Reaction Error: {react_err}")
+                    logger.error(f"❌ Reaction Failed: {react_err}")
 
-            except: pass
+            except Exception as e:
+                logger.error(f"Post-Win Error: {e}")
             
-        # Wrong Answer Logic
         else:
             await query.answer("Wrong! ❌ Try again.", show_alert=False)
-
+   
     # --- TIME CALCULATION FOR :00 AND :30 ---
     def get_seconds_until_next_slot(self):
         """Calculates seconds remaining until the next HH:00 or HH:30"""
