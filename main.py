@@ -1644,7 +1644,7 @@ async def off_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         await context.bot.send_message(chat_id=chat_id, text="Sorry, you need to be an admin to use this command.")
         return
     bot_status[chat_id] = False
-    await context.bot.send_message(chat_id=chat_id, text="Laila is now OFF for this group.")
+    await context.bot.send_message(chat_id=chat_id, text="Laila lis now OFF for this group.")
 
 # --- Reboot command for everyone (same as /on for admins) ---
 async def reboot_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -1656,6 +1656,7 @@ async def reboot_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     await on_command(update, context)
 
 # --- MODIFIED: Translate command for everyone ---
+
 async def translate_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Translates text using a direct model call for accuracy."""
     message = update.message or update.edited_message
@@ -1701,10 +1702,10 @@ async def translate_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
     try:
         # --- Choose model & API key ---
-        translation_model = None
         api_key_to_use = None
         model_name_to_use = None
 
+        # Filter available keys based on cooldown
         available_gemini_keys = [
             key for key in GEMINI_API_KEYS if key and time.time() >= key_cooldown_until.get(key, 0)
         ]
@@ -1713,7 +1714,7 @@ async def translate_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             random.shuffle(available_gemini_keys)
             api_key_to_use = available_gemini_keys[0]
             model_name_to_use = "models/gemini-1.5-flash-latest"
-        elif GEMMA_API_KEY:
+        elif globals().get('GEMMA_API_KEY'):
             api_key_to_use = GEMMA_API_KEY
             model_name_to_use = "models/gemma-2-9b-it"
         else:
@@ -1721,7 +1722,9 @@ async def translate_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             return
 
         # --- Configure and call model ---
-        genai.configure(api_key=api_key_to_use)
+        # FIX: Added transport="rest" to avoid gRPC errors on cloud hosts like Render
+        genai.configure(api_key=api_key_to_use, transport="rest")
+        
         model = genai.GenerativeModel(model_name=model_name_to_use)
 
         response = await model.generate_content_async(
@@ -1730,12 +1733,19 @@ async def translate_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         )
 
         translated_text = response.text.strip()
-        await message.reply_text(translated_text or "No translation result found.")
+        
+        if translated_text:
+            await message.reply_text(translated_text)
+        else:
+            await message.reply_text("No translation result found.")
 
     except Exception as e:
         logger.error(f"Error in translate command: {e}", exc_info=True)
-        await message.reply_text("An error occurred during translation. Please try again later.")
-# --- Reset command for group admins ---
+        # Detailed error for debugging
+        await message.reply_text(f"❌ Translation failed: {str(e)}")
+
+
+        
 async def reset_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     chat_id = update.effective_chat.id
     user_id = update.effective_user.id
