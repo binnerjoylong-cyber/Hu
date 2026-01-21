@@ -36,8 +36,7 @@ import io
 import glob
 # --- NEW: IMPORT THE GAME MODULE ---
 import game
-from trivia_manager import TriviaGame
-from summary_manager import SummaryManager
+
 # Agar file ka naam yt_bypass.py hai toh:
 # main.py ke top par
 from yt_bypass import social_media_handler, youtube_command
@@ -3622,7 +3621,7 @@ def check_sudo_wrapper(handler):
     
 
 # --- Global variables top par rehne do ---
-trivia_bot = None
+'''trivia_bot = None
 summary_bot = None
 
 async def post_init(application: Application) -> None:
@@ -3633,7 +3632,7 @@ async def post_init(application: Application) -> None:
     # taaki 'ExtBot' properly initialize ho chuka ho.
     if trivia_bot is None:
         from trivia_manager import TriviaGame
-        trivia_bot = TriviaGame(application)
+        trivia_bot = TriviaGame(application,known_users)
     
     if summary_bot is None:
         from summary_manager import SummaryManager
@@ -3646,49 +3645,77 @@ async def post_init(application: Application) -> None:
         logger.info("✅ Laila's Background Tasks (Trivia & Summary) Started.")
     except Exception as e:
         logger.error(f"❌ Error starting background tasks: {e}")
-        
-# --- Main function ---
+
+summary_bot = SummaryManager(application, known_users)
+trivia_bot = TriviaGame(application, known_users)
+asyncio.create_task(trivia_bot.start_loop())
+asyncio.create_task(summary_bot.run_scheduler())
+    
+logger.info("✅ Trivia and Summary bots are now LIVE in background.")
+'''
+# --- 1. Global Variables ---
+# --- 1. Global variables (Top par) ---
+trivia_bot = None
+summary_bot = None
+
+# --- 2. Post Init (Sahi jagah initialization ke liye) ---
+async def post_init(application: Application) -> None:
+    """Ye background tasks ko sahi event loop mein start karega"""
+    global trivia_bot, summary_bot
+    
+    # IMPORT AND INITIALIZE INSIDE POST_INIT
+    from trivia_manager import TriviaGame
+    from summary_manager import SummaryManager
+    
+    # known_users load_known_users() se globally available hoga
+    if trivia_bot is None:
+        trivia_bot = TriviaGame(application, known_users)
+    
+    if summary_bot is None:
+        summary_bot = SummaryManager(application, known_users)
+
+    try:
+        # Background tasks start karein
+        asyncio.create_task(trivia_bot.start_loop())
+        asyncio.create_task(summary_bot.run_scheduler())
+        logger.info("✅ Laila's Background Tasks (Trivia & Summary) Started.")
+    except Exception as e:
+        logger.error(f"❌ Error starting background tasks: {e}")
+
+# --- 3. Main function ---
 def main() -> None:
     global trivia_bot, summary_bot
 
-    
-    # --- NEW: Load all data from sheets on startup ---
-    # This call initializes all sheet variables (google_sheet, sudo_sheet, welcome_sheet)
+    # A. PEHLE: Data load karein
     client, error = get_google_sheet_connection()
-    if not client:
-        logger.critical(f"CRITICAL: Failed to connect to Google Sheets on startup. {error}")
-        # Depending on severity, you might want to exit
-        # return 
-    
     load_known_users()
     load_sudo_users()
-    load_welcome_settings() # NEW: Load custom welcomes into cache
+    load_welcome_settings()
 
+    # B. PHIR: Application Build karein
     application = (
         Application.builder()
         .token(TELEGRAM_BOT_TOKEN)
         .post_init(post_init) 
         .build()
     )
-    # General Commands
-    summary_bot = SummaryManager(application, known_users)
-    trivia_bot = TriviaGame(application, known_users)
+
+    # C. HANDLERS (Order is perfect)
+    
+    # Trivia buttons (Lambda is important here)
     application.add_handler(CallbackQueryHandler(
-    lambda u, c: trivia_bot.handle_callback(u, c) if trivia_bot else None, 
-    pattern="^trivia:"
+        lambda u, c: trivia_bot.handle_callback(u, c) if trivia_bot else None, 
+        pattern="^trivia:"
     ))
     
-    #asyncio.get_event_loop().create_task(trivia_bot.start_loop())
-
-    
+    # Summary recording (Group 1)
     application.add_handler(MessageHandler(
         filters.TEXT & ~filters.COMMAND, 
         lambda u, c: summary_bot.record_message(u, c) if summary_bot else None
     ), group=1)
     
+    # Commands
     application.add_handler(CommandHandler("testsummary", lambda u, c: summary_bot.test_summary_command(u, c) if summary_bot else None))
-    
-    
     application.add_handler(CommandHandler("start", start_command))
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("about", about_command))
