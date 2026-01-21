@@ -5,14 +5,14 @@ import html
 import time
 import io
 import requests
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, Application
 
 logger = logging.getLogger(__name__)
 
-# --- ⚙️ CONFIGURATION ---
-# In emojis ko hum use karenge
+# --- CONFIG ---
+# In Emojis ke liye hum Google ki image API use karenge
 EMOJI_POOL = ["🍎", "🚀", "💎", "🐱", "🎸", "🍕", "🌈", "🔥", "🦄", "🍦", "⚽", "🎮", "🔔", "🎁", "🧿", "🍀", "🍩", "🍹", "🎈", "🧸"]
 
 # Apni Frame ki File ID yahan daalein
@@ -32,43 +32,53 @@ class TriviaGame:
                 file = await self.application.bot.get_file(FRAME_FILE_ID)
                 photo_bytes = await file.download_as_bytearray()
                 self.cached_frame = bytes(photo_bytes)
+                logger.info("✅ Frame Cached!")
             except Exception as e:
-                logger.error(f"Error fetching Frame: {e}")
+                logger.error(f"❌ Frame Error: {e}")
         return self.cached_frame
+
+    def get_emoji_image_url(self, emoji):
+        """Emoji ko image me convert karne ke liye Google ki repo use karte hain"""
+        # Emoji ka hex code nikalte hain
+        hex_code = "-".join([f"{ord(c):x}" for c in emoji])
+        return f"https://raw.githubusercontent.com/googlefonts/noto-emoji/master/png/512/emoji_u{hex_code}.png"
 
     async def create_emoji_image(self, target_emoji):
         try:
+            # 1. Frame load karein
             frame_data = await self.get_frame_from_telegram()
             if not frame_data: return None
-
             img = Image.open(io.BytesIO(frame_data)).convert("RGBA")
             
-            # --- FIXED: EMOJI RENDERING ---
-            # Hum ek naya canvas banayenge emoji ke liye
-            # Taki font issue ki wajah se 'white bot' na dikhe
-            draw = ImageDraw.Draw(img)
+            # 2. Emoji ki HD Image download karein
+            emoji_url = self.get_emoji_image_url(target_emoji)
+            emoji_resp = requests.get(emoji_url, timeout=5)
+            emoji_img = Image.open(io.BytesIO(emoji_resp.content)).convert("RGBA")
             
-            # Bada font size taaki clear dikhe
-            # Render/Linux par NotoColorEmoji font hona zaroori hai proper emoji ke liye
-            # Agar nahi hai toh ye default use karega
-            try:
-                font = ImageFont.truetype("/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf", 150)
-            except:
-                try: font = ImageFont.truetype("arial.ttf", 150)
-                except: font = ImageFont.load_default()
+            # 3. Emoji ka size bada karein (Frame ke hisab se 250x250 ya 300x300)
+            emoji_img = emoji_img.resize((250, 250), Image.Resampling.LANCZOS)
             
+            # 4. Center Calculation
             width, height = img.size
-            # Center coordinates
-            # Emoji ko draw karne ka naya tarika (embedded color support check)
-            draw.text((width//2, height//2), target_emoji, font=font, anchor="mm", embedded_color=True)
+            ew, eh = emoji_img.size
+            x = (width - ew) // 2
+            y = (height - eh) // 2
             
+            # 5. Emoji ko Frame par chipka do
+            img.alpha_composite(emoji_img, (x, y))
+            
+            # PNG me save karein taaki quality bani rahe
             img_byte_arr = io.BytesIO()
             img.save(img_byte_arr, format='PNG')
             img_byte_arr.seek(0)
             return img_byte_arr
+            
         except Exception as e:
-            logger.error(f"Pillow Emoji Error: {e}")
+            logger.error(f"Pillow Image Fix Error: {e}")
             return None
+
+    # ... [Baki ka code: get_api_question, handle_callback, start_loop pehle jaisa hi rahega] ...
+    # Bus 'create_emoji_image' ko upar wale se replace kar dena.
             
     def get_api_question(self):
         try:
