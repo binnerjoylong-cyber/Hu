@@ -7,7 +7,7 @@ import io
 import requests
 from datetime import datetime, timedelta
 from PIL import Image, ImageDraw, ImageFont
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReactionTypeEmoji
 from telegram.ext import ContextTypes, Application
 
 # Enable Logging
@@ -31,7 +31,7 @@ NEON_COLORS = ["#FF00FF", "#00FFFF", "#00FF00", "#FFFF00", "#FF0099", "#9D00FF",
 
 # 4. FILE IDs (Replace with your actual Telegram File IDs)
 FRAME_FILE_ID = "AgACAgUAAyEFAATHcBuEAAICvGlwh5iWzzYJvgSuOE-EPOtjTa7XAAJnDWsb5FOJVwFVYd7UN29_AQADAgADeQADOAQ" 
-WORD_FRAME_FILE_ID = "AgACAgUAAxkBAAIErmlxNA9ZSKhDHfbq4yYCQDtK5yCLAAKPDGsbfcqQV1IRTOU_qATDAQADAgADdwADOAQ" # <--- PASTE YOUR WORD GAME PHOTO ID HERE
+WORD_FRAME_FILE_ID = "YOUR_WORD_FRAME_FILE_ID_HERE" # <--- PASTE YOUR WORD GAME PHOTO ID HERE
 
 class TriviaGame:
     def __init__(self, application: Application, known_users_list):
@@ -273,17 +273,20 @@ class TriviaGame:
                 
                 game['congrats_id'] = sent_msg.message_id
                 
-                # Reaction
+                # --- FIXED REACTION LOGIC ---
                 try:
                     chosen_emoji = random.choice(REACTION_POOL)
                     await asyncio.sleep(0.2) 
+                    
+                    # Use ReactionTypeEmoji() instead of raw dict
                     await context.bot.set_message_reaction(
                         chat_id=chat_id, 
                         message_id=sent_msg.message_id, 
-                        reaction=[{"type": "emoji", "emoji": chosen_emoji}],
+                        reaction=[ReactionTypeEmoji(chosen_emoji)],
                         is_big=False
                     )
-                except: pass
+                except Exception as react_err:
+                    logger.error(f"❌ Reaction Failed: {react_err}")
 
             except Exception as e:
                 logger.error(f"Post-Win Error: {e}")
