@@ -3636,11 +3636,10 @@ def main() -> None:
     load_welcome_settings() # NEW: Load custom welcomes into cache
     
     # General Commands
-    trivia = TriviaGame(application, known_users)
+    trivia_bot = TriviaGame(application, known_users)
+    application.add_handler(CallbackQueryHandler(trivia_bot.handle_callback, pattern="^trivia:"))
     
-    application.add_handler(CallbackQueryHandler(trivia.handle_callback, pattern="^trivia:"))
-    loop = asyncio.get_event_loop()
-    loop.create_task(trivia.start_loop())
+    asyncio.get_event_loop().create_task(trivia_bot.start_loop())
 
     
     application.add_handler(CommandHandler("start", start_command))
