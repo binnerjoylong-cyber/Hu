@@ -2288,7 +2288,7 @@ async def admin_stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     api_key_status_text = ""
     for i, key in enumerate(GEMINI_API_KEYS):
         if key:
-            key_short = key[-5:]
+            key_short = key[-10:]
             status = "🟢 Available"
             if time.time() < key_cooldown_until.get(key, 0):
                 cooldown_remaining = int(key_cooldown_until[key] - time.time())
