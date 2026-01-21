@@ -11,9 +11,8 @@ logger = logging.getLogger(__name__)
 # --- CONFIGURATION ---
 MONGO_URI = "mongodb+srv://Lailamongo:Adhyan134@laila.o7zkcis.mongodb.net/?appName=Laila"
 GROQ_API_KEY = "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"
-
 class SummaryManager:
-    def __init__(self, application, known_users_list):
+    def __init__(self, application, known_users_list): # 2 arguments
         self.client = AsyncIOMotorClient(MONGO_URI)
         self.db = self.client["laila_summaries"]
         self.app = application
