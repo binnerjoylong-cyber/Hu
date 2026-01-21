@@ -3620,9 +3620,15 @@ def check_sudo_wrapper(handler):
             logger.warning(f"Unauthorized access to restricted command by user {user_id} in chat {update.effective_chat.id}")
     return wrapper
 
+async def post_init(application: Application) -> None:
+    """Ye background tasks ko sahi event loop mein start karega"""
+    # Background tasks start karein
+    asyncio.create_task(trivia_bot.start_loop())
+    asyncio.create_task(summary_bot.run_scheduler())
+    logger.info("✅ Trivia and Summary schedulers started.")
 # --- Main function ---
 def main() -> None:
-    application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
+    application = Application.builder().token(TELEGRAM_BOT_TOKEN).post_init(post_init).build()
     
     # --- NEW: Load all data from sheets on startup ---
     # This call initializes all sheet variables (google_sheet, sudo_sheet, welcome_sheet)
@@ -3640,10 +3646,11 @@ def main() -> None:
     trivia_bot = TriviaGame(application, known_users)
     application.add_handler(CallbackQueryHandler(trivia_bot.handle_callback, pattern="^trivia:"))
     
-    asyncio.get_event_loop().create_task(trivia_bot.start_loop())
+    #asyncio.get_event_loop().create_task(trivia_bot.start_loop())
 
     summary_bot = SummaryManager(application, known_users)
-    asyncio.get_event_loop().create_task(summary_bot.run_scheduler())
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, summary_bot.record_message), group=1)
+    
     application.add_handler(CommandHandler("testsummary", summary_bot.test_summary_command))
     
     application.add_handler(CommandHandler("start", start_command))
