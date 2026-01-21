@@ -37,6 +37,7 @@ import glob
 # --- NEW: IMPORT THE GAME MODULE ---
 import game
 from trivia_manager import TriviaGame
+from summary_manager import SummaryManager
 # Agar file ka naam yt_bypass.py hai toh:
 # main.py ke top par
 from yt_bypass import social_media_handler, youtube_command
@@ -3641,6 +3642,8 @@ def main() -> None:
     
     asyncio.get_event_loop().create_task(trivia_bot.start_loop())
 
+    summary_bot = SummaryManager(application, known_users)
+    asyncio.get_event_loop().create_task(summary_bot.run_scheduler())
     
     application.add_handler(CommandHandler("start", start_command))
     application.add_handler(CommandHandler("help", help_command))
