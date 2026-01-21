@@ -77,6 +77,55 @@ class TriviaGame:
         except: pass
         return {"q": "Which is the red planet?", "options": ["Mars", "Earth", "Venus"], "a": "Mars"}
 
+    async def auto_delete_task(self, chat_id, quiz_msg_id, target_emoji):
+        """15 min baad timeout aur 20 min baad deletion"""
+        
+        # 1. 15 Minutes Wait for Time Out (900 seconds)
+        await asyncio.sleep(900)
+        
+        timeout_msg_id = None
+        if quiz_msg_id in self.active_games:
+            game = self.active_games[quiz_msg_id]
+            
+            # Agar kisi ne nahi jita toh Timeout message bhejo
+            if not game.get('winner'):
+                try:
+                    text = f"⏰ <b>TIME OUT!</b>\n\nKoi bhi <b>{target_emoji}</b> ko nahi dhund paaya. Agli baar thoda tez banna! ⚡"
+                    sent_msg = await self.application.bot.send_message(
+                        chat_id=chat_id, 
+                        text=text, 
+                        reply_to_message_id=quiz_msg_id, 
+                        parse_mode='HTML'
+                    )
+                    timeout_msg_id = sent_msg.message_id
+                except Exception as e:
+                    logger.error(f"Timeout message error: {e}")
+
+        # 2. Ab 5 minutes aur wait karo (Total 20 mins)
+        await asyncio.sleep(300)
+        
+        # 3. Sab delete kar do
+        try:
+            # Quiz delete karo
+            await self.application.bot.delete_message(chat_id=chat_id, message_id=quiz_msg_id)
+            
+            # Agar timeout message bhejha tha toh wo bhi delete karo
+            if timeout_msg_id:
+                await self.application.bot.delete_message(chat_id=chat_id, message_id=timeout_msg_id)
+            
+            # Agar koi congrats message tha (Winner wala), toh wo bhi delete karne ki koshish karo
+            if quiz_msg_id in self.active_games and self.active_games[quiz_msg_id].get('congrats_id'):
+                await self.application.bot.delete_message(
+                    chat_id=chat_id, 
+                    message_id=self.active_games[quiz_msg_id]['congrats_id']
+                )
+
+            if quiz_msg_id in self.active_games:
+                del self.active_games[quiz_msg_id]
+            logger.info(f"🗑 Group clean-up done for chat {chat_id}")
+        except Exception as e:
+            logger.error(f"Cleanup Error: {e}")
+
     async def handle_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         query = update.callback_query
         user = query.from_user
@@ -89,42 +138,33 @@ class TriviaGame:
             return
 
         game = self.active_games[msg_id]
-
         if game.get('winner'):
-            await query.answer(f"Already guessed by {game['winner_name']}!", show_alert=True)
+            await query.answer(f"Status: {game['winner_name']} ne dhund liya hai!", show_alert=True)
             return
 
         if data[1] == "yes":
             game['winner'] = user.id
             game['winner_name'] = user.first_name
             time_taken = round(time.time() - game['start_time'], 2)
+            await query.answer("Correct! 🔥")
             
-            await query.answer("Correct! 🔥", show_alert=False)
-            
-            # Short 1-line congrats message
             congrats_msg = f"🏆 {user.mention_html()} ne <b>{data[2]}</b> ko {time_taken}s mein dhund nikaala!"
-            
             try:
                 sent_msg = await context.bot.send_message(
-                    chat_id=chat_id,
-                    text=congrats_msg,
-                    reply_to_message_id=msg_id,
-                    parse_mode='HTML'
+                    chat_id=chat_id, text=congrats_msg, 
+                    reply_to_message_id=msg_id, parse_mode='HTML'
                 )
+                # Winner message ki ID store karo taaki delete ho sake
+                game['congrats_id'] = sent_msg.message_id
                 
-                # Auto-reaction on congrats message
                 try:
-                    await context.bot.set_message_reaction(
-                        chat_id=chat_id,
-                        message_id=sent_msg.message_id,
-                        reaction=[{"type": "emoji", "emoji": "🔥"}]
-                    )
+                    await context.bot.set_message_reaction(chat_id=chat_id, message_id=sent_msg.message_id, reaction=[{"type": "emoji", "emoji": "🔥"}])
                 except: pass
             except: pass
-
         else:
-            await query.answer("Galat! Phir se try karo.", show_alert=False)
+            await query.answer("Galat! Phir se try karo.")
 
+    
     async def start_loop(self):
         logger.info("Advanced Trivia Loop Started!")
         await asyncio.sleep(10)
@@ -178,3 +218,4 @@ class TriviaGame:
 
             except Exception as e: logger.error(f"Loop Error: {e}")
             await asyncio.sleep(1800) # 30 min wait
+            asyncio.create_task(self.auto_delete_task(cid, msg.message_id, target))
