@@ -57,7 +57,7 @@ class SummaryManager:
 
             try:
                 completion = self.ai_client.chat.completions.create(
-                    model="llama3-70b-8192",
+                    model="llama-3.3-70b-specdec",
                     messages=[{"role": "user", "content": prompt}],
                     max_tokens=1000,
                     temperature=0.7,
@@ -105,7 +105,7 @@ class SummaryManager:
         formatted_logs = "\n".join([f"{m['user']}: {m['text']}" for m in messages])
         try:
             completion = self.ai_client.chat.completions.create(
-                model="llama3-70b-8192",
+                model="llama-3.3-70b-specdec",
                 messages=[{"role": "user", "content": f"Briefly summarize this in elite story style: {formatted_logs}"}],
                 max_tokens=500
             )
