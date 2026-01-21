@@ -77,6 +77,61 @@ class SummaryManager:
             except Exception as e:
                 logger.error(f"Error in {chat_id}: {e}")
 
+    async def test_summary_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """For Testing: /testsummary command chalate hi turant summary banegi"""
+        chat_id = update.effective_chat.id
+        
+        # Check if it's a group
+        if update.effective_chat.type == "private":
+            await update.message.reply_text("Sir, please run this in a group to test history fetching.")
+            return
+
+        status_msg = await update.message.reply_text("⏳ Laila is reading the last 24 hours of gossip... please wait.")
+        
+        try:
+            # 1. Fetching history
+            messages = []
+            async for message in self.app.bot.get_chat_history(chat_id, limit=500): # Test ke liye 500 kaafi hain
+                if message.text and not message.text.startswith('/'):
+                    messages.append(f"{message.from_user.first_name}: {message.text}")
+            
+            if not messages:
+                await status_msg.edit_text("❌ No messages found in the last 24 hours to summarize.")
+                return
+
+            messages.reverse()
+            formatted_logs = "\n".join(messages)
+
+            # 2. AI Request
+            prompt = (
+                f"Narrate the highlights of this chat as a witty and elite story. "
+                f"Title: 'THE DAILY CHRONICLES (TEST MODE)'. "
+                f"Format: Medium-sized. Mention users and the drama. "
+                f"End with 'STAR OF THE NIGHT'. Language: Elite English.\n\nLOGS:\n{formatted_logs}"
+            )
+
+            completion = self.ai_client.chat.completions.create(
+                model="llama3-70b-8192",
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.7,
+            )
+            summary = completion.choices[0].message.content
+            
+            final_post = (
+                f"🏛 <b>THE DAILY CHRONICLES (TEST)</b> 🏛\n"
+                f"━━━━━━━━━━━━━━━━━━━━\n\n"
+                f"{summary}\n\n"
+                f"━━━━━━━━━━━━━━━━━━━━\n"
+                f"⚜️ <i>Test successful. Laila is ready for 8 PM!</i>"
+            )
+
+            await self.app.bot.send_message(chat_id, final_post, parse_mode='HTML')
+            await status_msg.delete()
+
+        except Exception as e:
+            await status_msg.edit_text(f"❌ Error during test: {str(e)}")
+            logger.error(f"Test Summary Error: {e}")
+
     async def run_scheduler(self):
         """Raat 7:50 PM par trigger hone ka scheduler"""
         while True:
