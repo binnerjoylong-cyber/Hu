@@ -23,15 +23,15 @@ EMOJI_POOL = [
     "🌋", "🛰", "🎡", "🎢", "🚢", "🛫", "🪐", "🌟", "🌙", "🥨", "🥓", "🍔", "🍣", "🌮", "🍭", "🍫", "🍯", "🥂", "🥃", "🧉"
 ]
 
-# 2. Reactions for Winners
+# 2. Reactions for Winners (Isme '👀' bhi shamil hai)
 REACTION_POOL = ["❤️", "🔥", "🎉", "👏", "🤩", "👀", "🏆"]
 
 # 3. Neon Colors for Word Game
 NEON_COLORS = ["#FF00FF", "#00FFFF", "#00FF00", "#FFFF00", "#FF0099", "#9D00FF", "#FFA500"]
 
-# 4. FILE IDs (Replace with your actual Telegram File IDs)
+# 4. FILE IDs (Apne Real File IDs yahan daalein)
 FRAME_FILE_ID = "AgACAgUAAyEFAATHcBuEAAICvGlwh5iWzzYJvgSuOE-EPOtjTa7XAAJnDWsb5FOJVwFVYd7UN29_AQADAgADeQADOAQ" 
-WORD_FRAME_FILE_ID = "YOUR_WORD_FRAME_FILE_ID_HERE" # <--- PASTE YOUR WORD GAME PHOTO ID HERE
+WORD_FRAME_FILE_ID = "YOUR_WORD_FRAME_FILE_ID_HERE" 
 
 class TriviaGame:
     def __init__(self, application: Application, known_users_list):
@@ -52,7 +52,7 @@ class TriviaGame:
         
         if target_cache is None:
             try:
-                # If user hasn't set the Word ID yet, use the Emoji one as fallback
+                # Fallback logic if Word ID is not set
                 if file_id == "YOUR_WORD_FRAME_FILE_ID_HERE":
                     file_id = FRAME_FILE_ID
                     
@@ -73,16 +73,13 @@ class TriviaGame:
 
     # --- HELPER: LOAD FONT ---
     def get_font(self, size=60):
-        """Downloads a bold font from Google Fonts for the Neon look"""
         if self.custom_font is None:
             try:
-                # Using 'Lilita One' - a nice thick font for games
                 font_url = "https://github.com/google/fonts/raw/main/ofl/lilitaone/LilitaOne-Regular.ttf"
                 resp = requests.get(font_url, timeout=10)
                 self.custom_font = io.BytesIO(resp.content)
             except:
-                logger.error("Failed to download font, using default")
-                return None # Will trigger default load
+                return ImageFont.load_default()
         
         try:
             return ImageFont.truetype(self.custom_font, size)
@@ -101,12 +98,10 @@ class TriviaGame:
             
             img = Image.open(io.BytesIO(frame_data)).convert("RGBA")
             
-            # Fetch Emoji
             emoji_url = self.get_emoji_image_url(target_emoji)
             emoji_resp = requests.get(emoji_url, timeout=5)
             emoji_img = Image.open(io.BytesIO(emoji_resp.content)).convert("RGBA")
             
-            # Resize and Center
             emoji_img = emoji_img.resize((250, 250), Image.Resampling.LANCZOS)
             width, height = img.size
             ew, eh = emoji_img.size
@@ -132,23 +127,16 @@ class TriviaGame:
             draw = ImageDraw.Draw(img)
             width, height = img.size
 
-            # Font setup
             font_size = 80 if len(text) < 6 else 60
             font = self.get_font(font_size)
             
-            # Text Centering
             bbox = draw.textbbox((0, 0), text, font=font)
             text_w = bbox[2] - bbox[0]
             text_h = bbox[3] - bbox[1]
             x, y = (width - text_w) / 2, (height - text_h) / 2
 
-            # Neon Effect (Draw thick outline + center)
             neon_color = random.choice(NEON_COLORS)
-            
-            # 1. Dark Shadow
             draw.text((x+3, y+3), text, font=font, fill="black")
-            
-            # 2. Main Color
             draw.text((x, y), text, font=font, fill=neon_color)
 
             img_byte_arr = io.BytesIO()
@@ -176,37 +164,57 @@ class TriviaGame:
 
     def get_word_data(self):
         try:
-            # Get 3 random words
             url = "https://random-word-api.herokuapp.com/word?number=3&length=5"
             words = requests.get(url, timeout=5).json()
             target = words[0].upper()
-            
-            # Scramble the target
             temp_list = list(target)
             random.shuffle(temp_list)
             scrambled = "".join(temp_list)
-            
-            # Options (Target + 2 others)
             options = [w.upper() for w in words]
             random.shuffle(options)
-            
             return {"scrambled": scrambled, "correct": target, "options": options}
-        except Exception as e:
-            logger.error(f"Word API Error: {e}")
-            # Fallback
+        except Exception:
             return {"scrambled": "ELPPA", "correct": "APPLE", "options": ["APPLE", "GRAPE", "MANGO"]}
 
-    # --- CLEANUP LOGIC ---
+    # --- CLEANUP & WARNING LOGIC (UPDATED) ---
     async def auto_delete_task(self, chat_id, quiz_msg_id, correct_answer):
-        # 15 Minutes Play Time
-        await asyncio.sleep(900) 
+        warning_msg_ids = []
+
+        # 1. First 5 Minutes Check
+        await asyncio.sleep(300) 
+        if quiz_msg_id in self.active_games and not self.active_games[quiz_msg_id].get('winner'):
+            try:
+                w_msg = await self.application.bot.send_message(
+                    chat_id=chat_id,
+                    text="⏳ <b>10 Minutes Remaining!</b>",
+                    reply_to_message_id=quiz_msg_id,
+                    parse_mode='HTML'
+                )
+                warning_msg_ids.append(w_msg.message_id)
+            except: pass
+
+        # 2. Next 5 Minutes Check (Total 10 mins elapsed)
+        await asyncio.sleep(300)
+        if quiz_msg_id in self.active_games and not self.active_games[quiz_msg_id].get('winner'):
+            try:
+                w_msg = await self.application.bot.send_message(
+                    chat_id=chat_id,
+                    text="⚠️ <b>Hurry Up! Only 5 Minutes Left!</b> ⚡",
+                    reply_to_message_id=quiz_msg_id,
+                    parse_mode='HTML'
+                )
+                warning_msg_ids.append(w_msg.message_id)
+            except: pass
+
+        # 3. Final 5 Minutes Check (Total 15 mins elapsed - TIMEOUT)
+        await asyncio.sleep(300)
         
         timeout_msg_id = None
         if quiz_msg_id in self.active_games:
             game = self.active_games[quiz_msg_id]
             if not game.get('winner'):
                 try:
-                    text = f"⏰ <b>TIME OUT!</b>\n\nThe correct answer was <b>{correct_answer}</b>. Nobody found it! ⚡"
+                    text = f"⏰ <b>TIME OUT!</b>\n\nThe correct answer was <b>{correct_answer}</b>. Nobody found it! 😢"
                     sent_msg = await self.application.bot.send_message(
                         chat_id=chat_id, 
                         text=text, 
@@ -216,7 +224,7 @@ class TriviaGame:
                     timeout_msg_id = sent_msg.message_id
                 except: pass
 
-        # 5 Minutes Buffer (Total 20 mins from start)
+        # 4. Final Buffer & Delete All
         await asyncio.sleep(300) 
         
         try:
@@ -229,6 +237,12 @@ class TriviaGame:
                     chat_id=chat_id, 
                     message_id=self.active_games[quiz_msg_id]['congrats_id']
                 )
+
+            # Delete Warnings
+            for wid in warning_msg_ids:
+                try:
+                    await self.application.bot.delete_message(chat_id=chat_id, message_id=wid)
+                except: pass
             
             if quiz_msg_id in self.active_games:
                 del self.active_games[quiz_msg_id]
@@ -236,7 +250,7 @@ class TriviaGame:
         except Exception as e:
             logger.error(f"Cleanup Error: {e}")
 
-    # --- BUTTON HANDLER ---
+    # --- BUTTON HANDLER (WINS & REACTIONS) ---
     async def handle_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         query = update.callback_query
         user = query.from_user
@@ -264,6 +278,7 @@ class TriviaGame:
             congrats_msg = f"🏆 {user.mention_html()} guessed <b>{data[2]}</b> in {time_taken}s!"
             
             try:
+                # 1. Send Congrats Message
                 sent_msg = await context.bot.send_message(
                     chat_id=chat_id, 
                     text=congrats_msg, 
@@ -273,12 +288,10 @@ class TriviaGame:
                 
                 game['congrats_id'] = sent_msg.message_id
                 
-                # --- FIXED REACTION LOGIC ---
+                # 2. Add Reaction (Only works in groups where bot is Admin or Reactions enabled)
                 try:
                     chosen_emoji = random.choice(REACTION_POOL)
-                    await asyncio.sleep(0.2) 
-                    
-                    # Use ReactionTypeEmoji() instead of raw dict
+                    await asyncio.sleep(0.5) 
                     await context.bot.set_message_reaction(
                         chat_id=chat_id, 
                         message_id=sent_msg.message_id, 
@@ -286,7 +299,7 @@ class TriviaGame:
                         is_big=False
                     )
                 except Exception as react_err:
-                    logger.error(f"❌ Reaction Failed: {react_err}")
+                    logger.error(f"❌ Reaction Failed (Check Admin Rights): {react_err}")
 
             except Exception as e:
                 logger.error(f"Post-Win Error: {e}")
@@ -323,23 +336,19 @@ class TriviaGame:
             await asyncio.sleep(sleep_seconds)
 
             current_mode = self.game_modes[self.current_mode_index]
-            # Advance mode for next time
             self.current_mode_index = (self.current_mode_index + 1) % len(self.game_modes)
 
             try:
                 active_chats = [c for c in list(self.known_users) if str(c).startswith("-")]
                 logger.info(f"🚀 Starting Mode: {current_mode.upper()}")
 
-                # --- 1. EMOJI HUNT ---
                 if current_mode == "emoji":
                     target = random.choice(EMOJI_POOL)
                     photo = await self.create_emoji_image(target)
-                    
                     if photo:
                         distractions = random.sample([e for e in EMOJI_POOL if e != target], 8)
                         grid_opts = distractions + [target]
                         random.shuffle(grid_opts)
-                        
                         kb = []
                         row = []
                         for e in grid_opts:
@@ -348,68 +357,50 @@ class TriviaGame:
                             if len(row) == 3:
                                 kb.append(row)
                                 row = []
-                        
                         for cid in active_chats:
                             try:
                                 photo.seek(0)
                                 msg = await self.application.bot.send_photo(
-                                    cid, 
-                                    photo=photo, 
+                                    cid, photo=photo, 
                                     caption="🖼 <b>EMOJI HUNT!</b>\nTap photo to reveal and find the emoji!", 
-                                    reply_markup=InlineKeyboardMarkup(kb), 
-                                    parse_mode='HTML',
-                                    has_spoiler=True
+                                    reply_markup=InlineKeyboardMarkup(kb), parse_mode='HTML', has_spoiler=True
                                 )
                                 self.active_games[msg.message_id] = {'start_time': time.time(), 'winner': None}
                                 asyncio.create_task(self.auto_delete_task(cid, msg.message_id, target))
-                                await asyncio.sleep(0.5) 
                             except: pass
 
-                # --- 2. TRIVIA QUIZ ---
                 elif current_mode == "trivia":
                     q = self.get_trivia_question()
                     kb = [[InlineKeyboardButton(o, callback_data=f"trivia:{'yes' if o==q['a'] else 'no'}:{o}")] for o in q['options']]
-                    
                     for cid in active_chats:
                         try:
                             msg = await self.application.bot.send_message(
-                                cid, 
-                                f"🧩 <b>TRIVIA QUIZ</b>\n\n{q['q']}", 
-                                reply_markup=InlineKeyboardMarkup(kb), 
-                                parse_mode='HTML'
+                                cid, f"🧩 <b>TRIVIA QUIZ</b>\n\n{q['q']}", 
+                                reply_markup=InlineKeyboardMarkup(kb), parse_mode='HTML'
                             )
                             self.active_games[msg.message_id] = {'start_time': time.time(), 'winner': None}
                             asyncio.create_task(self.auto_delete_task(cid, msg.message_id, q['a']))
-                            await asyncio.sleep(0.5)
                         except: pass
 
-                # --- 3. WORD GUESSER (NEW) ---
                 elif current_mode == "word":
                     data = self.get_word_data()
                     photo = await self.create_word_image(data['scrambled'])
-                    
                     if photo:
                         kb = []
                         for opt in data['options']:
                             is_correct = 'yes' if opt == data['correct'] else 'no'
-                            # Store truncated data if word is long to avoid limits
                             kb.append([InlineKeyboardButton(opt, callback_data=f"trivia:{is_correct}:{data['correct']}")])
-                        
                         for cid in active_chats:
                             try:
                                 photo.seek(0)
                                 msg = await self.application.bot.send_photo(
-                                    cid,
-                                    photo=photo,
-                                    caption=f"🔠 <b>UNSCRAMBLE THE WORD!</b>\n\nI have scrambled a word in Neon.\nTap the correct option below! 👇",
-                                    reply_markup=InlineKeyboardMarkup(kb),
-                                    parse_mode='HTML'
+                                    cid, photo=photo,
+                                    caption=f"🔠 <b>UNSCRAMBLE THE WORD!</b>\nTap the correct option below! 👇",
+                                    reply_markup=InlineKeyboardMarkup(kb), parse_mode='HTML'
                                 )
                                 self.active_games[msg.message_id] = {'start_time': time.time(), 'winner': None}
                                 asyncio.create_task(self.auto_delete_task(cid, msg.message_id, data['correct']))
-                                await asyncio.sleep(0.5)
-                            except Exception as e:
-                                logger.error(f"Word Send Error: {e}")
+                            except: pass
 
             except Exception as e: 
                 logger.error(f"Global Loop Error: {e}")
