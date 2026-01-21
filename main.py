@@ -1713,7 +1713,7 @@ async def translate_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         if available_gemini_keys:
             random.shuffle(available_gemini_keys)
             api_key_to_use = available_gemini_keys[0]
-            model_name_to_use = "models/gemini-1.5-flash-latest"
+            model_name_to_use = "models/gemini-2.5-flash-lite"
         elif globals().get('GEMMA_API_KEY'):
             api_key_to_use = GEMMA_API_KEY
             model_name_to_use = "models/gemma-2-9b-it"
