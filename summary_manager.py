@@ -47,28 +47,28 @@ class SummaryManager:
         except Exception as e:
             logger.error(f"DB Record Error: {e}")
 
+
     async def _generate_summary_text(self, logs, top_user_info):
         """
-        Generates the summary. 
-        'top_user_info' contains the name and count of the most active user.
+        Generates a concise, engaging narrative story.
         """
         
-        # --- FACTUAL NARRATIVE PROMPT ---
         system_prompt = (
-            "You are a smart community reporter. Create a Daily Summary based ONLY on the provided chat logs.\n"
-            "Rules:\n"
-            "1. **Accuracy is Key**: Do not invent stories. Only summarize what users actually discussed.\n"
-            "2. **Narrative Style**: Write in a flowing story format (paragraphs), not just a list of facts. Make it interesting but keep it real.\n"
-            "3. **Highlights**: Identify the main topics of discussion.\n"
-            "4. **Formatting**: ALWAYS bold user names (e.g., <b>Name</b>).\n"
-            "5. **Chatter of the Day**: The system has identified the most active user. You MUST mention them in the end with a credit line.\n"
-            "6. Language: Proper English.\n"
+            "You are a charismatic Storyteller for a premium Telegram group. "
+            "Your goal: Turn today's chat logs into a SHORT, punchy, and engaging 'Daily Story'.\n\n"
+            "Style Guidelines:\n"
+            "1. **Narrative Flow**: Don't just list facts. Use transitions like 'It all kicked off when...', 'Then things took a turn as...', or 'The vibe shifted when...'.\n"
+            "2. **Stick to the Plot**: Only use real events from the logs. Do not invent fake drama.\n"
+            "3. **Stay Concise**: Keep it to 2-3 short, high-energy paragraphs. Avoid 'fluff'.\n"
+            "4. **Formatting**: Bold user names: <b>Name</b>. Use relevant emojis sparingly.\n"
+            "5. **Closing Credits**: End with a dedicated 'Star of the Day' section for the top chatter.\n"
+            "6. **Language**: Smooth, modern English."
         )
 
         user_prompt = (
-            f"Here are the chat logs:\n{logs}\n\n"
-            f"STATS: {top_user_info}\n\n"
-            "Please write the summary story and give credits to the top chatter."
+            f"CHAT LOGS FOR STORYTELLING:\n{logs}\n\n"
+            f"ACTIVITY DATA: {top_user_info}\n\n"
+            "Write the story now. Keep it short, engaging, and bold the names."
         )
 
         try:
@@ -78,13 +78,16 @@ class SummaryManager:
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
                 ],
-                max_tokens=850,
-                temperature=0.5, # Low temp = No Hallucinations / No Rubbish
+                max_tokens=600, # Kept shorter for better engagement
+                temperature=0.7, # Slightly higher for better 'story' flow, but still grounded
             )
             return completion.choices[0].message.content
         except Exception as e:
             logger.error(f"Groq API Error: {e}")
-            return "⚠️ Could not generate summary due to an AI error."
+            return "⚠️ The AI is currently resting. Summary unavailable."
+
+
+    
 
     async def prepare_summaries(self):
         """Fetches logs, calculates stats, and generates summaries."""
@@ -131,8 +134,9 @@ class SummaryManager:
             await self.db[coll_name].delete_many({})
             logger.info(f"✅ Summary ready for {chat_id} (MVP: {top_name})")
 
-    async def deliver_summaries(self):
-        """Delivers the prepared summaries."""
+
+        async def deliver_summaries(self):
+        """Delivers the prepared summaries with a cleaner look."""
         logger.info("--- DELIVERING SUMMARIES ---")
         cursor = self.db["pending_summaries"].find({"status": "ready"})
         pending = await cursor.to_list(length=100)
@@ -140,23 +144,27 @@ class SummaryManager:
         for item in pending:
             chat_id = item["chat_id"]
             try:
+                # Cleaner, more modern delivery template
                 final_post = (
-                    f"🗞 <b>DAILY RECAP</b> 🗞\n"
-                    f"────────────────────\n\n"
+                    f"✨ <b>THE DAILY CHRONICLE</b> ✨\n"
+                    f"━━━━━━━━━━━━━━━━━━\n\n"
                     f"{item['summary']}\n\n"
-                    f"────────────────────\n"
-                    f"🤖 <i>Automated Report</i>"
+                    f"━━━━━━━━━━━━━━━━━━\n"
+                    f"📌 <i>Summarized for the community.</i>"
                 )
                 sent_msg = await self.app.bot.send_message(chat_id, final_post, parse_mode='HTML')
                 
                 try:
                     await self.app.bot.pin_chat_message(chat_id, sent_msg.message_id)
                 except:
-                    pass # Pin fail ho to ignore
+                    pass
 
                 await self.db["pending_summaries"].delete_one({"chat_id": chat_id})
             except Exception as e:
-                logger.error(f"Delivery Error for {chat_id}: {e}")
+                logger.error(f"Delivery Error: {e}")
+                
+
+    
 
     async def test_summary_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Manual trigger to test logic immediately."""
