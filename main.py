@@ -3623,11 +3623,26 @@ def check_sudo_wrapper(handler):
 trivia_bot = None
 summary_bot = None
 
+Python
+
+# --- Global variables top par rehne do ---
+trivia_bot = None
+summary_bot = None
+
 async def post_init(application: Application) -> None:
     """Ye background tasks ko sahi event loop mein start karega"""
-    # Global keyword use karna zaroori hai taaki function bahar ke objects ko pehchan sake
     global trivia_bot, summary_bot
     
+    # 🚨 ZAROORI: Bots ko yahan initialize karna sabse safe hai 
+    # taaki 'ExtBot' properly initialize ho chuka ho.
+    if trivia_bot is None:
+        from trivia_manager import TriviaGame
+        trivia_bot = TriviaGame(application)
+    
+    if summary_bot is None:
+        from summary_manager import SummaryManager
+        summary_bot = SummaryManager(application, known_users)
+
     try:
         # Background tasks start karein
         asyncio.create_task(trivia_bot.start_loop())
@@ -3639,8 +3654,7 @@ async def post_init(application: Application) -> None:
 # --- Main function ---
 def main() -> None:
     global trivia_bot, summary_bot
-    
-    application = Application.builder().token(TELEGRAM_BOT_TOKEN).post_init(post_init).build()
+
     
     # --- NEW: Load all data from sheets on startup ---
     # This call initializes all sheet variables (google_sheet, sudo_sheet, welcome_sheet)
@@ -3653,17 +3667,28 @@ def main() -> None:
     load_known_users()
     load_sudo_users()
     load_welcome_settings() # NEW: Load custom welcomes into cache
-    
+
+    application = (
+        Application.builder()
+        .token(TELEGRAM_BOT_TOKEN)
+        .post_init(post_init) 
+        .build()
+    )
     # General Commands
     summary_bot = SummaryManager(application, known_users)
     trivia_bot = TriviaGame(application, known_users)
-    application.add_handler(CallbackQueryHandler(trivia_bot.handle_callback, pattern="^trivia:"))
     
+    application.add_handler(CallbackQueryHandler(lambda u, c: trivia_bot.handle_callback(u, c) if trivia_bot else None, pattern="^trivia:"))
     #asyncio.get_event_loop().create_task(trivia_bot.start_loop())
 
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, summary_bot.record_message), group=1)
     
-    application.add_handler(CommandHandler("testsummary", summary_bot.test_summary_command))
+    application.add_handler(MessageHandler(
+        filters.TEXT & ~filters.COMMAND, 
+        lambda u, c: summary_bot.record_message(u, c) if summary_bot else None
+    ), group=1)
+    
+    application.add_handler(CommandHandler("testsummary", lambda u, c: summary_bot.test_summary_command(u, c) if summary_bot else None))
+    
     
     application.add_handler(CommandHandler("start", start_command))
     application.add_handler(CommandHandler("help", help_command))
