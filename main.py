@@ -3673,8 +3673,11 @@ def main() -> None:
     # General Commands
     summary_bot = SummaryManager(application, known_users)
     trivia_bot = TriviaGame(application, known_users)
+    application.add_handler(CallbackQueryHandler(
+    lambda u, c: trivia_bot.handle_callback(u, c) if trivia_bot else None, 
+    pattern="^trivia:"
+    ))
     
-    application.add_handler(CallbackQueryHandler(lambda u, c: trivia_bot.handle_callback(u, c) if trivia_bot else None, pattern="^trivia:"))
     #asyncio.get_event_loop().create_task(trivia_bot.start_loop())
 
     
