@@ -3639,8 +3639,7 @@ async def post_init(application: Application) -> None:
 # --- Main function ---
 def main() -> None:
     global trivia_bot, summary_bot
-    trivia_bot = TriviaGame(application)
-    summary_bot = SummaryManager(application, known_users)
+    
     application = Application.builder().token(TELEGRAM_BOT_TOKEN).post_init(post_init).build()
     
     # --- NEW: Load all data from sheets on startup ---
@@ -3656,12 +3655,12 @@ def main() -> None:
     load_welcome_settings() # NEW: Load custom welcomes into cache
     
     # General Commands
+    summary_bot = SummaryManager(application, known_users)
     trivia_bot = TriviaGame(application, known_users)
     application.add_handler(CallbackQueryHandler(trivia_bot.handle_callback, pattern="^trivia:"))
     
     #asyncio.get_event_loop().create_task(trivia_bot.start_loop())
 
-    summary_bot = SummaryManager(application, known_users)
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, summary_bot.record_message), group=1)
     
     application.add_handler(CommandHandler("testsummary", summary_bot.test_summary_command))
