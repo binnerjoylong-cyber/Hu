@@ -3620,10 +3620,6 @@ def check_sudo_wrapper(handler):
             logger.warning(f"Unauthorized access to restricted command by user {user_id} in chat {update.effective_chat.id}")
     return wrapper
     
-trivia_bot = None
-summary_bot = None
-
-Python
 
 # --- Global variables top par rehne do ---
 trivia_bot = None
