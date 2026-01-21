@@ -134,38 +134,36 @@ class SummaryManager:
             await self.db[coll_name].delete_many({})
             logger.info(f"✅ Summary ready for {chat_id} (MVP: {top_name})")
 
-
-        async def deliver_summaries(self):
+    async def deliver_summaries(self):
         """Delivers the prepared summaries with a cleaner look."""
         logger.info("--- DELIVERING SUMMARIES ---")
-        cursor = self.db["pending_summaries"].find({"status": "ready"})
-        pending = await cursor.to_list(length=100)
-        
-        for item in pending:
-            chat_id = item["chat_id"]
-            try:
-                # Cleaner, more modern delivery template
-                final_post = (
-                    f"✨ <b>THE DAILY CHRONICLE</b> ✨\n"
-                    f"━━━━━━━━━━━━━━━━━━\n\n"
-                    f"{item['summary']}\n\n"
-                    f"━━━━━━━━━━━━━━━━━━\n"
-                    f"📌 <i>Summarized for the community.</i>"
-                )
-                sent_msg = await self.app.bot.send_message(chat_id, final_post, parse_mode='HTML')
-                
+        try:
+            cursor = self.db["pending_summaries"].find({"status": "ready"})
+            pending = await cursor.to_list(length=100)
+            
+            for item in pending:
+                chat_id = item["chat_id"]
                 try:
-                    await self.app.bot.pin_chat_message(chat_id, sent_msg.message_id)
-                except:
-                    pass
+                    # Cleaner, more modern delivery template
+                    final_post = (
+                        f"✨ <b>THE DAILY CHRONICLE</b> ✨\n"
+                        f"━━━━━━━━━━━━━━━━━━\n\n"
+                        f"{item['summary']}\n\n"
+                        f"━━━━━━━━━━━━━━━━━━\n"
+                        f"📌 <i>Summarized for the community.</i>"
+                    )
+                    sent_msg = await self.app.bot.send_message(chat_id, final_post, parse_mode='HTML')
+                    
+                    try:
+                        await self.app.bot.pin_chat_message(chat_id, sent_msg.message_id)
+                    except Exception as pin_err:
+                        logger.warning(f"Could not pin message: {pin_err}")
 
-                await self.db["pending_summaries"].delete_one({"chat_id": chat_id})
-            except Exception as e:
-                logger.error(f"Delivery Error: {e}")
-                
-
-    
-
+                    await self.db["pending_summaries"].delete_one({"chat_id": chat_id})
+                except Exception as e:
+                    logger.error(f"Delivery Error for chat {chat_id}: {e}")
+        except Exception as global_err:
+            logger.error(f"Global Delivery Error: {global_err}")
     async def test_summary_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Manual trigger to test logic immediately."""
         chat_id = update.effective_chat.id
