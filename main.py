@@ -3619,6 +3619,9 @@ def check_sudo_wrapper(handler):
             await context.bot.send_message(chat_id=update.effective_chat.id, text="Sorry, this command is restricted to sudo users only.")
             logger.warning(f"Unauthorized access to restricted command by user {user_id} in chat {update.effective_chat.id}")
     return wrapper
+    
+trivia_bot = None
+summary_bot = None
 
 async def post_init(application: Application) -> None:
     """Ye background tasks ko sahi event loop mein start karega"""
