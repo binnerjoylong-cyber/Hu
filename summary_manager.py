@@ -1,149 +1,162 @@
 import logging
 import datetime
 import asyncio
+from motor.motor_asyncio import AsyncIOMotorClient
 from groq import Groq
 from telegram import Update
 from telegram.ext import ContextTypes
 
 logger = logging.getLogger(__name__)
 
-# --- CONFIG ---
-GROQ_API_KEY = "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" # Groq Cloud se key lein
+# --- CONFIGURATION ---
+MONGO_URI = "YOUR_MONGODB_URI_HERE"
+GROQ_API_KEY = "YOUR_GROQ_API_KEY_HERE"
 
 class SummaryManager:
-    def __init__(self, application, known_users_list):
+    def __init__(self, application):
+        self.client = AsyncIOMotorClient(MONGO_URI)
+        self.db = self.client["laila_summaries"]
         self.app = application
-        self.known_users = known_users_list
         self.ai_client = Groq(api_key=GROQ_API_KEY)
 
-    async def fetch_and_summarize(self):
-        """Raat 7:50 baje chat history uthakar 8 baje post karna"""
-        logger.info("Laila is scanning the last 24 hours of history...")
+    async def record_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Saves every text message to MongoDB for the 7:50 PM scan"""
+        if not update.effective_chat or update.effective_chat.type == "private":
+            return
+        msg = update.effective_message
+        if not msg or not msg.text or len(msg.text) < 2 or msg.text.startswith('/'):
+            return
+
+        chat_id = update.effective_chat.id
+        try:
+            await self.db[f"chat_{chat_id}"].insert_one({
+                "user": msg.from_user.first_name,
+                "text": msg.text,
+                "time": datetime.datetime.utcnow()
+            })
+        except Exception as e:
+            logger.error(f"DB Record Error: {e}")
+
+    async def prepare_summaries(self):
+        """7:50 PM: Scans DB, generates AI story, and stores in Queue"""
+        logger.info("--- 7:50 PM: INITIALIZING SUMMARY PREP ---")
+        collections = await self.db.list_collection_names()
         
-        # Sirf Groups ko filter karein
-        active_chats = [c for c in list(self.known_users) if str(c).startswith("-")]
-        
-        for chat_id in active_chats:
+        for coll_name in collections:
+            if not coll_name.startswith("chat_"): continue
+            
+            chat_id = int(coll_name.replace("chat_", ""))
+            # Get last 3000 messages
+            messages = await self.db[coll_name].find().sort("time", 1).to_list(length=3000)
+            
+            if not messages or len(messages) < 5:
+                logger.info(f"Skipping {chat_id}: Insufficient activity.")
+                continue
+
+            formatted_logs = "\n".join([f"{m['user']}: {m['text']}" for m in messages])
+            
+            # AI Prompt with Dynamic Length Logic
+            prompt = (
+                f"Narrate today's group chat highlights as a witty, dramatic, and elite storyteller. "
+                f"Title: 'THE DAILY CHRONICLES'. "
+                f"LENGTH RULE: If the chat is quiet, write a brief summary (50-100 words). "
+                f"If the chat is busy, write a detailed story (up to 600 words). "
+                f"Style: Elite English. Mention key moments and end with 'STAR OF THE NIGHT'.\n\n"
+                f"LOGS:\n{formatted_logs}"
+            )
+
             try:
-                # 1. Pichle 24 ghante ke messages fetch karna (Limit: 2000 messages)
-                messages = []
-                async for message in self.app.bot.get_chat_history(chat_id, limit=2000):
-                    # Check if message is within last 24 hours
-                    if message.date < datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=1):
-                        break
-                    if message.text and not message.text.startswith('/'):
-                        messages.append(f"{message.from_user.first_name}: {message.text}")
-                
-                if not messages or len(messages) < 5:
-                    continue
-
-                # Reverse taaki chronological order (shuruat se ant tak) rahe
-                messages.reverse()
-                formatted_logs = "\n".join(messages)
-
-                # 2. AI Prompt (Storytelling + Medium Size)
-                prompt = (
-                    f"Narrate the highlights of this chat from the last 24 hours as a witty and elite story. "
-                    f"Title: 'THE DAILY CHRONICLES'. "
-                    f"Format: Medium-sized (not too long, not too short). "
-                    f"Mention the main drama, funny interactions, and key topics. "
-                    f"End with 'STAR OF THE NIGHT' naming the most impactful user. "
-                    f"Language: Sophisticated English with an elite vibe.\n\nLOGS:\n{formatted_logs}"
-                )
-
-                # 3. Groq AI se summary generate karna
                 completion = self.ai_client.chat.completions.create(
                     model="llama3-70b-8192",
                     messages=[{"role": "user", "content": prompt}],
+                    max_tokens=1000,
                     temperature=0.7,
                 )
-                summary = completion.choices[0].message.content
+                summary_text = completion.choices[0].message.content
                 
+                # Store in Pending Queue
+                await self.db["pending_summaries"].update_one(
+                    {"chat_id": chat_id},
+                    {"$set": {"summary": summary_text, "status": "ready"}},
+                    upsert=True
+                )
+                # Cleanup raw logs
+                await self.db[coll_name].delete_many({})
+                logger.info(f"✅ Summary ready for {chat_id}")
+            except Exception as e:
+                logger.error(f"AI Prep Error for {chat_id}: {e}")
+
+    async def deliver_summaries(self):
+        """8:00 PM: Posts all ready summaries from the Queue"""
+        logger.info("--- 8:00 PM: DISPATCHING SUMMARIES ---")
+        cursor = self.db["pending_summaries"].find({"status": "ready"})
+        pending = await cursor.to_list(length=100)
+        
+        for item in pending:
+            chat_id = item["chat_id"]
+            text = item["summary"]
+            
+            try:
                 final_post = (
                     f"🏛 <b>THE DAILY CHRONICLES</b> 🏛\n"
                     f"━━━━━━━━━━━━━━━━━━━━\n\n"
-                    f"{summary}\n\n"
+                    f"{text}\n\n"
                     f"━━━━━━━━━━━━━━━━━━━━\n"
-                    f"⚜️ <i>Curated by Laila. See you tomorrow!</i>"
+                    f"⚜️ <i>Archives updated and pinned.</i>"
                 )
-
-                # 4. 8:00 PM tak wait karna (agar 7:50 par start hua hai)
-                # (Simple sleep logic ya direct send agar time ho gaya ho)
-                
                 sent_msg = await self.app.bot.send_message(chat_id, final_post, parse_mode='HTML')
                 await self.app.bot.pin_chat_message(chat_id, sent_msg.message_id)
-                logger.info(f"Summary pinned in {chat_id}")
-
+                
+                # Remove from Queue
+                await self.db["pending_summaries"].delete_one({"chat_id": chat_id})
+                logger.info(f"🚀 Summary posted in {chat_id}")
             except Exception as e:
-                logger.error(f"Error in {chat_id}: {e}")
+                logger.error(f"Delivery Error for {chat_id}: {e}")
 
     async def test_summary_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """For Testing: /testsummary command chalate hi turant summary banegi"""
+        """Immediate test for Admins: /testsummary"""
         chat_id = update.effective_chat.id
+        status = await update.message.reply_text("🧐 Analyzing current logs... please wait.")
         
-        # Check if it's a group
-        if update.effective_chat.type == "private":
-            await update.message.reply_text("Sir, please run this in a group to test history fetching.")
+        # Prepare and immediately return (is_test=True to keep logs)
+        messages = await self.db[f"chat_{chat_id}"].find().sort("time", 1).to_list(length=1000)
+        if not messages:
+            await status.edit_text("❌ No logs recorded yet. Send some messages first!")
             return
 
-        status_msg = await update.message.reply_text("⏳ Laila is reading the last 24 hours of gossip... please wait.")
-        
+        formatted_logs = "\n".join([f"{m['user']}: {m['text']}" for m in messages])
         try:
-            # 1. Fetching history
-            messages = []
-            async for message in self.app.bot.get_chat_history(chat_id, limit=500): # Test ke liye 500 kaafi hain
-                if message.text and not message.text.startswith('/'):
-                    messages.append(f"{message.from_user.first_name}: {message.text}")
-            
-            if not messages:
-                await status_msg.edit_text("❌ No messages found in the last 24 hours to summarize.")
-                return
-
-            messages.reverse()
-            formatted_logs = "\n".join(messages)
-
-            # 2. AI Request
-            prompt = (
-                f"Narrate the highlights of this chat as a witty and elite story. "
-                f"Title: 'THE DAILY CHRONICLES (TEST MODE)'. "
-                f"Format: Medium-sized. Mention users and the drama. "
-                f"End with 'STAR OF THE NIGHT'. Language: Elite English.\n\nLOGS:\n{formatted_logs}"
-            )
-
             completion = self.ai_client.chat.completions.create(
                 model="llama3-70b-8192",
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.7,
+                messages=[{"role": "user", "content": f"Summarize this briefly: {formatted_logs}"}],
+                max_tokens=500
             )
-            summary = completion.choices[0].message.content
-            
-            final_post = (
-                f"🏛 <b>THE DAILY CHRONICLES (TEST)</b> 🏛\n"
-                f"━━━━━━━━━━━━━━━━━━━━\n\n"
-                f"{summary}\n\n"
-                f"━━━━━━━━━━━━━━━━━━━━\n"
-                f"⚜️ <i>Test successful. Laila is ready for 8 PM!</i>"
-            )
-
-            await self.app.bot.send_message(chat_id, final_post, parse_mode='HTML')
-            await status_msg.delete()
-
+            await update.message.reply_text(f"🧪 <b>TEST SUMMARY:</b>\n\n{completion.choices[0].message.content}", parse_mode='HTML')
+            await status.delete()
         except Exception as e:
-            await status_msg.edit_text(f"❌ Error during test: {str(e)}")
-            logger.error(f"Test Summary Error: {e}")
+            await status.edit_text(f"Error: {e}")
 
     async def run_scheduler(self):
-        """Raat 7:50 PM par trigger hone ka scheduler"""
+        """The Main Clock"""
         while True:
             now = datetime.datetime.now()
-            # 19:50 means 7:50 PM
-            target = now.replace(hour=19, minute=50, second=0, microsecond=0)
             
-            if now >= target:
-                target += datetime.timedelta(days=1)
-            
-            wait_time = (target - now).total_seconds()
-            logger.info(f"Laila will scan chat in {wait_time/3600:.2f} hours.")
-            
-            await asyncio.sleep(wait_time)
-            await self.fetch_and_summarize()
+            # --- PHASE 1: PREP AT 7:50 PM ---
+            prep_time = now.replace(hour=19, minute=50, second=0, microsecond=0)
+            if now < prep_time:
+                wait_prep = (prep_time - now).total_seconds()
+                logger.info(f"Next Prep scheduled in {wait_prep/3600:.2f} hours.")
+                await asyncio.sleep(wait_prep)
+                await self.prepare_summaries()
+
+            # --- PHASE 2: POST AT 8:00 PM ---
+            now = datetime.datetime.now()
+            post_time = now.replace(hour=20, minute=0, second=0, microsecond=0)
+            if now < post_time:
+                wait_post = (post_time - now).total_seconds()
+                logger.info(f"Next Posting scheduled in {wait_post/60:.2f} minutes.")
+                await asyncio.sleep(wait_post)
+                await self.deliver_summaries()
+
+            # Wait for next day
+            await asyncio.sleep(60)
