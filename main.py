@@ -36,6 +36,7 @@ import io
 import glob
 # --- NEW: IMPORT THE GAME MODULE ---
 import game
+from trivia_manager import TriviaGame
 # Agar file ka naam yt_bypass.py hai toh:
 # main.py ke top par
 from yt_bypass import social_media_handler, youtube_command
@@ -3635,6 +3636,13 @@ def main() -> None:
     load_welcome_settings() # NEW: Load custom welcomes into cache
     
     # General Commands
+    trivia = TriviaGame(application, known_users)
+    
+    application.add_handler(CallbackQueryHandler(trivia.handle_callback, pattern="^trivia:"))
+    loop = asyncio.get_event_loop()
+    loop.create_task(trivia.start_loop())
+
+    
     application.add_handler(CommandHandler("start", start_command))
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("about", about_command))
