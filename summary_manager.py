@@ -196,9 +196,9 @@ class SummaryManager:
             now_ist = datetime.datetime.now(IST)
             
             # Prep Time: 7:50 PM
-            prep_time = now_ist.replace(hour=19, minute=50, second=0, microsecond=0)
+            prep_time = now_ist.replace(hour=21, minute=50, second=0, microsecond=0)
             # Post Time: 8:00 PM
-            post_time = now_ist.replace(hour=20, minute=0, second=0, microsecond=0)
+            post_time = now_ist.replace(hour=22, minute=0, second=0, microsecond=0)
 
             # --- LOGIC ---
             # 1. Agar 7:50 PM nahi baje: Wait karo.
