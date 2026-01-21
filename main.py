@@ -3644,6 +3644,7 @@ def main() -> None:
 
     summary_bot = SummaryManager(application, known_users)
     asyncio.get_event_loop().create_task(summary_bot.run_scheduler())
+    application.add_handler(CommandHandler("testsummary", summary_bot.test_summary_command))
     
     application.add_handler(CommandHandler("start", start_command))
     application.add_handler(CommandHandler("help", help_command))
