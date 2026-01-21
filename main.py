@@ -2197,6 +2197,91 @@ from datetime import datetime
 async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     chat_id = update.effective_chat.id
     
+    # --- 1. Ping Calculation & Quality Check ---
+    ping_start = time.time()
+    await context.bot.send_chat_action(chat_id=chat_id, action="typing")
+    ping_end = time.time()
+    ping_ms = int((ping_end - ping_start) * 1000)
+    
+    # Ping Quality Indicator
+    if ping_ms < 60:
+        ping_status = "🟢 Smooth"
+    elif ping_ms < 150:
+        ping_status = "🟡 Fair"
+    else:
+        ping_status = "🔴 High Load"
+
+    # --- 2. Uptime Calculation ---
+    uptime = datetime.now() - start_time
+    days = uptime.days
+    hours, remainder = divmod(uptime.seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    uptime_str = f"{days}d {hours}h {minutes}m"
+
+    # --- 3. System Usage ---
+    ram = psutil.virtual_memory().percent
+    cpu = psutil.cpu_percent(interval=None) 
+    disk = psutil.disk_usage('/').percent
+
+    # Progress Bar Function
+    def get_bar(percentage):
+        filled = int(percentage / 10)
+        # Custom bar style: ■ aur □ use karke
+        return "■" * filled + "□" * (10 - filled)
+
+    # --- 4. PREMIUM DASHBOARD LAYOUT ---
+    response_text = (
+        "<b>🤖 LAILA SYSTEM METRICS</b>\n"
+        "━━━━━━━━━━━━━━━━━━━\n"
+        f"<b>📶 Network Status</b>\n"
+        f"├ <b>Ping:</b> <code>{ping_ms}ms</code>\n"
+        f"└ <b>State:</b> {ping_status}\n\n"
+        f"<b>⏳ Runtime Info</b>\n"
+        f"└ <b>Up Since:</b> <code>{uptime_str}</code>\n"
+        "━━━━━━━━━━━━━━━━━━━\n"
+        f"<b>⚙️ CPU Load</b>\n"
+        f"<code>[{get_bar(cpu)}]</code> <b>{cpu}%</b>\n"
+        f"<b>🧠 RAM Usage</b>\n"
+        f"<code>[{get_bar(ram)}]</code> <b>{ram}%</b>\n"
+        f"<b>💾 Disk Space</b>\n"
+        f"<code>[{get_bar(disk)}]</code> <b>{disk}%</b>\n"
+        "━━━━━━━━━━━━━━━━━━━\n"
+        "<i>👨‍💻 Maintained by Adhyan</i>"
+    )
+
+    # --- 5. MEDIA HANDLING (Video + Photo Support) ---
+    # Yahan apna File ID daalein (Video ya Photo ka)
+    media_url = 'BAACAgUAAxkBAAIEgGlwaHd7eHlTKkVnj8w60KzRbfnqAAJKHAAC20OAV169e1yH7oFwOAQ'
+    
+    try:
+        # Pehle Video try karein
+        await context.bot.send_video(
+            chat_id=chat_id,
+            video=media_url,
+            caption=response_text,
+            parse_mode='HTML'
+        )
+    except Exception:
+        try:
+            # Agar Video fail ho, to Photo try karein
+            await context.bot.send_photo(
+                chat_id=chat_id,
+                photo=media_url,
+                caption=response_text,
+                parse_mode='HTML'
+            )
+        except Exception as e:
+            # Agar Media fail ho, to Text bhejein
+            logger.error(f"Stats Media Error: {e}")
+            await context.bot.send_message(
+                chat_id=chat_id, 
+                text=response_text, 
+                parse_mode='HTML'
+            )
+
+'''async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    chat_id = update.effective_chat.id
+    
     # 1. Ping Calculation
     ping_start = time.time()
     # Chat action dikhana cool lagta hai stats load hote waqt
@@ -2247,7 +2332,7 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         )
     except Exception as e:
         logger.error(f"Stats Error: {e}")
-        await context.bot.send_message(chat_id=chat_id, text=response_text, parse_mode='HTML')
+        await context.bot.send_message(chat_id=chat_id, text=response_text, parse_mode='HTML')'''
 
 
 async def admin_stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
