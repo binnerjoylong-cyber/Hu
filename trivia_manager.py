@@ -4,39 +4,37 @@ import logging
 import html
 import time
 import io
+import requests
 from PIL import Image, ImageDraw, ImageFont
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, Application
 
 logger = logging.getLogger(__name__)
 
-# --- CONFIG ---
+# --- ⚙️ CONFIGURATION ---
 EMOJI_POOL = ["🍎", "🚀", "💎", "🐱", "🎸", "🍕", "🌈", "🔥", "🦄", "🍦", "⚽", "🎮", "🔔", "🎁", "🧿", "🍀", "🍩", "🍹", "🎈", "🧸"]
 
-# Yahan apni Frame ki Telegram FILE ID daalein
-# (Bot Father ya kisi bhi ID bot se ye ID nikaal sakte hain)
+# Yahan apni Frame ki Telegram FILE ID paste karein
 FRAME_FILE_ID = "AgACAgUAAyEFAATHcBuEAAICvGlwh5iWzzYJvgSuOE-EPOtjTa7XAAJnDWsb5FOJVwFVYd7UN29_AQADAgADeQADOAQ" 
 
 class TriviaGame:
     def __init__(self, application: Application, known_users_list):
         self.application = application
-        self.known_users = known_users_list
-        self.current_mode = "emoji"
+        self.known_users = known_users_list # Yeh main.py ki known_users list hai
+        self.current_mode = "emoji" # Sabse pehle Emoji game aayega
         self.active_games = {} 
-        self.cached_frame = None # Memory me frame store karne ke liye
+        self.cached_frame = None
 
     async def get_frame_from_telegram(self):
-        """Telegram server se File ID ke zariye photo bytes fetch karna"""
+        """Telegram se frame download karke memory me cache karta hai"""
         if self.cached_frame is None:
             try:
-                # File ID se file object lena
                 file = await self.application.bot.get_file(FRAME_FILE_ID)
-                # Bytes me download karna
                 photo_bytes = await file.download_as_bytearray()
                 self.cached_frame = bytes(photo_bytes)
-                logger.info("Frame cached successfully from Telegram File ID!")
+                logger.info("✅ Game Frame cached successfully!")
             except Exception as e:
-                logger.error(f"Error fetching File ID: {e}")
+                logger.error(f"❌ Error fetching File ID: {e}")
         return self.cached_frame
 
     async def create_emoji_image(self, target_emoji):
@@ -47,20 +45,18 @@ class TriviaGame:
             img = Image.open(io.BytesIO(frame_data)).convert("RGBA")
             draw = ImageDraw.Draw(img)
             
-            # Font setting (System default ya custom path)
+            # Font Logic (Render/Linux support)
             try:
-                font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 180)
+                font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 160)
             except:
-                try: font = ImageFont.truetype("arial.ttf", 180)
+                try: font = ImageFont.truetype("arial.ttf", 160)
                 except: font = ImageFont.load_default()
             
             # --- Emoji Center Logic ---
             width, height = img.size
             bbox = draw.textbbox((0, 0), target_emoji, font=font)
             tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
-            
-            x = (width - tw) // 2
-            y = (height - th) // 2 - 20 # Center adjustment
+            x, y = (width - tw) // 2, (height - th) // 2 - 10
             
             draw.text((x, y), target_emoji, font=font, fill=(255, 255, 255, 255))
             
@@ -69,12 +65,11 @@ class TriviaGame:
             img_byte_arr.seek(0)
             return img_byte_arr
         except Exception as e:
-            logger.error(f"Pillow Logic Error: {e}")
+            logger.error(f"Pillow Error: {e}")
             return None
 
     def get_api_question(self):
         try:
-            import requests
             url = "https://opentdb.com/api.php?amount=1&type=multiple&difficulty=easy"
             data = requests.get(url, timeout=5).json()
             if data['response_code'] == 0:
@@ -94,7 +89,7 @@ class TriviaGame:
         data = query.data.split(":") 
 
         if msg_id not in self.active_games:
-            await query.answer("This game session is old!", show_alert=True)
+            await query.answer("Session Expired!", show_alert=True)
             return
 
         game = self.active_games[msg_id]
@@ -121,30 +116,33 @@ class TriviaGame:
             )
             
             try:
+                # Buttons wahi rahenge, bas caption edit hoga
                 if query.message.photo:
                     await query.edit_message_caption(caption=status_text, parse_mode='HTML', reply_markup=query.message.reply_markup)
                 else:
                     await query.edit_message_text(text=status_text, parse_mode='HTML', reply_markup=query.message.reply_markup)
             except: pass
         else:
-            await query.answer("❌ Galat Jawab! Try again.", show_alert=False)
+            await query.answer("❌ Wrong! Try again.", show_alert=False)
 
     async def send_alerts(self, chat_id, msg_id):
+        """Countdown: 10m aur 5m bache hone par alerts"""
         try:
-            await asyncio.sleep(300) # 10 Min Alert
+            await asyncio.sleep(300) 
             if msg_id in self.active_games and not self.active_games[msg_id].get('winner'):
                 await self.application.bot.send_message(chat_id, "⏳ <b>10 Minutes Left!</b>", parse_mode='HTML')
-            await asyncio.sleep(300) # 5 Min Alert
+            await asyncio.sleep(300) 
             if msg_id in self.active_games and not self.active_games[msg_id].get('winner'):
-                await self.application.bot.send_message(chat_id, "⚠️ <b>Hurry Up! 5 Minutes Remaining!</b>", parse_mode='HTML')
+                await self.application.bot.send_message(chat_id, "⚠️ <b>Only 5 Minutes Left!</b>", parse_mode='HTML')
         except: pass
 
     async def start_loop(self):
-        logger.info("Emoji-ID Frame Loop Started!")
-        await asyncio.sleep(5) 
+        logger.info("Advanced Trivia Loop Started!")
+        await asyncio.sleep(10) # Pehla game 10 sec baad
         
         while True:
             try:
+                # Sirf Groups ko filter karein
                 active_chats = [c for c in list(self.known_users) if str(c).startswith("-")]
                 expiry = time.time() + 900 
                 
@@ -164,23 +162,33 @@ class TriviaGame:
                             if len(row) == 5: kb.append(row); row = []
                         
                         for cid in active_chats:
-                            photo.seek(0)
-                            msg = await self.application.bot.send_photo(
-                                cid, photo=photo, 
-                                caption="🖼 <b>EMOJI HUNT!</b>\nIdentify the emoji in the frame and click below!", 
-                                reply_markup=InlineKeyboardMarkup(kb), parse_mode='HTML'
-                            )
-                            self.active_games[msg.message_id] = {'start_time': time.time(), 'expires_at': expiry, 'winner': None}
-                            asyncio.create_task(self.send_alerts(cid, msg.message_id))
+                            try:
+                                photo.seek(0)
+                                msg = await self.application.bot.send_photo(
+                                    cid, photo=photo, 
+                                    caption="🖼 <b>EMOJI HUNT!</b>\nFind the emoji in the frame and click below!", 
+                                    reply_markup=InlineKeyboardMarkup(kb), parse_mode='HTML'
+                                )
+                                self.active_games[msg.message_id] = {'start_time': time.time(), 'expires_at': expiry, 'winner': None}
+                                asyncio.create_task(self.send_alerts(cid, msg.message_id))
+                                await asyncio.sleep(0.5)
+                            except Exception as e:
+                                if "Chat not found" in str(e) or "Forbidden" in str(e):
+                                    self.known_users.discard(cid) # Invalid chat hata do
                     self.current_mode = "trivia"
                 else:
                     q = self.get_api_question()
                     kb = [[InlineKeyboardButton(o, callback_data=f"trivia:{'yes' if o==q['a'] else 'no'}:{o}")] for o in q['options']]
                     for cid in active_chats:
-                        msg = await self.application.bot.send_message(cid, f"🧩 <b>TRIVIA QUIZ</b>\n\n{q['q']}", reply_markup=InlineKeyboardMarkup(kb), parse_mode='HTML')
-                        self.active_games[msg.message_id] = {'start_time': time.time(), 'expires_at': expiry, 'winner': None}
-                        asyncio.create_task(self.send_alerts(cid, msg.message_id))
+                        try:
+                            msg = await self.application.bot.send_message(cid, f"🧩 <b>TRIVIA QUIZ</b>\n\n{q['q']}", reply_markup=InlineKeyboardMarkup(kb), parse_mode='HTML')
+                            self.active_games[msg.message_id] = {'start_time': time.time(), 'expires_at': expiry, 'winner': None}
+                            asyncio.create_task(self.send_alerts(cid, msg.message_id))
+                            await asyncio.sleep(0.5)
+                        except Exception as e:
+                            if "Chat not found" in str(e) or "Forbidden" in str(e):
+                                self.known_users.discard(cid)
                     self.current_mode = "emoji"
 
             except Exception as e: logger.error(f"Loop Error: {e}")
-            await asyncio.sleep(1800)
+            await asyncio.sleep(1800) # 30 min wait
