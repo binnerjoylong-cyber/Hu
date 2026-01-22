@@ -506,19 +506,17 @@ async def check_level_up(data, update, context):
     return data
 
 async def update_player_data(player_data: dict) -> bool:
-    """Updates a player's account data in the sheet with an internal Level-Up check."""
+    """Updates a player's account data safely without range errors."""
     if not game_sheet:
         logger.error("game_sheet not initialized. Cannot update data.")
         return False
         
     try:
-        # 1. Internal Level Up Check (as a backup to keep sheet data consistent)
+        # 1. Internal Level Up Check
         xp = player_data.get('XP', 0)
         new_level = (xp // 1000) + 1
-        
         if new_level > player_data.get('Level', 1):
             player_data['Level'] = new_level
-            # Note: Notification message is handled in check_level_up, not here.
             logger.info(f"User {player_data['UserID']} internally leveled up to {new_level}")
 
         # 2. Find Player Row (Async)
@@ -530,73 +528,24 @@ async def update_player_data(player_data: dict) -> bool:
         row_idx = cell.row
 
         # 3. Map Data to Columns
-        # Ensures data is written in the correct order based on PLAYER_HEADERS
         row_values = []
         for header in PLAYER_HEADERS:
             val = player_data.get(header, 0)
-            # Serialize lists/dicts to JSON strings for the sheet
             if isinstance(val, (list, dict)):
                 val = json.dumps(val)
             row_values.append(val)
 
-        # 4. Sheet Update Logic (Efficient Row Update)
-        # Calculates the column range (e.g., A:V) based on number of headers
-        end_col = chr(64 + len(PLAYER_HEADERS)) 
-        update_range = f"A{row_idx}:{end_col}{row_idx}"
-        
-        await asyncio.to_thread(game_sheet.update, update_range, [row_values])
+        # 4. Sheet Update Logic (Sahi tareeka)
+        # update_row use karne se range ka koi jhanjhat nahi rehta
+        await asyncio.to_thread(game_sheet.update, f"A{row_idx}", [row_values])
         
         return True
 
     except Exception as e:
         logger.error(f"Error updating player data: {e}", exc_info=True)
-        return False   
-''' async def update_player_data(data):
-    # Calculate Level based on XP
-    xp = data.get('XP', 0)
-    new_level = (xp // 1000) + 1
-    if new_level > data.get('Level', 1):
-        data['Level'] = new_level
-        # Trigger a Level Up message if possible
-    
-    # Existing update logic...
-    cells = game_sheet.find(str(data['UserID']))
-    # ... update the row ...   
-async def update_player_data(player_data: dict) -> bool:
-    """Updates a player's account data in the sheet."""
-    if not game_sheet:
-        logger.error("game_sheet not initialized. Cannot update data.")
         return False
         
-    try:
-        # Find row (this is the only blocking call we need)
-        cell = await asyncio.to_thread(_get_player_row, player_data["UserID"])
-        if not cell:
-            logger.error(f"Cannot update data: User {player_data['UserID']} not found in sheet.")
-            return False
 
-        # --- Type Conversion and JSON Serialization ---
-        data_to_save = player_data.copy()
-        
-        # Ensure JSON fields are strings
-        data_to_save["ChildrenIDs"] = json.dumps(data_to_save.get("ChildrenIDs", []))
-        data_to_save["Inventory"] = json.dumps(data_to_save.get("Inventory", {}))
-        data_to_save["Assets"] = json.dumps(data_to_save.get("Assets", {}))
-
-        # Build the final list of values in the correct order
-        final_values = [str(data_to_save.get(h, "")) for h in PLAYER_HEADERS]
-        
-        # Update the row in a thread
-        await asyncio.to_thread(
-            game_sheet.update,
-            f'A{cell.row}:{gspread.utils.rowcol_to_a1(cell.row, len(PLAYER_HEADERS))}',
-            [final_values]
-        )
-        return True
-        
-    except Exception as e:
-        logger.error(f"Error in update_player_data for {player_data['UserID']}: {e}", exc_info=True)
-        return False'''
 
 # --- Main Game Command Handlers ---
 # --- 🎰 THE CASINO ENGINE ---
