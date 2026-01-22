@@ -1713,8 +1713,9 @@ async def handle_rob(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
             await update_player_data(robber_data)
             await update.message.reply_text(f"You failed to rob {_mention(target.id, target.full_name)} and were caught! 💥\nYou lost {hp_loss} HP.", parse_mode='Markdown')
 
+
 async def handle_kill(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Attempts to kill a replied-to user."""
+    """Attempts to kill a user based on Levels and Health (No Cost)."""
     if not update.message.reply_to_message:
         await update.message.reply_text("Please reply to a user with `/kill` to attempt an assassination.")
         return
@@ -1723,10 +1724,10 @@ async def handle_kill(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     target = update.message.reply_to_message.from_user
 
     if killer.id == target.id:
-        await update.message.reply_text("Suicide is not an option.")
+        await update.message.reply_text("Suicide is not an option. 😄")
         return
     if target.is_bot:
-        await update.message.reply_text("You can't kill a bot.")
+        await update.message.reply_text("You can't kill a bot, they are immortal.")
         return
         
     killer_data = await get_player_data(killer.id, killer.full_name)
@@ -1736,82 +1737,88 @@ async def handle_kill(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         await update.message.reply_text("Error accessing accounts.")
         return
 
-    if target_data["Health"] <= 0:
-        await update.message.reply_text(f"{target.full_name} is already dead.")
+    # 1. Check if target is already dead
+    if int(target_data.get("Health", 0)) <= 0:
+        await update.message.reply_text(f"{target.full_name} is already dead. Let them rest in peace.")
+        return
+
+    # 2. Minimum Health Requirement for Killer
+    if int(killer_data.get("Health", 0)) < 50:
+        await update.message.reply_text("You are too weak to attack! Use `/heal` first (Minimum 50 HP required).")
         return
         
-    is_ready, time_left = _check_cooldown(killer_data["LastKill"], COOLDOWNS["kill"])
+    # 3. Cooldown Check
+    is_ready, time_left = _check_cooldown(killer_data.get("LastKill", 0), COOLDOWNS["kill"])
     if not is_ready:
         await update.message.reply_text(f"You need more time to plan. Try again in {time_left}.")
         return
-        
-    cost = KILL_RATES["cost"]
-    if killer_data["Money"] < cost:
-        await update.message.reply_text(f"You can't afford an assassination! You need `${cost:,}`.")
-        return
 
     killer_data["LastKill"] = time.time()
-    killer_data["Money"] -= cost # Pay the cost regardless of outcome
+
+    # 4. Success Calculation based on Levels
+    # Base chance 30% + Level difference bonus
+    killer_lvl = int(killer_data.get("Level", 1))
+    target_lvl = int(target_data.get("Level", 1))
     
-    # Check for bodyguard
-    if target_data["Inventory"].get("bodyguard", 0) > 0:
-        target_data["Inventory"]["bodyguard"] -= 1
-        await update_player_data(killer_data) # Save cooldown & cost
-        await update_player_data(target_data) # Save used bodyguard
+    level_diff = killer_lvl - target_lvl
+    # Agar killer ka level bada hai to chance badhega, chota hai to kam hoga
+    success_chance = 35 + (level_diff * 5) 
+    
+    # Chance limits (Min 10%, Max 85%)
+    success_chance = max(10, min(85, success_chance))
+
+    # 5. Check for Bodyguard (Still works as a defense)
+    inventory = target_data.get("Inventory", [])
+    # Agar inventory list hai to 'bodyguard' check karein
+    if "bodyguard" in inventory:
+        inventory.remove("bodyguard")
+        target_data["Inventory"] = inventory
+        await update_player_data(killer_data) 
+        await update_player_data(target_data)
         await update.message.reply_text(
-            f"Your attempt to kill {_mention(target.id, target.full_name)} failed! 🛡️\n\nThey were protected by a **Bodyguard**, who eliminated your threat! The bodyguard has been used and you still paid `${cost:,}`.",
+            f"Your attempt to kill {_mention(target.id, target.full_name)} failed! 🛡️\n\nThey were protected by a **Bodyguard**!",
             parse_mode='Markdown'
         )
         return
 
-    # Calculate success chance
-    weapon_bonus = _find_item("weapons", killer_data.get("Weapon", ""))
-    bonus = weapon_bonus["value"] if weapon_bonus else 0
-    success_chance = KILL_RATES["chance"] + bonus
-    
+    # 6. Random Outcome
     if random.randint(1, 100) <= success_chance:
-        # Success
+        # SUCCESS
         target_data["Health"] = 0
-        target_data["Deaths"] += 1
-        killer_data["Kills"] += 1
+        # XP Reward for killer
+        killer_data["XP"] = killer_data.get("XP", 0) + 500
         
         await update_player_data(killer_data)
         await update_player_data(target_data)
         
-        # --- NEW GIFS AND MESSAGES ---
-        kill_messages = [
-            f"💀 **Assassination Successful!** 💀\n\n{_mention(killer.id, killer.full_name)} took out {_mention(target.id, target.full_name)} in cold blood.",
-            f"🎯 **Target Eliminated!** 🎯\n\n{_mention(target.id, target.full_name)} won't be seeing tomorrow, thanks to {_mention(killer.id, killer.full_name)}.",
-            f"💥 **He's Dead, Jim!** 💥\n\n{_mention(killer.id, killer.full_name)} has successfully assassinated {_mention(target.id, target.full_name)}."
-        ]
-        
-        # You can find more GIF URLs online
         kill_gifs = [
-            "https://media.giphy.com/media/l3vRkvDA9uZYh2dGg/giphy.gif", # Sniper
-            "https://media.giphy.com/media/3o7TKwBfD4O3n0gpp6/giphy.gif", # Explosion
-            "https://media.giphy.com/media/xT39CZobfRXAATy9oY/giphy.gif"  # Hitman
+            "https://media.giphy.com/media/l3vRkvDA9uZYh2dGg/giphy.gif",
+            "https://media.giphy.com/media/3o7TKwBfD4O3n0gpp6/giphy.gif",
+            "https://media.giphy.com/media/xT39CZobfRXAATy9oY/giphy.gif" 
         ]
         
         await update.message.reply_animation(
             animation=random.choice(kill_gifs),
-            caption=random.choice(kill_messages),
+            caption=(
+                f"💀 **Assassination Successful!**\n\n"
+                f"{_mention(killer.id, killer.full_name)} (Lvl {killer_lvl}) has killed "
+                f"{_mention(target.id, target.full_name)} (Lvl {target_lvl})! \n"
+                f"Killer gained +500 XP! 🎯"
+            ),
             parse_mode='Markdown'
         )
-        # --- END NEW SECTION ---
     else:
-        # Fail
-        hp_loss = KILL_RATES["fail_hp_loss"]
-        killer_data["Health"] -= hp_loss
+        # FAIL
+        hp_loss = 30 # Attacker loses 30 HP on fail
+        killer_data["Health"] = max(0, int(killer_data["Health"]) - hp_loss)
         
-        if killer_data["Health"] <= 0:
-            killer_data["Health"] = 0
-            killer_data["Deaths"] += 1
-            await update_player_data(killer_data)
-            await update.message.reply_text(f"Your assassination attempt on {_mention(target.id, target.full_name)} failed horribly! 💥\n\nYou lost {hp_loss} HP and **died**!", parse_mode='Markdown')
-        else:
-            await update_player_data(killer_data)
-            await update.message.reply_text(f"Your assassination attempt on {_mention(target.id, target.full_name)} failed! 💥\nYou lost {hp_loss} HP.", parse_mode='Markdown')
-
+        await update_player_data(killer_data)
+        
+        await update.message.reply_text(
+            f"Your assassination attempt on {_mention(target.id, target.full_name)} failed! 💥\n"
+            f"The target was too strong for you. You lost {hp_loss} HP in the struggle.",
+            parse_mode='Markdown'
+        )
 
 # --- Main Callback Query Handler ---
 async def handle_game_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
