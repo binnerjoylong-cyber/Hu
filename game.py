@@ -138,23 +138,20 @@ proposals = {
 }
 
 # --- Game Initialization ---
-def init_game_module(spreadsheet: gspread.Spreadsheet):
-    """Initializes the game_sheet from the main bot."""
+
+def init_game_module(spreadsheet):
     global game_sheet
     try:
+        # Try to open the existing sheet
         game_sheet = spreadsheet.worksheet(GAME_SHEET_NAME)
-        logger.info(f"Connected to existing game sheet: '{GAME_SHEET_NAME}'")
-    except WorksheetNotFound:
-        try:
-            game_sheet = spreadsheet.add_worksheet(GAME_SHEET_NAME, rows="2000", cols=len(PLAYER_HEADERS))
-            game_sheet.append_row(PLAYER_HEADERS)
-            logger.info(f"Created new game sheet: '{GAME_SHEET_NAME}'")
-        except Exception as e:
-            logger.error(f"Failed to create new game sheet: {e}", exc_info=True)
-    except Exception as e:
-        logger.error(f"Failed to initialize game module: {e}", exc_info=True)
-
-
+        logger.info(f"Game sheet '{GAME_SHEET_NAME}' loaded.")
+    except gspread.WorksheetNotFound:
+        # If deleted, create a new one with headers
+        logger.warning(f"Sheet '{GAME_SHEET_NAME}' not found. Creating new one...")
+        game_sheet = spreadsheet.add_worksheet(title=GAME_SHEET_NAME, rows="1000", cols="20")
+        # Add the headers immediately so the bot knows where to put data
+        game_sheet.append_row(PLAYER_HEADERS)
+        logger.info(f"New sheet '{GAME_SHEET_NAME}' created with headers.")
 
 def get_progress_bar(current, total, length=10):
     """Generates a visual bar like: [🟩🟩🟩⬜⬜⬜]"""
