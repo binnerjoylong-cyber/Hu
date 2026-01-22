@@ -20,7 +20,15 @@ GAME_SHEET_NAME = "laila_game_v2"
 STARTING_MONEY = 500
 STARTING_BANK = 0
 STARTING_HEALTH = 100
+# Adoption GIFs
+GIF_ADOPT_PROPOSE = "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExM3ZidXN6bm1oZ3R3eXlyZ3B6Z3B6Z3B6Z3B6Z3B6Z3B6Z3B6JmVwaT12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/brsEO1JayBVja/giphy.gif"
+GIF_ADOPT_SUCCESS = "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExM3h6OHR0eXlyZ3B6Z3B6Z3B6Z3B6Z3B6Z3B6Z3B6JmVwaT12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/MDJ9IbxxvDUQM/giphy.gif"
+GIF_DISOWN = "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExM3h6OHR0eXlyZ3B6Z3B6Z3B6Z3B6Z3B6Z3B6Z3B6JmVwaT12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/l0HlIDU8q079S37gc/giphy.gif"
+GIF_RUNAWAY = "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExM3h6OHR0eXlyZ3B6Z3B6Z3B6Z3B6Z3B6Z3B6Z3B6JmVwaT12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/3o7ZetIsj6yALBg9BS/giphy.gif"
 
+# Proposals storage
+if 'proposals' not in globals():
+    proposals = {"marry": {}, "adopt": {}}
 # Cooldowns in seconds
 COOLDOWNS = {
     "work": 20 * 60,    # 20 minutes
@@ -1271,9 +1279,13 @@ async def handle_heal(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     else:
         await update.message.reply_text("An error occurred while processing your heal.")
 # --- Family Command Handlers ---
+# --- GIF Links (Inhe aap badal sakte hain) ---
+GIF_PROPOSE = "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExNHJmZzBqZzBqZzBqZzBqZzBqZzBqZzBqZzBqZzBqZzBqZzBqJmVwaT12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/L95W4M8qO1MeY/giphy.gif"
+GIF_MARRY_SUCCESS = "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExNHJmZzBqZzBqZzBqZzBqZzBqZzBqZzBqZzBqZzBqZzBqZzBqJmVwaT12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/vS7pC7iH0AWRy/giphy.gif"
+GIF_MARRY_REJECT = "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExNHJmZzBqZzBqZzBqZzBqZzBqZzBqZzBqZzBqZzBqZzBqZzBqJmVwaT12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/26vUxO6iRj8T2K3K0/giphy.gif"
 
 async def handle_marry(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Proposes marriage to a replied-to user."""
+    """Proposes marriage with a GIF."""
     if not update.message.reply_to_message:
         await update.message.reply_text("Please reply to the user you want to marry with `/marry`.")
         return
@@ -1288,7 +1300,6 @@ async def handle_marry(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         await update.message.reply_text("You can't marry a bot, silly.")
         return
 
-    # Get data for both
     proposer_data = await get_player_data(proposer.id, proposer.full_name)
     target_data = await get_player_data(target.id, target.full_name)
 
@@ -1296,14 +1307,15 @@ async def handle_marry(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         await update.message.reply_text("Error accessing accounts. Please try again.")
         return
 
-    if proposer_data["MarriedToID"] != 0:
+    # Safe check using int()
+    if int(proposer_data.get("MarriedToID", 0)) != 0:
         await update.message.reply_text(f"You are already married! Use `/divorce` first.")
         return
-    if target_data["MarriedToID"] != 0:
+        
+    if int(target_data.get("MarriedToID", 0)) != 0:
         await update.message.reply_text(f"{target.full_name} is already married.")
         return
         
-    # Store proposal
     proposals["marry"][target.id] = proposer.id
     
     keyboard = [
@@ -1312,15 +1324,22 @@ async def handle_marry(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             InlineKeyboardButton("❌ Decline", callback_data=f"game:marry:decline:{proposer.id}")
         ]
     ]
-    await update.message.reply_text(
-        f"Hey {_mention(target.id, target.full_name)}! 💍\n\n"
-        f"{_mention(proposer.id, proposer.full_name)} is proposing to you! Do you accept?",
+
+    # Animation (GIF) ke sath proposal bhejna
+    await update.message.reply_animation(
+        animation=GIF_PROPOSE,
+        caption=(
+            f"Hey {_mention(target.id, target.full_name)}! 💍\n\n"
+            f"{_mention(proposer.id, proposer.full_name)} is proposing to you! Do you accept?"
+        ),
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode='Markdown'
     )
 
+
+
 async def handle_adopt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Proposes to adopt a replied-to user."""
+    """Proposes to adopt with GIF."""
     if not update.message.reply_to_message:
         await update.message.reply_text("Please reply to the user you want to adopt with `/adopt`.")
         return
@@ -1328,35 +1347,78 @@ async def handle_adopt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     proposer = update.effective_user
     target = update.message.reply_to_message.from_user
 
-    if proposer.id == target.id:
-        await update.message.reply_text("You can't adopt yourself.")
-        return
-    if target.is_bot:
-        await update.message.reply_text("You can't adopt a bot.")
+    if proposer.id == target.id or target.is_bot:
+        await update.message.reply_text("Invalid adoption request!")
         return
 
-    proposer_data = await get_player_data(proposer.id, proposer.full_name)
-    if not proposer_data:
-        await update.message.reply_text("Error accessing your account.")
-        return
-        
-    if proposer_data["MarriedToID"] == 0:
-        await update.message.reply_text("You must be married to adopt a child.")
+    p_data = await get_player_data(proposer.id, proposer.full_name)
+    if not p_data or int(p_data.get("MarriedToID", 0)) == 0:
+        await update.message.reply_text("❌ You must be married to adopt a child!")
         return
 
-    # Store proposal
     proposals["adopt"][target.id] = proposer.id
     
-    keyboard = [
-        [
-            InlineKeyboardButton("✅ Accept", callback_data=f"game:adopt:accept:{proposer.id}"),
-            InlineKeyboardButton("❌ Decline", callback_data=f"game:adopt:decline:{proposer.id}")
-        ]
-    ]
-    await update.message.reply_text(
-        f"Hey {_mention(target.id, target.full_name)}! 👶\n\n"
-        f"{_mention(proposer.id, proposer.full_name)} wants to adopt you into their family! Do you accept?",
+    keyboard = [[
+        InlineKeyboardButton("✅ Accept", callback_data=f"game:adopt:accept:{proposer.id}"),
+        InlineKeyboardButton("❌ Decline", callback_data=f"game:adopt:decline:{proposer.id}")
+    ]]
+
+    await update.message.reply_animation(
+        animation=GIF_ADOPT_PROPOSE,
+        caption=f"👶 Hey {_mention(target.id, target.full_name)}!\n\n{_mention(proposer.id, proposer.full_name)} wants to adopt you! Do you accept?",
         reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
+
+async def handle_disown(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Parent disowns child (Reply to child)."""
+    if not update.message.reply_to_message:
+        await update.message.reply_text("Reply to the child you want to disown.")
+        return
+
+    parent = update.effective_user
+    child = update.message.reply_to_message.from_user
+
+    p_data = await get_player_data(parent.id)
+    children = p_data.get("ChildrenIDs", [])
+
+    if child.id not in children:
+        await update.message.reply_text("This user is not your child!")
+        return
+
+    children.remove(child.id)
+    p_data["ChildrenIDs"] = children
+    await update_player_data(p_data)
+
+    await update.message.reply_animation(
+        animation=GIF_DISOWN,
+        caption=f"🚫 {_mention(parent.id, parent.full_name)} has disowned {_mention(child.id, child.full_name)}!",
+        parse_mode='Markdown'
+    )
+
+async def handle_runaway(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Child runs away from home."""
+    child = update.effective_user
+    all_records = await asyncio.to_thread(game_sheet.get_all_records)
+    found = False
+
+    for row in all_records:
+        kids = json.loads(row.get("ChildrenIDs", "[]"))
+        if child.id in kids:
+            kids.remove(child.id)
+            # Row update logic
+            p_cell = await asyncio.to_thread(_get_player_row, row["UserID"])
+            await asyncio.to_thread(game_sheet.update_cell, p_cell.row, PLAYER_HEADERS.index("ChildrenIDs")+1, json.dumps(kids))
+            found = True
+            break
+
+    if not found:
+        await update.message.reply_text("You don't have a family to run away from!")
+        return
+
+    await update.message.reply_animation(
+        animation=GIF_RUNAWAY,
+        caption=f"🏃‍♂️ {_mention(child.id, child.full_name)} has run away from home!",
         parse_mode='Markdown'
     )
 
@@ -2139,28 +2201,34 @@ async def handle_game_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         if parts[0] != "game":
             return
             
+        action = parts[2]
+        proposer_id = int(parts[3])
+        target = user # The user clicking the button
+
+        # --- MARRIAGE CALLBACK LOGIC ---
         if parts[1] == "marry":
-            action, proposer_id_str = parts[2], parts[3]
-            proposer_id = int(proposer_id_str)
-            target = user # The user clicking the button
-            
             if proposals["marry"].get(target.id) != proposer_id:
-                await query.edit_message_text("This proposal has expired or is invalid.")
+                await query.answer("This proposal has expired or is invalid.", show_alert=True)
                 return
 
-            del proposals["marry"][target.id] # Clear proposal
+            del proposals["marry"][target.id] 
+            await query.message.delete() # Purana message delete
             
             if action == "decline":
-                await query.edit_message_text(f"{_mention(target.id, target.full_name)} has declined the marriage proposal.", parse_mode='Markdown')
+                await context.bot.send_animation(
+                    chat_id=query.message.chat_id,
+                    animation=GIF_MARRY_REJECT,
+                    caption=f"💔 {_mention(target.id, target.full_name)} has declined the marriage proposal.",
+                    parse_mode='Markdown'
+                )
                 return
 
             if action == "accept":
                 proposer_data = await get_player_data(proposer_id, "Proposer")
                 target_data = await get_player_data(target.id, target.full_name)
                 
-                if (proposer_data and proposer_data["MarriedToID"] != 0) or \
-                   (target_data and target_data["MarriedToID"] != 0):
-                    await query.edit_message_text("One of you is already married. Proposal cancelled.")
+                if (int(proposer_data.get("MarriedToID", 0)) != 0) or (int(target_data.get("MarriedToID", 0)) != 0):
+                    await context.bot.send_message(query.message.chat_id, "One of you is already married. Proposal cancelled.")
                     return
                     
                 proposer_data["MarriedToID"] = target.id
@@ -2169,46 +2237,58 @@ async def handle_game_callback(update: Update, context: ContextTypes.DEFAULT_TYP
                 await update_player_data(proposer_data)
                 await update_player_data(target_data)
                 
-                await query.edit_message_text(f"🎉 **Congratulations!** 🎉\n\n{_mention(proposer_id, proposer_data['UserName'])} and {_mention(target.id, target_data['UserName'])} are now married!", parse_mode='Markdown')
+                await context.bot.send_animation(
+                    chat_id=query.message.chat_id,
+                    animation=GIF_MARRY_SUCCESS,
+                    caption=f"🎉 **Congratulations!** 🎉\n\n{_mention(proposer_id, proposer_data['UserName'])} and {_mention(target.id, target_data['UserName'])} are now married!",
+                    parse_mode='Markdown'
+                )
                 return
 
-        elif parts[1] == "adopt": # <--- Use elif for better flow
-            action, proposer_id_str = parts[2], parts[3]
-            proposer_id = int(proposer_id_str)
-            target = user 
-            
+        # --- ADOPTION CALLBACK LOGIC ---
+        elif parts[1] == "adopt":
             if proposals["adopt"].get(target.id) != proposer_id:
-                await query.edit_message_text("This adoption offer has expired or is invalid.")
+                await query.answer("This adoption offer has expired or is invalid.", show_alert=True)
                 return
 
             del proposals["adopt"][target.id] 
+            await query.message.delete() # Purana message delete
             
             if action == "decline":
-                await query.edit_message_text(f"{_mention(target.id, target.full_name)} has declined the adoption.", parse_mode='Markdown')
+                await context.bot.send_animation(
+                    chat_id=query.message.chat_id,
+                    animation=GIF_MARRY_REJECT, # Reject wala GIF
+                    caption=f"❌ {_mention(target.id, target.full_name)} has declined the adoption.",
+                    parse_mode='Markdown'
+                )
                 return
 
             if action == "accept":
                 proposer_data = await get_player_data(proposer_id, "Proposer")
                 
-                if not proposer_data or proposer_data["MarriedToID"] == 0:
-                    await query.edit_message_text("The adopter is no longer married. Offer cancelled.")
+                if not proposer_data or int(proposer_data.get("MarriedToID", 0)) == 0:
+                    await context.bot.send_message(query.message.chat_id, "The adopter is no longer married. Offer cancelled.")
                     return
                     
                 if target.id not in proposer_data["ChildrenIDs"]:
                     proposer_data["ChildrenIDs"].append(target.id)
                     await update_player_data(proposer_data)
                 
-                await query.edit_message_text(
-                    f"🎉 **Welcome to the Family!** 🎉\n\n"
-                    f"{_mention(target.id, target.full_name)} has been adopted by "
-                    f"{_mention(proposer_id, proposer_data['UserName'])}!", 
+                await context.bot.send_animation(
+                    chat_id=query.message.chat_id,
+                    animation=GIF_ADOPT_SUCCESS,
+                    caption=(
+                        f"🎉 **Welcome to the Family!** 🎉\n\n"
+                        f"{_mention(target.id, target.full_name)} has been adopted by "
+                        f"{_mention(proposer_id, proposer_data['UserName'])}!"
+                    ),
                     parse_mode='Markdown'
                 )
                 return
 
-    except Exception as e: # <--- Ab ye except sahi chalega
+    except Exception as e:
         logger.error(f"Error in game callback handler: {e}", exc_info=True)
         try:
-            await query.answer("An unexpected error occurred. Please try again.", show_alert=True)
+            await query.answer("An unexpected error occurred.", show_alert=True)
         except Exception:
             pass
