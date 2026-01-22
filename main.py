@@ -1656,6 +1656,17 @@ async def reboot_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     await on_command(update, context)
 
 # --- MODIFIED: Translate command for everyone ---
+import asyncio
+import time
+import random
+import google.generativeai as genai
+from telegram import Update
+from telegram.ext import ContextTypes
+
+# Make sure your API keys are defined globally or imported:
+# GEMINI_API_KEYS = [...]
+# GEMMA_API_KEY = "..."
+# key_cooldown_until = {}
 
 async def translate_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Translates text using a direct model call for accuracy."""
@@ -1669,7 +1680,8 @@ async def translate_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     # --- Determine target language and text ---
     if message.reply_to_message:
         target_language = " ".join(args).strip()
-        text_to_translate = message.reply_to_message.text
+        # Handle cases where reply might be a caption or text
+        text_to_translate = message.reply_to_message.text or message.reply_to_message.caption
 
         if not target_language:
             await message.reply_text(
@@ -1692,6 +1704,7 @@ async def translate_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         )
         return
 
+    # Send typing action so user knows bot is working
     await context.bot.send_chat_action(chat_id=chat_id, action="typing")
 
     # --- Create translation prompt ---
@@ -1713,7 +1726,8 @@ async def translate_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         if available_gemini_keys:
             random.shuffle(available_gemini_keys)
             api_key_to_use = available_gemini_keys[0]
-            model_name_to_use = "models/gemini-2.5-flash-lite"
+            # Updated to a valid existing model name
+            model_name_to_use = "models/gemini-2.5-flash-lite" 
         elif globals().get('GEMMA_API_KEY'):
             api_key_to_use = GEMMA_API_KEY
             model_name_to_use = "models/gemma-2-9b-it"
@@ -1722,12 +1736,15 @@ async def translate_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             return
 
         # --- Configure and call model ---
-        # FIX: Added transport="rest" to avoid gRPC errors on cloud hosts like Render
+        # transport="rest" is safer for cloud hosting (Render/Heroku)
         genai.configure(api_key=api_key_to_use, transport="rest")
         
         model = genai.GenerativeModel(model_name=model_name_to_use)
 
-        response = await model.generate_content_async(
+        # FIX: Use asyncio.to_thread to run the synchronous 'generate_content' 
+        # in a separate thread. This prevents the "can't await GenerateContentResponse" error.
+        response = await asyncio.to_thread(
+            model.generate_content,
             prompt,
             generation_config=genai.types.GenerationConfig(temperature=0.1)
         )
@@ -1740,12 +1757,11 @@ async def translate_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             await message.reply_text("No translation result found.")
 
     except Exception as e:
-        logger.error(f"Error in translate command: {e}", exc_info=True)
-        # Detailed error for debugging
+        # logger.error(f"Error in translate command: {e}", exc_info=True)
         await message.reply_text(f"❌ Translation failed: {str(e)}")
 
 
-        
+
 async def reset_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     chat_id = update.effective_chat.id
     user_id = update.effective_user.id
