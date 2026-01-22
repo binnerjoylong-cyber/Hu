@@ -189,37 +189,40 @@ def get_visual_bar(current, total, length=10):
     return f"[{bar}] {current}%"
 
 async def handle_game_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """The central hub for Laila Legends."""
     user = update.effective_user
-    # Fetch player data using your existing get_player_data function
     data = await get_player_data(user.id, user.full_name)
     
-    # Calculate health status
-    health_bar = get_visual_bar(data['Health'], 100)
+    # Progress bar for Health
+    health_val = int(data.get('Health', 0))
+    health_bar = get_progress_bar(health_val, 100)
+    status = "💀" if health_val <= 0 else "❤️"
     
-    dashboard = (
+    text = (
         f"🏆 **LAILA LEGENDS: {user.first_name.upper()}**\n"
         f"━━━━━━━━━━━━━━━━━━\n"
         f"💰 **Wallet:** `${data['Money']:,}`\n"
         f"🏦 **Bank:** `${data['Bank']:,}`\n"
-        f"❤️ **Health:** {health_bar}\n"
+        f"❤️ **Health:** {health_bar} `{health_val}%`\n"
+        f"⭐ **Level:** `{data.get('Level', 1)}` | **XP:** `{data.get('XP', 0)}`\n"
         f"━━━━━━━━━━━━━━━━━━\n"
-        f"⚡️ *Select an action to continue your journey:* "
+        f"⚡️ *Choose your action below:* "
     )
 
     keyboard = [
         [InlineKeyboardButton("💼 Work", callback_data="game_work"), 
          InlineKeyboardButton("🌾 Farm", callback_data="game_farm")],
         [InlineKeyboardButton("🛒 Shop", callback_data="game_shop"), 
-         InlineKeyboardButton("⚔️ PVP Arena", callback_data="game_pvp")],
-        [InlineKeyboardButton("📜 Inventory", callback_data="game_inventory")]
+         InlineKeyboardButton("⚔️ Kill (Reply)", callback_data="game_help_kill")], # Kill guide button
+        [InlineKeyboardButton("📜 Inventory", callback_data="game_inventory"),
+         InlineKeyboardButton("🏥 Heal", callback_data="game_heal_quick")]
     ]
     
-    # Logic to either send a new message or update the existing one
+    markup = InlineKeyboardMarkup(keyboard)
+    
     if update.callback_query:
-        await update.callback_query.edit_message_text(dashboard, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+        await update.callback_query.edit_message_text(text, reply_markup=markup, parse_mode='Markdown')
     else:
-        await update.message.reply_text(dashboard, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+        await update.message.reply_text(text, reply_markup=markup, parse_mode='Markdown')
 # --- Helper Functions ---
 
 def _format_time(seconds: int) -> str:
