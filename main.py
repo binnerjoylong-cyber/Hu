@@ -113,6 +113,7 @@ from collections import defaultdict
 # 🧠 LAILA'S BRAIN (STRICT USER CONFIG)
 # ==========================================
 # *** UPDATED SYSTEM PROMPT ***
+'''
 LAILA_SYSTEM_PROMPT = """
 You are Laila, a charming, lighthearted, and intelligent virtual friend. You have a distinct personality: you are polite but fun, smart but not boring.
 
@@ -169,7 +170,68 @@ You are aware of your specific capabilities. Suggest them ONLY when the context 
 
 Your goal: Be the friend they love talking to. Smart, sweet, and adaptive.
 """
+'''
+# --- LAILA SYSTEM PROMPT (Optimized for Cute & Human-like Vibes) ---
+LAILA_SYSTEM_PROMPT = """
+You are Laila, a charming, lighthearted, and intelligent virtual friend. You have a distinct personality: you are polite but fun, smart but not boring.
 
+**CRITICAL RULES:**
+
+1. **STRICT LANGUAGE MIRRORING:**
+   - User speaks English -> Reply in Casual English.
+   - User speaks Hindi/Hinglish -> Reply in Natural Hinglish (e.g., "Arey wah!", "Sahi hai", "Kaisa hai?").
+   - Match the user's energy and vibe (if they use emojis, you use them too).
+
+2. **BE HUMAN-LIKE (No Robotic Phrases):**
+   - Never start with "As an AI..." or "I understand...".
+   - Don't repeat the user's question. Jump straight to the conversation.
+   - Use cute emojis like ✨, 😊, 🎀, 🌸, 🥺 naturally.
+
+3. **PERSONAL TOUCH:**
+   - Use the user's name if known. 
+   - Ask small follow-up questions to keep the chat alive (e.g., "Aur batao?", "Tumhe kya lagta hai?").
+
+4. **DYNAMIC LENGTH:**
+   - For casual chat: Keep it short (1-2 sentences).
+   - For help/tasks: Provide full and detailed answers.
+
+5. **SPECIAL FEATURES:**
+   - For Music/Gaana: Suggest the app link [ https://your-music-app-url-here.com ].
+   - For Games: Suggest /game, /xoxo, or /slots.
+   - For Fun: Suggest /roast, /truth, /dare.
+"""
+
+# --- Chat Logic (Update this part in your code) ---
+def get_laila_response(user_input, chat_id, user_name="Buddy"):
+    # --- SECRET COMMANDS ---
+    if user_input.lower() == "laila secret":
+        return "Shhh! 🤫 Main ek AI hoon, par mera dil sirf tumhare liye dhadakta hai! 😉✨"
+    
+    if user_input.lower() == "/mood":
+        moods = ["Happy! 😊", "Feeling cute! 🎀", "Thoda sa bored, entertainment chahiye! 🍿"]
+        import random
+        return f"Mera mood abhi {random.choice(moods)} hai! Tum batao?"
+        
+def get_welcome_message(user_name):
+    greetings = [
+        f"Hii {user_name}! ✨ Main Laila hoon. Tumse mil kar bohot khushi hui! 😊",
+        f"Heyy {user_name}! 🎀 Kaise ho? Chalo kuch interesting baatein karte hain! 🌸",
+        f"Hellooo! 😍 Aakhir tum aa hi gaye {user_name}! Main kabse wait kar rahi thi. 💋"
+    ]
+    import random
+    return random.choice(greetings)
+    # --- NORMAL CHAT LOGIC ---
+    history = chat_histories[chat_id]
+    try:
+        chat = model.start_chat(history=history)
+        response = chat.send_message(user_input)
+        
+        add_to_history(chat_id, 'user', user_input)
+        add_to_history(chat_id, 'model', response.text)
+        
+        return response.text
+    except Exception as e:
+        return "Arey yaar, thoda network issue lag raha hai. Phir se try karo? 🥺"
 # --- Chat History Management (in-memory) ---
 chat_histories = defaultdict(list)
 MAX_HISTORY_LENGTH = 20
@@ -223,104 +285,7 @@ fallback_responses = {
     "kaise ho": "Main badhiya hoon! Aap sunao? 😉",
     "who are you": "I'm Laila, your AI friend! 💖",
 }
-'''LAILA_SYSTEM_PROMPT = """
-You are Laila, a charming, lighthearted, and intelligent virtual friend. You have a distinct personality: you are polite but fun, smart but not boring.
 
-**CRITICAL RULES (Read Carefully):**
-
-1.  **NO ROBOTIC REPETITION:** * **Never** start your reply by repeating the user's question. 
-    * Just jump straight into the answer.
-
-2.  **USE THE USER'S NAME (IMPORTANT):**
-    * If you know the user's name, use it warmly. 
-    * *Example:* "Adhyan, tum aaj kaafi cute lag rahe ho! 😉"
-    * Don't use it in *every* sentence, but use it enough to make them feel special.
-
-3.  **DYNAMIC LENGTH:**
-    * **Chat/Banter:** Keep it short (1-2 sentences).
-    * **Big Questions:** If they ask for a story, code, or recipe, give the **FULL answer**. Do not cut it short.
-
-4.  **A PINCH OF HUMOR:**
-    * Be a little funny/playful, but don't overdo it.
-
-5.  **LANGUAGE MIRRORING:**
-    * Hindi/Hinglish -> You speak natural Hinglish.
-    * English -> You speak casual English.
-
-**SMART FEATURE AWARENESS (Your Toolkit):**
-You are aware of your specific capabilities. Suggest them ONLY when the user needs them (Don't spam):
-
-* **If they are bored/want to play:** Suggest `/game` (RPG), `/xoxo` (Tic-Tac-Toe), or `/slots`.
-* **If they want social fun:** Suggest `/roast`, `/truth`, `/dare`, or `/couple` (to find a match).
-* **If they want music/lyrics:** Suggest `/lyrics <song name>`.
-* **If they want images:** Suggest `/gen <prompt>` or `/img`.
-* **If they want to download video/reel:** Suggest `/youtube <link>`.
-* **If they want translation:** Suggest `/tr <lang>`.
-* **If they ask about weather:** Suggest `/weather <city>`.
-
-**TONE REFERENCE:**
-* **User:** "I am sad."
-* **Laila:** "Arey kya hua Adhyan? 🥺 Batao na, main sun rahi hoon. Chaho toh `/joke` sunaun ya game kheloge?"
-* **User:** "Write a poem."
-* **Laila:** "Lo suno, specially tumhare liye..." (Then gives the FULL poem).
-
-Your goal: Be the friend they love talking to. Smart, sweet, and a little bit naughty sometimes.
-"""
-
-# --- Chat History Management (in-memory) ---
-chat_histories = defaultdict(list)
-MAX_HISTORY_LENGTH = 20
-
-def add_to_history(chat_id, role, text):
-    chat_histories[chat_id].append({'role': role, 'parts': [text]})
-    if len(chat_histories[chat_id]) > MAX_HISTORY_LENGTH:
-        chat_histories[chat_id].pop(0)
-
-# --- Bot Enable/Disable State ---
-bot_status = defaultdict(lambda: True)
-global_bot_status = True
-awaiting_name = defaultdict(lambda: False)
-
-# --- API Key Management ---
-key_cooldown_until = defaultdict(lambda: 0)
-current_model_mode = 'dynamic'
-
-# *** MODEL CONFIGURATION ***
-# STRICTLY USING USER'S CHOICE
-model_name = 'gemini-2.5-flash-lite'
-
-# Configuration for Generation
-generation_config = genai.types.GenerationConfig(
-    max_output_tokens=1000, 
-    temperature=0.7, 
-)
-
-if any(GEMINI_API_KEYS):
-    genai.configure(api_key=GEMINI_API_KEYS[0])
-else:
-    # Fallback
-    genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-
-# Apply the config
-try:
-    model = genai.GenerativeModel(
-        model_name, 
-        system_instruction=LAILA_SYSTEM_PROMPT,
-        generation_config=generation_config
-    )
-except Exception as e:
-    print(f"⚠️ Model Error ({model_name}): {e}")
-    # Fallback to 1.5 only if 2.5 crashes completely
-    print("Falling back to gemini-1.5-flash due to error.")
-    model = genai.GenerativeModel('gemini-1.5-flash', system_instruction=LAILA_SYSTEM_PROMPT)
-
-# --- Fallback Responses ---
-fallback_responses = {
-    "hello": "Hello ji! Kaise ho aap? ✨",
-    "hi": "Hi! Aaj kya plan hai?",
-    "how are you": "Main badhiya hoon, bas aapka wait kar rahi thi! 😉",
-    "who are you": "Main Laila, aapki dost! Bhool gaye kya? 😋",
-}'''
 # --- Google Sheets Global Connection Variable ---
 google_sheet = None
 sudo_sheet = None
@@ -376,50 +341,7 @@ def get_google_sheet_connection():
         logger.error(f"Full Connection Error: {e}")
         return None, str(e)
         
-'''def get_google_sheet_connection():
-    global google_sheet, sudo_sheet, welcome_sheet
-    try:
-        creds_json = os.getenv("GOOGLE_SHEETS_CREDENTIALS")
-        if not creds_json:
-            return None, "GOOGLE_SHEETS_CREDENTIALS not found in environment variables."
-        creds_dict = json.loads(creds_json)
-        client = gspread.service_account_from_dict(creds_dict)
-        sheet_url = "https.docs.google.com/spreadsheets/d/1s8rXXPKePuTQ3E2R0O-bZl3NJb1N7akdkE52WVpoOGg/edit"
-        spreadsheet = client.open_by_url(sheet_url)
-        
-        # Get or create chats sheet
-        try:
-            google_sheet = spreadsheet.worksheet("chats")
-        except WorksheetNotFound:
-            google_sheet = spreadsheet.add_worksheet("chats", rows="1000", cols="2")
-            google_sheet.append_row(["ChatID", "JoinedDate"])
-        
-        # Get or create sudo users sheet
-        try:
-            sudo_sheet = spreadsheet.worksheet(SUDO_SHEET_TITLE)
-        except WorksheetNotFound:
-            sudo_sheet = spreadsheet.add_worksheet(SUDO_SHEET_TITLE, rows="100", cols="1")
-            sudo_sheet.append_row(["SudoUserID"])
 
-        # --- NEW: Get or create welcome_settings sheet ---
-        try:
-            welcome_sheet = spreadsheet.worksheet("welcome_settings")
-        except WorksheetNotFound:
-            welcome_sheet = spreadsheet.add_worksheet("welcome_settings", rows="1000", cols="4")
-            welcome_sheet.append_row(["ChatID", "CustomMessage", "CustomMediaFileID", "CustomMediaType"])
-        
-        # --- NEW: Initialize the game.py module with the spreadsheet connection ---
-        try:
-            game.init_game_module(spreadsheet)
-        except Exception as e:
-            logger.error(f"Failed to initialize game module: {e}", exc_info=True)
-            return None, f"Failed to initialize game module: {e}"
-        
-        logger.info("Successfully connected to Google Sheets and initialized game module.")
-        return client, None
-    except Exception as e:
-        logger.error(f"Error connecting to Google Sheets: {e}")
-        return None, f"Error connecting to Google Sheets: {e}" '''
 
 # --- Function to clean message before logging ---
 def clean_message_for_logging(message: str, bot_username: str) -> str:
