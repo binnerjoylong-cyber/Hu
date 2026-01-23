@@ -130,11 +130,13 @@ SHOP_CATALOG = {
 }
 
 # --- NEW DATA MODEL (22 Columns) ---
+# Update this list at the top of your file
 PLAYER_HEADERS = [
     "UserID", "UserName", "Money", "Bank", "Health", "MarriedToID", "ChildrenIDs",
     "Pet", "Inventory", "Assets", "Weapon", "LastWork", "LastFarm", "LastCrime",
     "LastMine", "LastRob", "LastKill", "LastHeal", "LastTask", "LastDaily",
-    "Kills", "Deaths","StreakCount", "XP", "Level", "Bounty", "ClanName", "ClanRole"
+    "Kills", "Deaths", "StreakCount", "XP", "Level", "Bounty", "ClanName", "ClanRole",
+    "ParentID", "Rebirths" # <--- ADDED THESE
 ]
 
 # --- In-memory proposal cache ---
@@ -2057,6 +2059,9 @@ async def handle_game_callback(update: Update, context: ContextTypes.DEFAULT_TYP
             return
             
         # --- Action Handlers (REFACTORED FOR FEEDBACK) ---
+
+        # -
+
         if parts[1] == "action":
             action_name = parts[2]
             player_data = await get_player_data(user.id, user.full_name)
@@ -2292,6 +2297,7 @@ async def handle_game_callback(update: Update, context: ContextTypes.DEFAULT_TYP
                     return
 
             # --- ADOPTION CALLBACK LOGIC ---
+        
             elif parts[1] == "adopt":
                 if proposals["adopt"].get(target.id) != proposer_id:
                     await query.answer("This adoption offer has expired or is invalid.", show_alert=True)
@@ -2312,9 +2318,10 @@ async def handle_game_callback(update: Update, context: ContextTypes.DEFAULT_TYP
                     )
                     return
 
+                
                 if action == "accept":
                     proposer_data = await get_player_data(proposer_id, "Proposer")
-                    
+
                     if not proposer_data or int(proposer_data.get("MarriedToID", 0)) == 0:
                         await context.bot.send_message(query.message.chat_id, "The adopter is no longer married. Offer cancelled.")
                         return
@@ -2323,18 +2330,29 @@ async def handle_game_callback(update: Update, context: ContextTypes.DEFAULT_TYP
                     if target.id not in proposer_data["ChildrenIDs"]:
                         proposer_data["ChildrenIDs"].append(target.id)
                         await update_player_data(proposer_data)
-                    
+                    spouse_id = proposer_data["MarriedToID"]
+                    if spouse_id:
+                        spouse_data = await get_player_data(spouse_id, "Spouse")
+                        if target.id not in spouse_data["ChildrenIDs"]:
+                            spouse_data["ChildrenIDs"].append(target.id)
+                            await update_player_data(spouse_data)
+                            
+                    child_data = await get_player_data(target.id, target.full_name)
+                    child_data["ParentID"] = proposer_id  # Primary parent
+                    await update_player_data(child_data)
+
                     await context.bot.send_animation(
                         chat_id=query.message.chat_id,
                         animation=GIF_ADOPT_SUCCESS,
                         caption=(
                             f"🎉 **Welcome to the Family!** 🎉\n\n"
                             f"{_mention(target.id, target.full_name)} has been adopted by "
-                            f"{_mention(proposer_id, proposer_data['UserName'])}!"
+                            f"{_mention(proposer_id, proposer_data['UserName'])} and their spouse!"
                         ),
                         parse_mode='Markdown'
                     )
                     return
+                
 
         except Exception as e:
             logger.error(f"Error in family callback: {e}", exc_info=True)
