@@ -190,6 +190,10 @@ def get_visual_bar(current, total, length=10):
     bar = "🟩" * filled + "⬜" * (length - filled)
     return f"[{bar}] {current}%"
 
+# game.py -> Inside handle_game_menu or game_menu function
+
+    
+
 async def handle_game_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     data = await get_player_data(user.id, user.full_name)
@@ -210,14 +214,27 @@ async def handle_game_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"⚡️ *Choose your action below:* "
     )
 
+    
     keyboard = [
-        [InlineKeyboardButton("💼 Work", callback_data="game_work"), 
-         InlineKeyboardButton("🌾 Farm", callback_data="game_farm")],
-        [InlineKeyboardButton("🛒 Shop", callback_data="game_shop"), 
-         InlineKeyboardButton("⚔️ Kill (Reply)", callback_data="game_help_kill")], # Kill guide button
-        [InlineKeyboardButton("📜 Inventory", callback_data="game_inventory"),
-         InlineKeyboardButton("🏥 Heal", callback_data="game_heal_quick")]
+        [
+            InlineKeyboardButton("👤 Profile", callback_data="game:profile"),
+            InlineKeyboardButton("🎒 Inventory", callback_data="game:inventory")
+        ],
+        [
+            InlineKeyboardButton("💼 Work", callback_data="game:work"),       # Direct Work Action
+            InlineKeyboardButton("🚜 Farm", callback_data="game:farm:menu")   # Opens Farm Menu
+        ],
+        [
+            InlineKeyboardButton("⚔️ Arena", callback_data="game:arena:menu"), # Opens Arena Menu
+            InlineKeyboardButton("🎰 Gamble", callback_data="game:gamble")
+        ],
+        [
+            InlineKeyboardButton("🏪 Shop", callback_data="game:shop"),
+            InlineKeyboardButton("🏦 Bank", callback_data="game:bank")
+        ],
+        [InlineKeyboardButton("🏆 Leaderboard", callback_data="game:leaderboard")]
     ]
+    
     
     markup = InlineKeyboardMarkup(keyboard)
     
