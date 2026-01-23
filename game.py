@@ -1400,51 +1400,69 @@ async def handle_disown(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         caption=f"🚫 {_mention(parent.id, parent.full_name)} has disowned {_mention(child.id, child.full_name)}!",
         parse_mode='Markdown'
     )
-
 async def handle_runaway(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Child runs away from home."""
     child = update.effective_user
-    all_records = await asyncio.to_thread(game_sheet.get_all_records)
-    found = False
+    child_data = await get_player_data(child.id, child.full_name)
 
-    for row in all_records:
-        kids = json.loads(row.get("ChildrenIDs", "[]"))
-        if child.id in kids:
-            kids.remove(child.id)
-            # Row update logic
-            p_cell = await asyncio.to_thread(_get_player_row, row["UserID"])
-            await asyncio.to_thread(game_sheet.update_cell, p_cell.row, PLAYER_HEADERS.index("ChildrenIDs")+1, json.dumps(kids))
-            found = True
-            break
+    parent_id = int(child_data.get("ParentID", 0))
 
-    if not found:
-        await update.message.reply_text("You don't have a family to run away from!")
+    if parent_id == 0:
+        await update.message.reply_text("You don't have parents to run away from! (You are an orphan 🥺)")
         return
+
+    # Remove from Parent
+    parent_data = await get_player_data(parent_id, "Parent")
+    if child.id in parent_data["ChildrenIDs"]:
+        parent_data["ChildrenIDs"].remove(child.id)
+        await update_player_data(parent_data)
+
+    # Remove from Spouse (if exists)
+    spouse_id = int(parent_data.get("MarriedToID", 0))
+    if spouse_id != 0:
+        spouse_data = await get_player_data(spouse_id, "Spouse")
+        if child.id in spouse_data["ChildrenIDs"]:
+            spouse_data["ChildrenIDs"].remove(child.id)
+            await update_player_data(spouse_data)
+
+    # Reset Child
+    child_data["ParentID"] = 0
+    await update_player_data(child_data)
 
     await update.message.reply_animation(
         animation=GIF_RUNAWAY,
-        caption=f"🏃‍♂️ {_mention(child.id, child.full_name)} has run away from home!",
+        caption=f"🏃‍♂️ {_mention(child.id, child.full_name)} has run away from home! The family is broken. 💔",
         parse_mode='Markdown'
     )
 
 async def handle_divorce(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Divorces the user's current spouse."""
+    """Divorces the user's current spouse with a legal fee."""
     user = update.effective_user
     player_data = await get_player_data(user.id, user.full_name)
     
+    # 1. Basic Validation
     if not player_data:
         await update.message.reply_text("Error accessing your account.")
         return
         
-    if player_data["MarriedToID"] == 0:
-        await update.message.reply_text("You are not married.")
+    if int(player_data.get("MarriedToID", 0)) == 0:
+        await update.message.reply_text("You are not married! 🤷‍♂️")
+        return
+
+    # 2. THE FINE LOGIC (Legal Fees)
+    DIVORCE_COST = 5000
+    if player_data["Money"] < DIVORCE_COST:
+        await update.message.reply_text(
+            f"⚖️ **Divorce Request Denied**\n\n"
+            f"Lawyers are expensive! You need **${DIVORCE_COST:,}** to pay for legal fees.\n"
+            f"💸 Your Wallet: `${player_data['Money']:,}`"
+        )
         return
 
     spouse_id = player_data["MarriedToID"]
     
     # Get spouse data to update them too
     try:
-        # We need the spouse's name for the get_player_data call
         spouse_chat = await context.bot.get_chat(spouse_id)
         spouse_name = spouse_chat.full_name
     except:
@@ -1452,7 +1470,8 @@ async def handle_divorce(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         
     spouse_data = await get_player_data(spouse_id, spouse_name)
 
-    # Update both players
+    # 3. Deduct Money & Execute Divorce
+    player_data["Money"] -= DIVORCE_COST  # <--- Deduct the fine
     player_data["MarriedToID"] = 0
     await update_player_data(player_data)
     
@@ -1460,8 +1479,14 @@ async def handle_divorce(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         spouse_data["MarriedToID"] = 0
         await update_player_data(spouse_data)
         
-    await update.message.reply_text(f"You have successfully divorced {_mention(spouse_id, spouse_name)}. 💔", parse_mode='Markdown')
-
+    # 4. Result Message
+    await update.message.reply_text(
+        f"💔 **Divorce Finalized**\n"
+        f"━━━━━━━━━━━━━━━━━━\n"
+        f"You paid **${DIVORCE_COST:,}** in legal fees to separate from {_mention(spouse_id, spouse_name)}.\n\n"
+        f"You are now single again.", 
+        parse_mode='Markdown'
+    )
 # --- NEW UTILITY COMMANDS ---
 async def clan_war(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Command: /clanwar <EnemyClanName>"""
