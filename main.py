@@ -3784,10 +3784,9 @@ def main() -> None:
     application.add_handler(CallbackQueryHandler(start_callback_handler, pattern="^start_"))
     application.add_handler(CallbackQueryHandler(xoxo_callback, pattern="^xoxo_"))
     application.add_handler(CallbackQueryHandler(help_callback_handler, pattern="^help_"))
-    
-    # 3. Game callback sabse last mein kyunki usme pattern nahi hai
-    application.add_handler(CallbackQueryHandler(game.handle_game_callback))
 
+    # 3. Game callback sabse last mein kyunki usme pattern nahi hai
+    application.add_handler(CallbackQueryHandler(game.handle_game_callback, pattern="^game"))
     # ... baki code ...
     # --- Message handlers ---
     # ... existing handlers ...
