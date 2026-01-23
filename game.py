@@ -1826,21 +1826,44 @@ async def handle_kill(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 # --- Main Callback Query Handler ---
 async def handle_game_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    await query.answer()
+    # Don't answer yet, some logic might need to send a specific alert
     data = query.data
     user = query.from_user
     parts = data.split(":")
 
-    # --- CATEGORY ROUTING ---
-    if data == "game_main":
-        await handle_game_menu(update, context) # The Dashboard we built
-    
-    elif data == "game_work":
+    # --- 1. ROUTING LEGACY CALLBACKS TO NEW SYSTEM ---
+    if data == "game_work":
         await work_command(update, context)
-        
+        await query.answer()
+        return
     elif data == "game_shop":
-        # New Paginated Shop UI
-        await shop_menu(update, context)
+        # Redirect old shop button to new shop menu
+        data = "game:menu:shop"
+        parts = data.split(":") 
+
+    # --- 2. MAIN MENU HANDLERS ---
+    if data == "game:menu:main" or data == "game_main":
+        await handle_game_menu(update, context)
+        await query.answer()
+        return
+
+    # --- 3. ACTIONS (Link to full commands) ---
+    if len(parts) > 2 and parts[1] == "action":
+        action = parts[2]
+        
+        if action == "work":
+            await work_command(update, context) # Use the full command logic
+            await query.answer()
+            # Update the menu to show new cooldowns
+            # (You can copy the menu refresh logic from your existing code here)
+            return
+            
+        elif action == "heal":
+             await handle_heal(update, context)
+             await query.answer()
+             return
+
+    # ... Rest of your existing logic for shop, family, etc. ...
     elif data == "game_pvp_menu":
         text = "⚔️ **BATTLE ARENA**\nChoose your combat style:"
         buttons = [
