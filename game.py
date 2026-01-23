@@ -88,39 +88,7 @@ async def get_badges(data):
         badges.append("🔥")
     
     return " ".join(badges) if badges else "🆕 Newbie"
-'''
-SHOP_CATALOG = {
-    "items": [
-        {"id": "bandage", "name": "Bandage 🩹", "price": 100, "description": "Heals 10 HP.", "value": 10},
-        {"id": "medkit", "name": "Medkit ✚", "price": 500, "description": "Heals 50 HP.", "value": 50},
-        {"id": "bodyguard", "name": "Bodyguard 🛡️", "price": 50000, "description": "Consumable. Automatically stops one /rob or /kill attempt against you."}
-    ],
-    "weapons": [
-        {"id": "knife", "name": "Knife 🔪", "price": 1000, "description": "+5% Rob/Kill chance.", "value": 5},
-        {"id": "pistol", "name": "Pistol 🔫", "price": 5000, "description": "+10% Rob/Kill chance.", "value": 10}
-    ],
-    "pets": [
-        {"id": "dog", "name": "Dog 🐶", "price": 10000, "description": "A loyal friend. -5% rob chance against you."},
-        {"id": "cat", "name": "Cat 🐱", "price": 10000, "description": "A cute companion. Gives $1-100 every hour."}
-    ],
-    # --- ASSET VARIETY ADDED ---
-    # You can add open-source image URLs here
-    "vehicles": [
-        {"id": "used_car", "name": "Used Car 🚗", "price": 25000, "description": "Needed for some tasks.", "image": "https://loremflickr.com/320/240/car"},
-        {"id": "sports_car", "name": "Sports Car 🏎️", "price": 150000, "description": "Fast and flashy.", "image": "https://loremflickr.com/320/240/sportscar"},
-        {"id": "helicopter", "name": "Helicopter 🚁", "price": 500000, "description": "Get above the traffic.", "image": "https://loremflickr.com/320/240/helicopter"}
-    ],
-    "yachts": [
-        {"id": "small_yacht", "name": "Small Yacht 🛥️", "price": 750000, "description": "Rule the local seas.", "image": "https://loremflickr.com/320/240/yacht"},
-        {"id": "giga_yacht", "name": "Giga Yacht 🚢", "price": 10000000, "description": "A floating palace.", "image": "https://loremflickr.com/320/240/yacht,luxury"}
-    ],
-    "real_estate": [
-        {"id": "house", "name": "House 🏡", "price": 150000, "description": "A place to call home.", "image": "https://loremflickr.com/320/240/house"},
-        {"id": "villa", "name": "Villa 🏰", "price": 750000, "description": "Live in luxury.", "image": "https://loremflickr.com/320/240/villa"},
-        {"id": "island", "name": "Private Island 🏝️", "price": 10000000, "description": "The ultimate asset.", "image": "https://loremflickr.com/320/240/island"}
-    ]
-}
-'''
+
 # Helper to find an item in the new list-based catalog by its ID
 def _find_item(category, item_id):
     if category in SHOP_CATALOG:
@@ -128,6 +96,38 @@ def _find_item(category, item_id):
             if item["id"] == item_id:
                 return item
     return None
+
+
+# --- ITEM CATALOG ---
+# This dictionary structure is required for your handle_game_callback logic
+SHOP_CATALOG = {
+    "items": [
+        {"id": "bandage", "name": "Bandage 🩹", "price": 100, "description": "Heals 10 HP.", "value": 10},
+        {"id": "medkit", "name": "Medkit ✚", "price": 500, "description": "Heals 50 HP.", "value": 50},
+        {"id": "bodyguard", "name": "Bodyguard 🛡️", "price": 50000, "description": "Stops one /rob or /kill attempt."}
+    ],
+    "weapons": [
+        {"id": "knife", "name": "Knife 🔪", "price": 1000, "description": "+5% Rob/Kill chance.", "value": 5},
+        {"id": "pistol", "name": "Pistol 🔫", "price": 5000, "description": "+10% Rob/Kill chance.", "value": 10},
+        {"id": "glock", "name": "Glock-17 🔫", "price": 75000, "description": "+20% Kill success.", "value": 20}
+    ],
+    "pets": [
+        {"id": "dog", "name": "Dog 🐶", "price": 10000, "description": "A loyal friend. -5% rob chance against you."},
+        {"id": "cat", "name": "Cat 🐱", "price": 10000, "description": "A cute companion."}
+    ],
+    "vehicles": [
+        {"id": "used_car", "name": "Used Car 🚗", "price": 25000, "description": "Basic transport."},
+        {"id": "sports_car", "name": "Sports Car 🏎️", "price": 150000, "description": "Fast and flashy."},
+        {"id": "ferrari", "name": "Ferrari 🏎️", "price": 5000000, "description": "Instant /work cooldown."}
+    ],
+    "yachts": [
+        {"id": "small_yacht", "name": "Small Yacht 🛥️", "price": 750000, "description": "Rule the local seas."}
+    ],
+    "real_estate": [
+        {"id": "house", "name": "House 🏡", "price": 150000, "description": "A place to call home."},
+        {"id": "villa", "name": "Villa 🏰", "price": 750000, "description": "Live in luxury."}
+    ]
+}
 
 # --- NEW DATA MODEL (22 Columns) ---
 PLAYER_HEADERS = [
