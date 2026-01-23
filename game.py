@@ -868,37 +868,7 @@ async def bounty_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"⚔️ *Anyone who uses /kill on them successfully will claim the reward!*"
     )
     
-async def handle_game_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    data = await get_player_data(user.id, user.full_name)
-    
-    health_bar = get_progress_bar(data['Health'], 100)
-    status = get_status_emoji(data['Health'])
-    
-    text = (
-        f"🏆 **LAILA LEGENDS: {user.first_name.upper()}** {status}\n"
-        f"━━━━━━━━━━━━━━━━━━\n"
-        f"💰 **Wallet:** `${data['Money']:,}`\n"
-        f"🏦 **Bank:** `${data['Bank']:,}`\n"
-        f"❤️ **Health:** {health_bar}\n"
-        f"━━━━━━━━━━━━━━━━━━\n"
-        f"⚡️ *Use the buttons below to build your empire!*"
-    )
 
-    keyboard = [
-        [InlineKeyboardButton("💼 Work", callback_data="game_work"), 
-         InlineKeyboardButton("🌾 Farm", callback_data="game_farm")],
-        [InlineKeyboardButton("🛒 Shop", callback_data="game_shop"), 
-         InlineKeyboardButton("⚔️ Arena", callback_data="game_pvp")],
-        [InlineKeyboardButton("📜 Inventory", callback_data="game_inventory")]
-    ]
-    
-    markup = InlineKeyboardMarkup(keyboard)
-    
-    if update.callback_query:
-        await update.callback_query.edit_message_text(text, reply_markup=markup, parse_mode='Markdown')
-    else:
-        await update.message.reply_text(text, reply_markup=markup, parse_mode='Markdown')
 # --- NEW: /check COMMAND ---
 async def handle_check_profile(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Shows the profile of the replied-to user."""
