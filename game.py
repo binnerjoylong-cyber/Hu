@@ -2207,6 +2207,78 @@ async def handle_game_callback(update: Update, context: ContextTypes.DEFAULT_TYP
             return
 
         # --- Buy Handlers (REFACTORED) ---
+        # --- Buy Handlers (Fixed Logic) ---
+        if parts[1] == "buy":
+            # Data format: game:buy:category:item_id
+            if len(parts) < 4:
+                await query.answer("Invalid item data.", show_alert=True)
+                return
+
+            category, item_id = parts[2], parts[3]
+            
+            item_data = _find_item(category, item_id)
+            if not item_data:
+                await query.answer("This item is out of stock.", show_alert=True)
+                return
+
+            price = item_data["price"]
+
+            # Re-fetch fresh player data to avoid money glitches
+            player_data = await get_player_data(user.id, user.full_name)
+            if not player_data:
+                await query.answer("Error loading wallet.", show_alert=True)
+                return
+                
+            if player_data["Money"] < price:
+                await query.answer(f"❌ You need ${price:,} but only have ${player_data['Money']:,}!", show_alert=True)
+                return
+
+            # --- DEDUCT MONEY ---
+            player_data["Money"] -= price
+            reply_text = f"✅ Purchased {item_data['name']} for ${price:,}!"
+
+            # --- ADD ITEM LOGIC ---
+            if category == "items":
+                # Ensure inventory is a dict
+                if isinstance(player_data["Inventory"], str): 
+                    player_data["Inventory"] = json.loads(player_data["Inventory"])
+                player_data["Inventory"][item_id] = player_data["Inventory"].get(item_id, 0) + 1
+            
+            elif category == "weapons":
+                if player_data.get("Weapon") == item_id:
+                    player_data["Money"] += price # Refund
+                    await query.answer("You already have this weapon!", show_alert=True)
+                    return 
+                player_data["Weapon"] = item_id
+            
+            elif category == "pets":
+                player_data["Pet"] = item_id
+
+            elif category in ["vehicles", "real_estate", "yachts"]:
+                # Ensure Assets is a dict
+                if isinstance(player_data["Assets"], str): 
+                    player_data["Assets"] = json.loads(player_data["Assets"])
+                
+                # Initialize category list if missing
+                if category not in player_data["Assets"] or not isinstance(player_data["Assets"][category], list):
+                    player_data["Assets"][category] = []
+                
+                if item_id in player_data["Assets"][category]:
+                    player_data["Money"] += price # Refund
+                    await query.answer("You already own this!", show_alert=True)
+                    return
+                
+                player_data["Assets"][category].append(item_id)
+
+            # Save
+            if await update_player_data(player_data):
+                await query.answer(reply_text, show_alert=True)
+                # Optional: Refresh the menu to show updated balance
+            else:
+                await query.answer("Database error! Purchase cancelled.", show_alert=True)
+            return
+
+        '''
         if parts[1] == "buy":
             category, item_id = parts[2], parts[3]
             
@@ -2267,7 +2339,7 @@ async def handle_game_callback(update: Update, context: ContextTypes.DEFAULT_TYP
             await update_player_data(player_data)
             await query.answer(reply_text, show_alert=True)
             return
-
+            '''
     # --- Family Proposal Handlers (Marry & Adopt) ---
     # Check if it is a family action and has enough data parts
     # Format expected: game:marry:accept:12345
