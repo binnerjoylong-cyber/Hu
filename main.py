@@ -3738,6 +3738,7 @@ def main() -> None:
 
     application.add_handler(CommandHandler("disown", game.handle_disown))
     application.add_handler(CommandHandler("runaway", game.handle_runaway))
+    application.add_handler(CommandHandler("shop", game.shop_handle))
 
     # --- Admin Commands (Group Admin required) ---
     application.add_handler(CommandHandler("on", on_command))
