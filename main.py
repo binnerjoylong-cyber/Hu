@@ -3736,6 +3736,9 @@ def main() -> None:
     application.add_handler(CommandHandler("slots", game.slots_command))
     application.add_handler(CommandHandler("clan", game.clan_command))
 
+    application.add_handler(CommandHandler("disown", game.handle_disown))
+    application.add_handler(CommandHandler("runaway", game.handle_runaway))
+
     # --- Admin Commands (Group Admin required) ---
     application.add_handler(CommandHandler("on", on_command))
     application.add_handler(CommandHandler("off", off_command))
@@ -3770,8 +3773,7 @@ def main() -> None:
     application.add_handler(CommandHandler("top", game.leaderboard_command))
     application.add_handler(CommandHandler("clan", game.clan_command))
     # Adoption system ke naye handlers
-    application.add_handler(CommandHandler("disown", handle_disown))
-    application.add_handler(CommandHandler("runaway", handle_runaway))
+    
     # Owner-Only Sudo Management Commands (BROADCAST_ADMIN_ID required)
     application.add_handler(CommandHandler("addsudo", add_sudo_command))
     application.add_handler(CommandHandler("removesudo", remove_sudo_command))
