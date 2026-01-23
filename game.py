@@ -1716,7 +1716,6 @@ async def handle_rob(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
             await update_player_data(robber_data)
             await update.message.reply_text(f"You failed to rob {_mention(target.id, target.full_name)} and were caught! 💥\nYou lost {hp_loss} HP.", parse_mode='Markdown')
 
-
 async def handle_kill(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Attempts to kill a user based on Levels and Health (No Cost)."""
     if not update.message.reply_to_message:
@@ -1740,39 +1739,43 @@ async def handle_kill(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         await update.message.reply_text("Error accessing accounts.")
         return
 
-    # 1. Check if target is already dead
+    # 1. Health Checks (Logical Consistency)
     if int(target_data.get("Health", 0)) <= 0:
         await update.message.reply_text(f"{target.full_name} is already dead. Let them rest in peace.")
         return
 
-    # 2. Minimum Health Requirement for Killer
     if int(killer_data.get("Health", 0)) < 50:
         await update.message.reply_text("You are too weak to attack! Use `/heal` first (Minimum 50 HP required).")
         return
         
-    # 3. Cooldown Check
+    # 2. Cooldown Check
     is_ready, time_left = _check_cooldown(killer_data.get("LastKill", 0), COOLDOWNS["kill"])
     if not is_ready:
         await update.message.reply_text(f"You need more time to plan. Try again in {time_left}.")
         return
 
+    # Update cooldown immediately to prevent spamming while script processes
     killer_data["LastKill"] = time.time()
 
-    # 4. Success Calculation based on Levels
-    # Base chance 30% + Level difference bonus
-    killer_lvl = int(killer_data.get("Level", 1))
-    target_lvl = int(target_data.get("Level", 1))
+    # 3. Success Calculation (Calibrated for Rebirths)
+    k_lvl = int(killer_data.get("Level", 1))
+    k_reb = int(killer_data.get("Rebirths", 0))
+    t_lvl = int(target_data.get("Level", 1))
+    t_reb = int(target_data.get("Rebirths", 0))
     
-    level_diff = killer_lvl - target_lvl
-    # Agar killer ka level bada hai to chance badhega, chota hai to kam hoga
-    success_chance = 35 + (level_diff * 5) 
+    # Each rebirth acts like 100 levels
+    killer_score = k_lvl + (k_reb * 100)
+    target_score = t_lvl + (t_reb * 100)
     
-    # Chance limits (Min 10%, Max 85%)
+    level_diff = killer_score - target_score
+    success_chance = 35 + (level_diff * 2) # Slightly nerfed bonus for better balance
     success_chance = max(10, min(85, success_chance))
 
-    # 5. Check for Bodyguard (Still works as a defense)
+    # 4. Defense Check
     inventory = target_data.get("Inventory", [])
-    # Agar inventory list hai to 'bodyguard' check karein
+    if isinstance(inventory, str): # Handle if sheet returns string instead of list
+        inventory = json.loads(inventory) if inventory else []
+
     if "bodyguard" in inventory:
         inventory.remove("bodyguard")
         target_data["Inventory"] = inventory
@@ -1784,45 +1787,51 @@ async def handle_kill(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         )
         return
 
-    # 6. Random Outcome
+    # 5. Outcome Logic
     if random.randint(1, 100) <= success_chance:
-        # SUCCESS
+        # --- SUCCESS ---
         target_data["Health"] = 0
-        # XP Reward for killer
-        killer_data["XP"] = killer_data.get("XP", 0) + 500
+        
+        # Claim Bounty (Emotional Payoff)
+        bounty = int(target_data.get("Bounty", 0))
+        bounty_msg = ""
+        if bounty > 0:
+            killer_data["Money"] = int(killer_data.get("Money", 0)) + bounty
+            target_data["Bounty"] = 0
+            bounty_msg = f"\n💰 **BOUNTY CLAIMED:** You collected ${bounty:,}!"
+
+        # XP Reward (Fixing string + int crash)
+        killer_data["XP"] = int(killer_data.get("XP", 0)) + 500
         
         await update_player_data(killer_data)
         await update_player_data(target_data)
         
         kill_gifs = [
             "https://media.giphy.com/media/l3vRkvDA9uZYh2dGg/giphy.gif",
-            "https://media.giphy.com/media/3o7TKwBfD4O3n0gpp6/giphy.gif",
-            "https://media.giphy.com/media/xT39CZobfRXAATy9oY/giphy.gif" 
+            "https://media.giphy.com/media/3o7TKwBfD4O3n0gpp6/giphy.gif"
         ]
         
         await update.message.reply_animation(
             animation=random.choice(kill_gifs),
             caption=(
                 f"💀 **Assassination Successful!**\n\n"
-                f"{_mention(killer.id, killer.full_name)} (Lvl {killer_lvl}) has killed "
-                f"{_mention(target.id, target.full_name)} (Lvl {target_lvl})! \n"
-                f"Killer gained +500 XP! 🎯"
+                f"{_mention(killer.id, killer.full_name)} has killed "
+                f"{_mention(target.id, target.full_name)}! {bounty_msg}\n"
+                f"🌟 Reward: +500 XP"
             ),
             parse_mode='Markdown'
         )
     else:
-        # FAIL
-        hp_loss = 30 # Attacker loses 30 HP on fail
-        killer_data["Health"] = max(0, int(killer_data["Health"]) - hp_loss)
-        
+        # --- FAIL ---
+        hp_loss = 30
+        killer_data["Health"] = max(0, int(killer_data.get("Health", 100)) - hp_loss)
         await update_player_data(killer_data)
         
         await update.message.reply_text(
             f"Your assassination attempt on {_mention(target.id, target.full_name)} failed! 💥\n"
-            f"The target was too strong for you. You lost {hp_loss} HP in the struggle.",
+            f"You were injured in the struggle and lost **{hp_loss} HP**.",
             parse_mode='Markdown'
         )
-
 # --- Main Callback Query Handler ---
 async def handle_game_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
