@@ -1849,6 +1849,427 @@ async def handle_kill(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 # --- Main Callback Query Handler ---
 async def handle_game_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
+    data = query.data
+    user = query.from_user
+    parts = data.split(":")
+
+    # --- 1. ROUTING LEGACY CALLBACKS (Purane buttons ka fix) ---
+    if data == "game_work":
+        await work_command(update, context)
+        await query.answer()
+        return
+    elif data == "game_shop":
+        data = "game:menu:shop"
+        parts = data.split(":") 
+    elif data == "game_main" or data == "game:menu:main":
+        await handle_game_menu(update, context)
+        await query.answer()
+        return
+
+    # --- 2. GAME ACTIONS MENU (With Cooldowns Display) ---
+    if data == "game_actions_menu" or data == "game:menu:actions":
+        player_data = await get_player_data(user.id, user.full_name)
+        if not player_data:
+            await query.answer("Error loading data.", show_alert=True)
+            return
+
+        # Cooldowns check karna
+        _, work_cd = _check_cooldown(player_data["LastWork"], COOLDOWNS["work"])
+        _, farm_cd = _check_cooldown(player_data["LastFarm"], COOLDOWNS["farm"])
+        _, crime_cd = _check_cooldown(player_data["LastCrime"], COOLDOWNS["crime"])
+        _, mine_cd = _check_cooldown(player_data["LastMine"], COOLDOWNS["mine"])
+        _, task_cd = _check_cooldown(player_data["LastTask"], COOLDOWNS["task"])
+        _, daily_cd = _check_cooldown(player_data["LastDaily"], COOLDOWNS["daily"])
+        
+        action_text = (
+            f"⚡ **ACTIONS MENU** ⚡\n"
+            f"Choose a job to earn money:\n\n"
+            f"**Cooldown Status:**\n"
+            f"🎁 **Daily**: `{daily_cd}`\n"
+            f"💼 **Work**: `{work_cd}`\n"
+            f"🚜 **Farm**: `{farm_cd}`\n"
+            f"⛏️ **Mine**: `{mine_cd}`\n"
+            f"🔫 **Crime**: `{crime_cd}`\n"
+            f"📋 **Task**: `{task_cd}`"
+        )
+        
+        keyboard = [
+            [InlineKeyboardButton(f"🎁 Daily Reward", callback_data="game:action:daily")],
+            [
+                InlineKeyboardButton(f"💼 Work", callback_data="game:action:work"),
+                InlineKeyboardButton(f"🚜 Farm", callback_data="game:action:farm"),
+                InlineKeyboardButton(f"⛏️ Mine", callback_data="game:action:mine")
+            ],
+            [
+                InlineKeyboardButton(f"🔫 Crime", callback_data="game:action:crime"),
+                InlineKeyboardButton(f"📋 Task", callback_data="game:action:task")
+            ],
+            [InlineKeyboardButton("⬅️ Back to Main Menu", callback_data="game:menu:main")]
+        ]
+        await query.edit_message_text(action_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+        return
+
+    # --- 3. EXECUTING ACTIONS (Work, Farm, Crime, etc.) ---
+    if len(parts) > 2 and parts[1] == "action":
+        action_name = parts[2]
+        
+        # Heal alag se handle hota hai agar button ho
+        if action_name == 'heal':
+            await handle_heal(update, context)
+            await query.answer()
+            return
+
+        player_data = await get_player_data(user.id, user.full_name)
+        if not player_data:
+            await query.answer("Error loading data.", show_alert=True)
+            return
+
+        # Cooldown Check
+        last_time_key = f"Last{action_name.capitalize()}"
+        cooldown_time = COOLDOWNS.get(action_name, 0)
+        
+        is_ready, time_left = _check_cooldown(player_data.get(last_time_key, 0), cooldown_time)
+        
+        if not is_ready:
+            await query.answer(f"⏳ Wait {time_left} before doing this again!", show_alert=True)
+            return
+
+        # Execute Logic
+        player_data[last_time_key] = time.time()
+        result_msg = ""
+        xp_gain = random.randint(10, 50)
+        
+        if action_name in EARNINGS: # Work, Farm, Mine, Task, Daily
+            min_earn, max_earn = EARNINGS[action_name]
+            amount = random.randint(min_earn, max_earn)
+            
+            # Daily bonus logic (Streak based)
+            if action_name == "daily":
+                streak = player_data.get('StreakCount', 0) + 1
+                player_data['StreakCount'] = streak
+                amount = int(amount * (1 + (streak * 0.1)))
+                result_msg = f"🎁 **Daily Claimed!**\nStreak: {streak}\nEarned: `${amount:,}`"
+            else:
+                result_msg = f"✅ **{action_name.capitalize()} Successful!**\nEarned: `${amount:,}`"
+            
+            player_data["Money"] += amount
+            player_data["XP"] += xp_gain
+
+        elif action_name == "crime":
+            chance = CRIME_RATES["chance"]
+            if random.randint(1, 100) <= chance:
+                min_earn, max_earn = CRIME_RATES["success"]
+                amount = random.randint(min_earn, max_earn)
+                player_data["Money"] += amount
+                player_data["XP"] += xp_gain
+                result_msg = f"😈 **Crime Successful!**\nYou stole `${amount:,}`"
+            else:
+                min_loss, max_loss = CRIME_RATES["fail"]
+                amount = random.randint(min_loss, max_loss)
+                player_data["Money"] = max(0, player_data["Money"] - amount)
+                result_msg = f"🚓 **Busted!**\nPolice fined you `${amount:,}`"
+
+        # Save Data & Refresh Menu
+        await update_player_data(player_data)
+        
+        # Refresh Menu Text with Result
+        _, work_cd = _check_cooldown(player_data["LastWork"], COOLDOWNS["work"])
+        _, farm_cd = _check_cooldown(player_data["LastFarm"], COOLDOWNS["farm"])
+        _, crime_cd = _check_cooldown(player_data["LastCrime"], COOLDOWNS["crime"])
+        _, mine_cd = _check_cooldown(player_data["LastMine"], COOLDOWNS["mine"])
+        _, task_cd = _check_cooldown(player_data["LastTask"], COOLDOWNS["task"])
+        _, daily_cd = _check_cooldown(player_data["LastDaily"], COOLDOWNS["daily"])
+
+        new_text = (
+            f"{result_msg}\n\n"
+            f"**Actions Menu**\n"
+            f"🎁 **Daily**: `{daily_cd}`\n"
+            f"💼 **Work**: `{work_cd}`\n"
+            f"🚜 **Farm**: `{farm_cd}`\n"
+            f"⛏️ **Mine**: `{mine_cd}`\n"
+            f"🔫 **Crime**: `{crime_cd}`\n"
+            f"📋 **Task**: `{task_cd}`"
+        )
+        
+        # Same keyboard as before
+        keyboard = [
+            [InlineKeyboardButton(f"🎁 Daily Reward", callback_data="game:action:daily")],
+            [
+                InlineKeyboardButton(f"💼 Work", callback_data="game:action:work"),
+                InlineKeyboardButton(f"🚜 Farm", callback_data="game:action:farm"),
+                InlineKeyboardButton(f"⛏️ Mine", callback_data="game:action:mine")
+            ],
+            [
+                InlineKeyboardButton(f"🔫 Crime", callback_data="game:action:crime"),
+                InlineKeyboardButton(f"📋 Task", callback_data="game:action:task")
+            ],
+            [InlineKeyboardButton("⬅️ Back to Main Menu", callback_data="game:menu:main")]
+        ]
+        
+        try:
+            await query.edit_message_text(new_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+        except:
+            await query.answer(result_msg.replace("*", ""), show_alert=True)
+        return
+
+    # --- 4. BANK MENU ---
+    if data == "game:menu:bank":
+        player_data = await get_player_data(user.id, user.full_name)
+        if not player_data:
+            await query.edit_message_text("Error loading data.")
+            return
+
+        bank_text = (
+            f"🏦 **City Bank**\n"
+            f"Secure your funds here.\n\n"
+            f"💵 **Wallet:** `${player_data['Money']:,}`\n"
+            f"💳 **Bank:** `${player_data['Bank']:,}`\n\n"
+            f"**Commands:**\n"
+            f"`/deposit <amount>`\n"
+            f"`/withdraw <amount>`\n"
+            f"`/gift <amount>` (Reply to user)"
+        )
+        keyboard = [[InlineKeyboardButton("⬅️ Back to Main Menu", callback_data="game:menu:main")]]
+        await query.edit_message_text(bank_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+        return
+
+    # --- 5. LEADERBOARD MENU & DISPLAY ---
+    if data == "game:menu:leaderboard":
+        await show_leaderboard_menu(update, context)
+        return
+        
+    if len(parts) > 2 and parts[1] == "lb":
+        lb_type = parts[2] # "rich", "bank", "kills"
+        await display_leaderboard(update, context, lb_type)
+        return
+
+    # --- 6. FAMILY MENU ---
+    if data == "game:menu:family":
+        player_data = await get_player_data(user.id, user.full_name)
+        spouse_name = "Nobody"
+        if player_data["MarriedToID"]:
+            try:
+                spouse_chat = await context.bot.get_chat(player_data["MarriedToID"])
+                spouse_name = spouse_chat.full_name
+            except: spouse_name = "Unknown"
+        
+        children_count = len(player_data.get("ChildrenIDs", []))
+        
+        fam_text = (
+            f"👨‍👩‍👧‍👦 **Family Status**\n\n"
+            f"💍 **Married to:** {spouse_name}\n"
+            f"👶 **Children:** {children_count}\n\n"
+            f"**Commands:**\n"
+            f"`/marry` (Reply to user)\n"
+            f"`/adopt` (Reply to user)\n"
+            f"`/divorce`\n"
+            f"`/disown`"
+        )
+        keyboard = [[InlineKeyboardButton("⬅️ Back to Main Menu", callback_data="game:menu:main")]]
+        await query.edit_message_text(fam_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+        return
+
+    # --- 7. ASSETS / INVENTORY MENU ---
+    if data == "game:menu:assets":
+        player_data = await get_player_data(user.id, user.full_name)
+        assets_text = "**🎒 Inventory & Assets**\n\n"
+        
+        # Inventory
+        assets_text += "**Items:**\n"
+        inventory = player_data.get("Inventory", {})
+        if inventory:
+            for item_id, count in inventory.items():
+                item_name = item_id.capitalize() # Or lookup name
+                # Catalog lookup
+                found = False
+                for cat in SHOP_CATALOG:
+                    for i in SHOP_CATALOG[cat]:
+                        if i['id'] == item_id:
+                            item_name = i['name']
+                            found = True
+                            break
+                    if found: break
+                assets_text += f"• {item_name}: x{count}\n"
+        else:
+            assets_text += "_(Empty)_\n"
+
+        # Assets
+        assets_text += "\n**Properties & Vehicles:**\n"
+        assets = player_data.get("Assets", {})
+        has_asset = False
+        for cat, items in assets.items():
+            if items:
+                for item_id in items:
+                    assets_text += f"• {item_id.replace('_', ' ').title()}\n"
+                    has_asset = True
+        if not has_asset:
+            assets_text += "_(None)_"
+
+        keyboard = [[InlineKeyboardButton("⬅️ Back to Main Menu", callback_data="game:menu:main")]]
+        await query.edit_message_text(assets_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+        return
+
+    # --- 8. SHOP MENUS ---
+    # Main Shop Categories
+    if data == "game:menu:shop":
+        shop_text = "🏪 **Laila Black Market**\nSelect a category:"
+        keyboard = [
+            [
+                InlineKeyboardButton("🩹 Items", callback_data="game:shop:category:items"),
+                InlineKeyboardButton("⚔️ Weapons", callback_data="game:shop:category:weapons")
+            ],
+            [
+                InlineKeyboardButton("🐾 Pets", callback_data="game:shop:category:pets"),
+                InlineKeyboardButton("🚗 Vehicles", callback_data="game:shop:category:vehicles")
+            ],
+            [
+                InlineKeyboardButton("🛥️ Yachts", callback_data="game:shop:category:yachts"),
+                InlineKeyboardButton("🏡 Real Estate", callback_data="game:shop:category:real_estate")
+            ],
+            [InlineKeyboardButton("⬅️ Back to Main Menu", callback_data="game:menu:main")]
+        ]
+        await query.edit_message_text(shop_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+        return
+
+    # Show Items in Category
+    if len(parts) > 3 and parts[1] == "shop" and parts[2] == "category":
+        category = parts[3]
+        if category not in SHOP_CATALOG:
+            await query.answer("Empty Category", show_alert=True)
+            return
+
+        cat_text = f"🛒 **Shop: {category.replace('_', ' ').title()}**\n\n"
+        keyboard = []
+        
+        for item in SHOP_CATALOG[category]:
+            cat_text += f"▪️ **{item['name']}** - ${item['price']:,}\n_{item['description']}_\n\n"
+            keyboard.append([InlineKeyboardButton(f"Buy {item['name']} (${item['price']:,})", callback_data=f"game:buy:{category}:{item['id']}")])
+        
+        keyboard.append([InlineKeyboardButton("⬅️ Back to Shop", callback_data="game:menu:shop")])
+        await query.edit_message_text(cat_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+        return
+
+    # --- 9. BUYING LOGIC ---
+    if len(parts) > 3 and parts[1] == "buy":
+        category, item_id = parts[2], parts[3]
+        
+        # Find item details
+        item_data = None
+        if category in SHOP_CATALOG:
+            for i in SHOP_CATALOG[category]:
+                if i['id'] == item_id:
+                    item_data = i
+                    break
+        
+        if not item_data:
+            await query.answer("Item not found.", show_alert=True)
+            return
+
+        player_data = await get_player_data(user.id, user.full_name)
+        price = item_data['price']
+
+        if player_data['Money'] < price:
+            await query.answer(f"❌ Not enough money! You need ${price:,}", show_alert=True)
+            return
+
+        # Deduct Money
+        player_data['Money'] -= price
+        
+        # Add Item logic
+        if category == "items":
+            if "Inventory" not in player_data: player_data["Inventory"] = {}
+            player_data["Inventory"][item_id] = player_data["Inventory"].get(item_id, 0) + 1
+            
+        elif category == "weapons":
+            player_data["Weapon"] = item_id
+            
+        elif category == "pets":
+            player_data["Pet"] = item_id
+            
+        else: # Assets (Vehicles, Homes, Yachts)
+            if "Assets" not in player_data: player_data["Assets"] = {}
+            if category not in player_data["Assets"]: player_data["Assets"][category] = []
+            
+            # Check duplicate ownership for assets
+            if item_id in player_data["Assets"][category]:
+                player_data['Money'] += price # Refund
+                await query.answer("You already own this!", show_alert=True)
+                return
+            
+            player_data["Assets"][category].append(item_id)
+
+        await update_player_data(player_data)
+        await query.answer(f"✅ Bought {item_data['name']}!", show_alert=True)
+        return
+
+    # --- 10. FAMILY PROPOSALS (Marry/Adopt) ---
+    if len(parts) >= 4 and parts[1] in ["marry", "adopt"]:
+        action = parts[2] # accept/decline
+        proposer_id = int(parts[3])
+        target_id = user.id
+        
+        proposal_type = parts[1] # marry or adopt
+        
+        # Verify proposal exists in cache
+        if proposals[proposal_type].get(target_id) != proposer_id:
+            await query.answer("This proposal has expired.", show_alert=True)
+            await query.message.delete()
+            return
+            
+        # Clean up cache
+        del proposals[proposal_type][target_id]
+        await query.message.delete()
+
+        if action == "decline":
+            await context.bot.send_message(query.message.chat_id, f"❌ Proposal declined.")
+            return
+
+        # Handle Accept
+        if proposal_type == "marry":
+            p1_data = await get_player_data(proposer_id, "Proposer")
+            p2_data = await get_player_data(target_id, user.full_name)
+            
+            p1_data["MarriedToID"] = target_id
+            p2_data["MarriedToID"] = proposer_id
+            
+            await update_player_data(p1_data)
+            await update_player_data(p2_data)
+            
+            await context.bot.send_animation(
+                query.message.chat_id, 
+                animation=GIF_MARRY_SUCCESS,
+                caption=f"💍 **Just Married!**\n\n{_mention(proposer_id, p1_data['UserName'])} ❤️ {_mention(target_id, p2_data['UserName'])}",
+                parse_mode='Markdown'
+            )
+
+        elif proposal_type == "adopt":
+            parent_data = await get_player_data(proposer_id, "Parent")
+            child_data = await get_player_data(target_id, user.full_name)
+            
+            # Add to parent
+            if "ChildrenIDs" not in parent_data: parent_data["ChildrenIDs"] = []
+            if target_id not in parent_data["ChildrenIDs"]:
+                parent_data["ChildrenIDs"].append(target_id)
+            
+            # Update child
+            child_data["ParentID"] = proposer_id
+            
+            await update_player_data(parent_data)
+            await update_player_data(child_data)
+            
+            await context.bot.send_animation(
+                query.message.chat_id,
+                animation=GIF_ADOPT_SUCCESS,
+                caption=f"👶 **Adoption Successful!**\n\n{_mention(proposer_id, parent_data['UserName'])} has adopted {_mention(target_id, child_data['UserName'])}!",
+                parse_mode='Markdown'
+            )
+        return
+
+    # Fallback if nothing matched
+    await query.answer()
+'''
+async def handle_game_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
     # Don't answer yet, some logic might need to send a specific alert
     data = query.data
     user = query.from_user
@@ -2265,68 +2686,7 @@ async def handle_game_callback(update: Update, context: ContextTypes.DEFAULT_TYP
                 await query.answer("Database error! Purchase cancelled.", show_alert=True)
             return
 
-        '''
-        if parts[1] == "buy":
-            category, item_id = parts[2], parts[3]
-            
-            item_data = _find_item(category, item_id)
-            if not item_data:
-                await query.answer("This item does not exist.", show_alert=True)
-                return
-
-            price = item_data["price"]
-
-            player_data = await get_player_data(user.id, user.full_name)
-            if not player_data:
-                await query.answer("Error loading your data.", show_alert=True)
-                return
-                
-            if player_data["Money"] < price:
-                await query.answer(f"You don't have enough money! You need ${price:,}.", show_alert=True)
-                return
-
-            # Handle different buy types
-            player_data["Money"] -= price
-            reply_text = f"You bought 1 {item_data['name']}!"
-
-            if category == "items":
-                player_data["Inventory"][item_id] = player_data["Inventory"].get(item_id, 0) + 1
-            
-            elif category == "weapons":
-                if player_data.get("Weapon") == item_id:
-                    player_data["Money"] += price # Refund
-                    await query.answer(f"You already have this weapon equipped.", show_alert=True)
-                    return 
-                player_data["Weapon"] = item_id
-            
-            elif category == "pets":
-                if player_data.get("Pet") == item_id:
-                    player_data["Money"] += price # Refund
-                    await query.answer(f"You already have this pet.", show_alert=True)
-                    return
-                player_data["Pet"] = item_id
-
-            elif category in ["vehicles", "real_estate", "yachts"]:
-                # Initialize asset category as list if not present
-                if category not in player_data["Assets"] or not isinstance(player_data["Assets"].get(category), list):
-                    player_data["Assets"][category] = []
-                
-                # Check if user already owns this specific item
-                if item_id in player_data["Assets"][category]:
-                    player_data["Money"] += price # Refund
-                    await query.answer(f"You already own this.", show_alert=True)
-                    return
-                
-                # Add item to the list
-                player_data["Assets"][category].append(item_id)
-
-            # Save and notify
-            
-            # ... (Existing buy logic above) ...
-            await update_player_data(player_data)
-            await query.answer(reply_text, show_alert=True)
-            return
-            '''
+        
     # --- Family Proposal Handlers (Marry & Adopt) ---
     # Check if it is a family action and has enough data parts
     # Format expected: game:marry:accept:12345
@@ -2440,6 +2800,6 @@ async def handle_game_callback(update: Update, context: ContextTypes.DEFAULT_TYP
 
         except Exception as e:
             logger.error(f"Error in family callback: {e}", exc_info=True)
-            await query.answer("An error occurred.", show_alert=True)
+            await query.answer("An error occurred.", show_alert=True)'''
 
     
