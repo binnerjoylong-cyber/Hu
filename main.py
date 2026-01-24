@@ -1640,9 +1640,19 @@ async def translate_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             api_key_to_use = available_gemini_keys[0]
             # Updated to a valid existing model name
             model_name_to_use = "models/gemini-2.5-flash-lite" 
-        elif globals().get('GEMMA_API_KEY'):
-            api_key_to_use = GEMMA_API_KEY
-            model_name_to_use = "models/gemma-2-9b-it"
+        elif GROQ_API_KEY: 
+             # Use Groq for translation if Gemini fails/missing
+             client = Groq(api_key=GROQ_API_KEY)
+             chat_completion = client.chat.completions.create(
+                 messages=[
+                     {"role": "system", "content": "You are a translator. Translate the user text exactly. Output ONLY the translated text."},
+                     {"role": "user", "content": prompt} # Prompt contains "Translate to X..."
+                 ],
+                 model="gemma2-9b-it",
+             )
+             await message.reply_text(chat_completion.choices[0].message.content.strip())
+             return # Exit here since we handled it differently than GenAI
+        
         else:
             await message.reply_text("Sorry, no API keys are available for translation right now.")
             return
