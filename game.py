@@ -2233,6 +2233,6 @@ async def handle_game_callback(update: Update, context: ContextTypes.DEFAULT_TYP
 
         except Exception as e:
             logger.error(f"Error in family callback: {e}", exc_info=True)
-            await query.answer("An error occurred.", show_alert=True)'''
+            await query.answer("An error occurred.", show_alert=True)
 
     
