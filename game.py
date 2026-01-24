@@ -210,25 +210,26 @@ async def handle_game_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"⚡️ *Choose your action below:* "
     )
 
-    # --- FIX: Updated callback_data to match your handler logic ---
+    # --- FIX: Updated callback_data to match handler logic ---
     keyboard = [
         [
-            InlineKeyboardButton("👤 Profile", callback_data="game:profile"), # You need to add a handler for this or remove it
-            InlineKeyboardButton("🎒 Inventory", callback_data="game:menu:assets") # Points to Assets Menu
+            InlineKeyboardButton("👤 Profile", callback_data="game:profile"), 
+            InlineKeyboardButton("🎒 Inventory", callback_data="game:menu:assets") 
         ],
         [
-            InlineKeyboardButton("💼 Work", callback_data="game:action:work"),       # Changed from game:work to game:action:work
-            InlineKeyboardButton("🚜 Farm", callback_data="game:action:farm")        # Changed from game:farm:menu to game:action:farm
+            InlineKeyboardButton("💼 Work", callback_data="game:action:work"),      
+            InlineKeyboardButton("🚜 Farm", callback_data="game:action:farm")        
         ],
         [
-            InlineKeyboardButton("⚔️ Arena", callback_data="game:pvp_menu"),       # Ensure you have a handler for this
-            InlineKeyboardButton("🎰 Gamble", callback_data="game:gamble")         # Ensure you have a handler for this
+            # Yahan sahi data 'game:menu:pvp' aur 'game:menu:gamble' use kiya hai
+            InlineKeyboardButton("⚔️ Arena", callback_data="game:menu:pvp"),       
+            InlineKeyboardButton("🎰 Gamble", callback_data="game:menu:gamble")         
         ],
         [
-            InlineKeyboardButton("🏪 Shop", callback_data="game:menu:shop"),         # Changed from game:shop to game:menu:shop
-            InlineKeyboardButton("🏦 Bank", callback_data="game:menu:bank")          # Changed from game:bank to game:menu:bank
+            InlineKeyboardButton("🏪 Shop", callback_data="game:menu:shop"),         
+            InlineKeyboardButton("🏦 Bank", callback_data="game:menu:bank")          
         ],
-        [InlineKeyboardButton("🏆 Leaderboard", callback_data="game:menu:leaderboard")] # Changed to match handler
+        [InlineKeyboardButton("🏆 Leaderboard", callback_data="game:menu:leaderboard")] 
     ]
     
     markup = InlineKeyboardMarkup(keyboard)
