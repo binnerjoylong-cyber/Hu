@@ -516,7 +516,7 @@ def _get_groq_response(chat_id: int, full_prompt: str) -> str | None:
         messages.append({"role": "user", "content": full_prompt})
 
         completion = client.chat.completions.create(
-            model="gemma2-9b-it", # Using Gemma 2 via Groq for extreme speed
+            model="llama-3.1-8b-instant", # Using Gemma 2 via Groq for extreme speed
             messages=messages,
             temperature=0.7,
             max_tokens=1024,
