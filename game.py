@@ -1843,13 +1843,17 @@ async def handle_kill(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             parse_mode='Markdown'
         )
 
+
+
+
+
+
 async def handle_game_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     data = query.data
     user = query.from_user
     
-    # --- 1. TRANSLATION LAYER (The "Router") ---
-    # This fixes the mismatch between old buttons and new handler logic.
+    # --- 1. TRANSLATION LAYER (Legacy Fixes) ---
     if data == "game:shop" or data == "game_shop":
         data = "game:menu:shop"
     elif data == "game:bank" or data == "game_bank":
@@ -1860,12 +1864,12 @@ async def handle_game_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         data = "game:action:farm"
     elif data == "game:leaderboard":
         data = "game:menu:leaderboard"
-    elif data == "game_actions_menu": # Legacy naming fix
-        data = "game:menu:actions"
-    elif data == "game_pvp_menu": # Legacy naming fix
+    # Ye purane naam ko naye format mein badal dega
+    elif data == "game:pvp_menu" or data == "game_pvp_menu": 
         data = "game:menu:pvp"
+    elif data == "game:gamble":
+        data = "game:menu:gamble"
 
-    # Refresh 'parts' after any translation changes
     parts = data.split(":")
 
     # --- 2. MAIN MENU HANDLER ---
@@ -1874,7 +1878,70 @@ async def handle_game_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         await query.answer()
         return
 
-    # --- 3. ACTIONS HANDLER (Work, Farm, Crime, etc.) ---
+    # --- NEW: PROFILE HANDLER ---
+    if data == "game:profile":
+        player_data = await get_player_data(user.id, user.full_name)
+        if not player_data:
+            await query.answer("Error loading profile", show_alert=True)
+            return
+            
+        badges = await get_badges(player_data)
+        # Profile UI Generation
+        profile_ui = (
+            f"👤 **PLAYER PROFILE**\n"
+            f"━━━━━━━━━━━━━━━━━━\n"
+            f"NAME: **{user.first_name}**\n"
+            f"RANK: `{badges}`\n"
+            f"LEVEL: `Lv. {player_data.get('Level', 1)}`\n"
+            f"━━━━━━━━━━━━━━━━━━\n"
+            f"❤️ HEALTH: `{player_data['Health']}/100`\n"
+            f"💰 WALLET: `${player_data['Money']:,}`\n"
+            f"🏦 BANK: `${player_data['Bank']:,}`\n"
+            f"━━━━━━━━━━━━━━━━━━\n"
+            f"⚔️ KILLS: `{player_data.get('Kills', 0)}` | 💀 DEATHS: `{player_data.get('Deaths', 0)}`\n"
+            f"🏴‍☠️ CLAN: `{player_data.get('ClanName', 'None')}`"
+        )
+        # Back button
+        kb = [[InlineKeyboardButton("⬅️ Back to Menu", callback_data="game:menu:main")]]
+        await query.edit_message_text(profile_ui, reply_markup=InlineKeyboardMarkup(kb), parse_mode='Markdown')
+        return
+
+    # --- NEW: GAMBLE MENU HANDLER ---
+    if data == "game:menu:gamble":
+        text = (
+            "🎰 **LAILA CASINO** 🎰\n"
+            "━━━━━━━━━━━━━━━━━━\n"
+            "Feeling lucky? Test your fate here!\n\n"
+            "**Available Games:**\n"
+            "🔹 **Slots:** Spin the machine to win big!\n"
+            "   Command: `/slots <amount>`\n"
+            "   _Example: /slots 100_\n\n"
+            "⚠️ _Warning: The house always wins... eventually._"
+        )
+        kb = [[InlineKeyboardButton("⬅️ Back to Menu", callback_data="game:menu:main")]]
+        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(kb), parse_mode='Markdown')
+        return
+
+    # --- PVP / ARENA MENU HANDLER ---
+    if data == "game:menu:pvp":
+        text = (
+            "⚔️ **BATTLE ARENA** ⚔️\n"
+            "━━━━━━━━━━━━━━━━━━\n"
+            "Rules of the streets:\n\n"
+            "🔫 **Robbing:** Steal cash from others.\n"
+            "   `/rob` (Reply to message)\n\n"
+            "💀 **Killing:** End someone's game.\n"
+            "   `/kill` (Reply to message)\n\n"
+            "🛡️ **Defense:** Buy Bodyguards in Shop."
+        )
+        buttons = [
+            [InlineKeyboardButton("🎯 See Bounties (Soon)", callback_data="game:menu:main")], # Placeholder
+            [InlineKeyboardButton("⬅️ Back to Menu", callback_data="game:menu:main")]
+        ]
+        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(buttons), parse_mode='Markdown')
+        return
+        
+ # --- 3. ACTIONS HANDLER (Work, Farm, Crime, etc.) ---
     if len(parts) > 2 and parts[1] == "action":
         action_name = parts[2]
         
