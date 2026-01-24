@@ -3762,7 +3762,7 @@ def main() -> None:
     application.add_handler(CommandHandler("broadcast", check_sudo_wrapper(broadcast_command)))
     application.add_handler(CommandHandler("get_photo_id", check_sudo_wrapper(get_photo_id)))
     application.add_handler(CommandHandler("adminstats", check_sudo_wrapper(admin_stats_command)))
-    application.add_handler(CommandHandler("forcegemma", check_sudo_wrapper(force_gemma_command)))
+    application.add_handler(CommandHandler("forcegroq", check_sudo_wrapper(force_groq_command)))
     application.add_handler(CommandHandler("forcedynamic", check_sudo_wrapper(force_dynamic_command)))
     application.add_handler(CommandHandler("forcedeepseek", check_sudo_wrapper(force_deepseek_command)))
     application.add_handler(CommandHandler("show_chats", check_sudo_wrapper(show_chats_command)))
