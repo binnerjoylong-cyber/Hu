@@ -1801,12 +1801,12 @@ async def broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     logger.info(f"Broadcast {broadcast_id} finished. Receipt sent to admin/sudo user.")
 
 # --- NEW: Sudo commands for model switching ---
-async def force_gemma_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Forces the bot to use only the Gemma model."""
+async def force_groq_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Forces the bot to use only the Groq model."""
     global current_model_mode
-    current_model_mode = 'gemma_only'
-    await update.message.reply_text("🤖 Model mode has been **forced to Gemma-only**.\nAll AI responses will now use Gemma until switched back.", parse_mode='Markdown')
-    logger.info(f"Model mode forced to Gemma-only by sudo user {update.effective_user.id}.")
+    current_model_mode = 'groq_only'
+    await update.message.reply_text("🤖 Model mode has been **forced to Groq-only**.\nAll AI responses will now use Groq (Gemma2-9b) until switched back.", parse_mode='Markdown')
+    logger.info(f"Model mode forced to Groq-only by sudo user {update.effective_user.id}.")
 
 async def force_dynamic_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Switches the bot back to dynamic model selection."""
