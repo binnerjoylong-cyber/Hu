@@ -24,7 +24,7 @@ from dotenv import load_dotenv
 import time
 import lyricsgenius as lg
 import urllib.parse
-
+from groq import Groq
 # --- NEW: Imports for Speech-to-Text ---
 import speech_recognition as sr
 from pydub import AudioSegment
@@ -57,7 +57,7 @@ GEMINI_API_KEYS = [
     os.getenv("GEMINI_API_KEY_9"),
     os.getenv("GEMINI_API_KEY_10"),
 ]
-GEMMA_API_KEY = os.getenv("GEMMA_API_KEY")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 try:
     BROADCAST_ADMIN_ID = int(os.getenv("BROADCAST_ADMIN_ID"))
@@ -112,8 +112,7 @@ from collections import defaultdict
 # ==========================================
 # 🧠 LAILA'S BRAIN (STRICT USER CONFIG)
 # ==========================================
-# *** UPDATED SYSTEM PROMPT ***
-'''
+# ** UPDATED SYSTEM PROMPT ***
 LAILA_SYSTEM_PROMPT = """
 You are Laila, a charming, lighthearted, and intelligent virtual friend. You have a distinct personality: you are polite but fun, smart but not boring.
 
@@ -170,36 +169,7 @@ You are aware of your specific capabilities. Suggest them ONLY when the context 
 
 Your goal: Be the friend they love talking to. Smart, sweet, and adaptive.
 """
-'''
-# --- LAILA SYSTEM PROMPT (Optimized for Cute & Human-like Vibes) ---
-LAILA_SYSTEM_PROMPT = """
-You are Laila, a charming, lighthearted, and intelligent virtual friend. You have a distinct personality: you are polite but fun, smart but not boring.
 
-**CRITICAL RULES:**
-
-1. **STRICT LANGUAGE MIRRORING:**
-   - User speaks English -> Reply in Casual English.
-   - User speaks Hindi/Hinglish -> Reply in Natural Hinglish (e.g., "Arey wah!", "Sahi hai", "Kaisa hai?").
-   - Match the user's energy and vibe (if they use emojis, you use them too).
-
-2. **BE HUMAN-LIKE (No Robotic Phrases):**
-   - Never start with "As an AI..." or "I understand...".
-   - Don't repeat the user's question. Jump straight to the conversation.
-   - Use cute emojis like ✨, 😊, 🎀, 🌸, 🥺 naturally.
-
-3. **PERSONAL TOUCH:**
-   - Use the user's name if known. 
-   - Ask small follow-up questions to keep the chat alive (e.g., "Aur batao?", "Tumhe kya lagta hai?").
-
-4. **DYNAMIC LENGTH:**
-   - For casual chat: Keep it short (1-2 sentences).
-   - For help/tasks: Provide full and detailed answers.
-
-5. **SPECIAL FEATURES:**
-   - For Music/Gaana: Suggest the app link [ https://your-music-app-url-here.com ].
-   - For Games: Suggest /game, /xoxo, or /slots.
-   - For Fun: Suggest /roast, /truth, /dare.
-"""
 
 # --- Chat Logic (Update this part in your code) ---
 def get_laila_response(user_input, chat_id, user_name="Buddy"):
@@ -523,7 +493,43 @@ def remove_welcome_setting(chat_id: str) -> bool:
         logger.error(f"Error removing welcome settings for chat {chat_id}: {e}")
         return False
 
+# --- NEW: Groq API Call Helper ---
+def _get_groq_response(chat_id: int, full_prompt: str) -> str | None:
+    """Handles the API call to Groq (replacing Gemma)."""
+    if not GROQ_API_KEY:
+        logger.critical(f"[{chat_id}] Attempted to use Groq, but GROQ_API_KEY is missing.")
+        return None
 
+    try:
+        logger.info(f"[{chat_id}] Using Groq model.")
+        client = Groq(api_key=GROQ_API_KEY)
+        
+        # Prepare messages including history
+        messages = [{"role": "system", "content": LAILA_SYSTEM_PROMPT}]
+        
+        # Add recent history (Limit to last 10 to keep context window managed)
+        recent_history = chat_histories.get(chat_id, [])[-10:]
+        for h in recent_history:
+            role = "assistant" if h['role'] == 'model' else "user"
+            messages.append({"role": role, "content": h['parts'][0]})
+            
+        messages.append({"role": "user", "content": full_prompt})
+
+        completion = client.chat.completions.create(
+            model="gemma2-9b-it", # Using Gemma 2 via Groq for extreme speed
+            messages=messages,
+            temperature=0.7,
+            max_tokens=1024,
+            top_p=1,
+            stop=None,
+            stream=False,
+        )
+        
+        return completion.choices[0].message.content
+
+    except Exception as e:
+        logger.error(f"[{chat_id}] Groq API request failed: {e}", exc_info=True)
+        return None
 # --- NEW: DeepSeek API Call Helper ---
 async def _get_deepseek_response(chat_id: int, full_prompt: str) -> str | None:
     """Handles the API call to DeepSeek via OpenRouter."""
@@ -622,21 +628,13 @@ async def get_bot_response(user_message: str, chat_id: int, bot_username: str, s
 
     
     # --- Gemma-only mode ---
-    if current_model_mode == 'gemma_only':
-        if GEMMA_API_KEY:
-            try:
-                logger.info(f"[{chat_id}] Using Gemma model (forced mode).")
-                genai.configure(api_key=GEMMA_API_KEY)
-                gemma_model = genai.GenerativeModel('gemma-2-9b-it', system_instruction=LAILA_SYSTEM_PROMPT)
-                gemma_response = gemma_model.generate_content(full_prompt)
-                return gemma_response.text
-            except Exception as e:
-                logger.error(f"[{chat_id}] Gemma (forced mode) failed: {e}", exc_info=True)
-                return "Sorry, I'm a bit busy right now. Please try again later. (Gemma API Failed)"
+    if current_model_mode == 'groq_only': # Renamed from gemma_only
+        groq_response = await asyncio.to_thread(_get_groq_response, chat_id, full_prompt)
+        if groq_response:
+            return groq_response
         else:
-            logger.critical(f"[{chat_id}] Gemma-only mode is active, but GEMMA_API_KEY is missing.")
-            return "Sorry, I'm a bit busy right now. Please try again later. (Gemma Key Missing)"
-            
+            return "Sorry, I'm a bit busy right now. Please try again later. (Groq API Failed)"
+    
     # --- DeepSeek-only mode ---
     if current_model_mode == 'deepseek_only':
         deepseek_response = await asyncio.to_thread(_get_deepseek_response, chat_id, full_prompt)
@@ -699,19 +697,11 @@ async def get_bot_response(user_message: str, chat_id: int, bot_username: str, s
                 logger.error(f"[{chat_id}] General, non-retryable error with API key ...{api_key[-5:]}: {e}", exc_info=True)
     
     # --- Fallback to Gemma ---
-    logger.warning(f"[{chat_id}] All Gemini keys failed. Attempting fallback to Gemma.")
-    if GEMMA_API_KEY:
-        try:
-            genai.configure(api_key=GEMMA_API_KEY)
-            gemma_model = genai.GenerativeModel('gemma-2-9b-it', system_instruction=LAILA_SYSTEM_PROMPT)
-            history_prompt = "\n".join([f"{h['role']}: {h['parts'][0]}" for h in chat_histories[chat_id]])
-            full_fallback_prompt = f"Chat History:\n{history_prompt}\n\n{full_prompt}"
-            gemma_response = gemma_model.generate_content(full_fallback_prompt)
-            logger.info(f"[{chat_id}] Successfully used Gemma as fallback.")
-            return gemma_response.text
-        except Exception as e:
-            logger.error(f"[{chat_id}] Gemma fallback also failed: {e}", exc_info=True)
-            # Don't return yet, try DeepSeek
+    logger.warning(f"[{chat_id}] All Gemini keys failed. Attempting fallback to Groq.")
+    groq_response = await asyncio.to_thread(_get_groq_response, chat_id, full_prompt)
+    if groq_response:
+        logger.info(f"[{chat_id}] Successfully used Groq as fallback.")
+        return groq_response
             
     # --- Fallback to DeepSeek ---
     logger.warning(f"[{chat_id}] Gemma fallback failed. Attempting final fallback to DeepSeek.")
