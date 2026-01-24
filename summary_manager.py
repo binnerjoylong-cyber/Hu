@@ -50,25 +50,67 @@ class SummaryManager:
 
     async def _generate_summary_text(self, logs, top_user_info):
         """
-        Generates a concise, engaging narrative story.
+        Smart Method: Handles HUGE logs (5000+) using Chunking.
         """
+        # --- CONFIGURATION ---
+        CHUNK_SIZE = 12000  # Characters per chunk (Safe limit for Llama 3 8b)
         
+        # 1. Check if logs are small enough to send directly
+        if len(logs) < CHUNK_SIZE:
+            return await self._call_groq_storyteller(logs, top_user_info)
+
+        # 2. If logs are HUGE, split them (Chunking Logic)
+        logger.info(f"⚠️ Logs too large ({len(logs)} chars). Switching to CHUNKING mode.")
+        
+        chunks = [logs[i:i+CHUNK_SIZE] for i in range(0, len(logs), CHUNK_SIZE)]
+        partial_summaries = []
+
+        # Process each chunk
+        for index, chunk in enumerate(chunks):
+            try:
+                # We ask AI to extract "Key Plot Points" from this chunk
+                prompt = (
+                    f"Analyze this part (Part {index+1}/{len(chunks)}) of a chat log. "
+                    "List the 3-4 most funny, dramatic, or important events that happened here. "
+                    "Be brief. Just bullet points."
+                )
+                
+                completion = self.ai_client.chat.completions.create(
+                    model="llama-3.1-8b-instant",
+                    messages=[
+                        {"role": "system", "content": "You are a helpful assistant extracting key events from chat logs."},
+                        {"role": "user", "content": f"{prompt}\n\nLOGS:\n{chunk}"}
+                    ],
+                    max_tokens=300
+                )
+                partial_summaries.append(completion.choices[0].message.content)
+            except Exception as e:
+                logger.error(f"Chunking Error on part {index}: {e}")
+                continue
+
+        # 3. Combine all partial summaries into one Master Story
+        combined_data = "\n".join(partial_summaries)
+        logger.info("✅ All chunks processed. Generating final story.")
+        
+        return await self._call_groq_storyteller(combined_data, top_user_info)
+
+    async def _call_groq_storyteller(self, text_input, top_user_info):
+        """Helper function that actually writes the final story."""
         system_prompt = (
             "You are a charismatic Storyteller for a premium Telegram group. "
-            "Your goal: Turn today's chat logs into a SHORT, punchy, and engaging 'Daily Story'.\n\n"
+            "Your goal: Turn the provided 'Chat Highlights' or 'Logs' into a SHORT, punchy, and engaging 'Daily Story'.\n\n"
             "Style Guidelines:\n"
-            "1. **Narrative Flow**: Don't just list facts. Use transitions like 'It all kicked off when...', 'Then things took a turn as...', or 'The vibe shifted when...'.\n"
-            "2. **Stick to the Plot**: Only use real events from the logs. Do not invent fake drama.\n"
-            "3. **Stay Concise**: Keep it to 2-3 short, high-energy paragraphs. Avoid 'fluff'.\n"
-            "4. **Formatting**: Bold user names: <b>Name</b>. Use relevant emojis sparingly.\n"
-            "5. **Closing Credits**: End with a dedicated 'Star of the Day' section for the top chatter.\n"
-            "6. **Language**: Smooth, modern English."
+            "1. **Narrative Flow**: Use transitions like 'It all kicked off when...', 'Then things took a turn as...'.\n"
+            "2. **Stick to the Plot**: Only use events provided in the text.\n"
+            "3. **Stay Concise**: Keep it to 2-3 short, high-energy paragraphs.\n"
+            "4. **Formatting**: Bold user names: <b>Name</b>.\n"
+            "5. **Closing**: End with the 'Star of the Day'.\n"
         )
 
         user_prompt = (
-            f"CHAT LOGS FOR STORYTELLING:\n{logs}\n\n"
+            f"DATA FOR STORY:\n{text_input}\n\n"
             f"ACTIVITY DATA: {top_user_info}\n\n"
-            "Write the story now. Keep it short, engaging, and bold the names."
+            "Write the Daily Chronicle story now."
         )
 
         try:
@@ -78,20 +120,17 @@ class SummaryManager:
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
                 ],
-                max_tokens=600, # Kept shorter for better engagement
-                temperature=0.7, # Slightly higher for better 'story' flow, but still grounded
+                max_tokens=800, 
+                temperature=0.7, 
             )
             return completion.choices[0].message.content
         except Exception as e:
-            logger.error(f"Groq API Error: {e}")
-            return "⚠️ The AI is currently resting. Summary unavailable."
-
-
-    
+            logger.error(f"Final Story Generation Error: {e}")
+            return "⚠️ The AI is overwhelmed. Summary unavailable."
 
     async def prepare_summaries(self):
-        """Fetches logs, calculates stats, and generates summaries."""
-        logger.info("--- 7:50 PM IST: PREPARING SUMMARIES ---")
+        """Fetches logs (UP TO 5000), calculates stats, and generates summaries."""
+        logger.info("--- PREPARING SUMMARIES ---")
         collections = await self.db.list_collection_names()
         
         for coll_name in collections:
@@ -99,18 +138,15 @@ class SummaryManager:
             
             chat_id = int(coll_name.replace("chat_", ""))
             
-            # Fetch messages
-            messages = await self.db[coll_name].find().sort("time", 1).to_list(length=3000)
+            # --- UPDATE: FETCH UP TO 5000 MESSAGES ---
+            messages = await self.db[coll_name].find().sort("time", 1).to_list(length=5000)
             
             if not messages or len(messages) < 5: 
                 continue
 
-            # --- 1. Calculate Chatter of the Day (Python Logic) ---
-            # Extract list of users
+            # --- 1. Stats ---
             all_users = [m.get('user', 'Unknown') for m in messages]
-            # Count frequency
             user_counts = Counter(all_users)
-            # Get top user
             if user_counts:
                 top_name, msg_count = user_counts.most_common(1)[0]
                 top_user_info = f"Top Chatter: {top_name} ({msg_count} messages)"
@@ -118,22 +154,25 @@ class SummaryManager:
                 top_user_info = "Top Chatter: None"
 
             # --- 2. Format Logs ---
-            formatted_logs = "\n".join([f"{m.get('user', 'Anon')}: {m.get('text', '')}" for m in messages])
+            # Format text compactly to save tokens
+            formatted_logs = "\n".join([f"{m.get('user', 'A')}: {m.get('text', '')}" for m in messages])
             
-            # --- 3. Generate Summary with AI ---
+            # --- 3. Generate Summary (Using the new Smart Chunking logic) ---
             summary_text = await self._generate_summary_text(formatted_logs, top_user_info)
 
-            # Save to 'pending_summaries'
+            # Save
             await self.db["pending_summaries"].update_one(
                 {"chat_id": chat_id},
                 {"$set": {"summary": summary_text, "status": "ready"}},
                 upsert=True
             )
             
-            # Clear logs for next day
+            # Clear logs
             await self.db[coll_name].delete_many({})
-            logger.info(f"✅ Summary ready for {chat_id} (MVP: {top_name})")
+            logger.info(f"✅ Summary ready for {chat_id} (Processed {len(messages)} msgs)")
 
+
+    
     async def deliver_summaries(self):
         """Delivers the prepared summaries with a cleaner look."""
         logger.info("--- DELIVERING SUMMARIES ---")
