@@ -1648,7 +1648,7 @@ async def translate_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
                      {"role": "system", "content": "You are a translator. Translate the user text exactly. Output ONLY the translated text."},
                      {"role": "user", "content": prompt} # Prompt contains "Translate to X..."
                  ],
-                 model="gemma2-9b-it",
+                 model="llama-3.1-8b-instant",
              )
              await message.reply_text(chat_completion.choices[0].message.content.strip())
              return # Exit here since we handled it differently than GenAI
