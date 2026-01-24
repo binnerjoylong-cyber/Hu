@@ -31,7 +31,7 @@ NEON_COLORS = ["#FF00FF", "#00FFFF", "#00FF00", "#FFFF00", "#FF0099", "#9D00FF",
 
 # 4. FILE IDs (Apne Real File IDs yahan daalein)
 FRAME_FILE_ID = "AgACAgUAAyEFAATHcBuEAAICvGlwh5iWzzYJvgSuOE-EPOtjTa7XAAJnDWsb5FOJVwFVYd7UN29_AQADAgADeQADOAQ" 
-WORD_FRAME_FILE_ID = "YOUR_WORD_FRAME_FILE_ID_HERE" 
+WORD_FRAME_FILE_ID = "AgACAgUAAxkBAAIErmlxNA9ZSKhDHfbq4yYCQDtK5yCLAAKPDGsbfcqQV1IRTOU_qATDAQADAgADdwADOAQ" 
 
 class TriviaGame:
     def __init__(self, application: Application, known_users_list):
@@ -117,9 +117,10 @@ class TriviaGame:
             logger.error(f"Emoji Image Error: {e}")
             return None
 
-    # --- IMAGE GENERATOR: WORD (NEON) ---
+    # --- IMAGE GENERATOR: WORD (NEON) --
     async def create_word_image(self, text):
         try:
+            # Yahan ab ye specific 'word' wala frame uthayega
             frame_data = await self.get_cached_file(WORD_FRAME_FILE_ID, "word")
             if not frame_data: return None
 
@@ -127,7 +128,9 @@ class TriviaGame:
             draw = ImageDraw.Draw(img)
             width, height = img.size
 
-            font_size = 80 if len(text) < 6 else 60
+            # --- CHANGE: Font Size Bada Kar Diya ---
+            # Agar word chota hai (5 letters se kam) to size 120, nahi to 90
+            font_size = 120 if len(text) < 6 else 90 
             font = self.get_font(font_size)
             
             bbox = draw.textbbox((0, 0), text, font=font)
@@ -136,7 +139,8 @@ class TriviaGame:
             x, y = (width - text_w) / 2, (height - text_h) / 2
 
             neon_color = random.choice(NEON_COLORS)
-            draw.text((x+3, y+3), text, font=font, fill="black")
+            # Thoda shadow/stroke badhaya taaki clear dikhe
+            draw.text((x+4, y+4), text, font=font, fill="black") 
             draw.text((x, y), text, font=font, fill=neon_color)
 
             img_byte_arr = io.BytesIO()
@@ -396,7 +400,7 @@ class TriviaGame:
                                 msg = await self.application.bot.send_photo(
                                     cid, photo=photo,
                                     caption=f"🔠 <b>UNSCRAMBLE THE WORD!</b>\nTap the correct option below! 👇",
-                                    reply_markup=InlineKeyboardMarkup(kb), parse_mode='HTML'
+                                    reply_markup=InlineKeyboardMarkup(kb), parse_mode='HTML',has_spoiler=True  
                                 )
                                 self.active_games[msg.message_id] = {'start_time': time.time(), 'winner': None}
                                 asyncio.create_task(self.auto_delete_task(cid, msg.message_id, data['correct']))
