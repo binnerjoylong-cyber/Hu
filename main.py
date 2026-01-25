@@ -3469,7 +3469,7 @@ async def help_callback_handler(update: Update, context: ContextTypes.DEFAULT_TY
             "• `/shorten <url>` - URL Shortner"
         ),
         "help_game": (
-            "**🎮 Laila's Game Zone (Complete Menu)**\n\n"
+            "**🎮 Laila Game Zone (Complete Menu)**\n\n"
             "**🎲 Classic Games**\n"
             "• `/xoxo` - Tic-Tac-Toe\n"
             "• `/endxoxo` - End Tic-Tac-Toe\n"
