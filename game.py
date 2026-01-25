@@ -1846,14 +1846,13 @@ async def handle_kill(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
 
 
-
-
 async def handle_game_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     data = query.data
     user = query.from_user
     
     # --- 1. TRANSLATION LAYER (Legacy Fixes) ---
+    # Standardize legacy buttons to new format
     if data == "game:shop" or data == "game_shop":
         data = "game:menu:shop"
     elif data == "game:bank" or data == "game_bank":
@@ -1864,7 +1863,6 @@ async def handle_game_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         data = "game:action:farm"
     elif data == "game:leaderboard":
         data = "game:menu:leaderboard"
-    # Ye purane naam ko naye format mein badal dega
     elif data == "game:pvp_menu" or data == "game_pvp_menu": 
         data = "game:menu:pvp"
     elif data == "game:gamble":
@@ -1878,7 +1876,7 @@ async def handle_game_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         await query.answer()
         return
 
-    # --- NEW: PROFILE HANDLER ---
+    # --- 3. PROFILE HANDLER (Fixed Markdown Crash) ---
     if data == "game:profile":
         player_data = await get_player_data(user.id, user.full_name)
         if not player_data:
@@ -1886,11 +1884,14 @@ async def handle_game_callback(update: Update, context: ContextTypes.DEFAULT_TYP
             return
             
         badges = await get_badges(player_data)
-        # Profile UI Generation
+        
+        # CLEAN THE NAME TO PREVENT CRASHES
+        safe_name = re.sub(r'[_*\[\]()~`>#+-=|{}.!]', '', user.first_name)
+        
         profile_ui = (
             f"👤 **PLAYER PROFILE**\n"
             f"━━━━━━━━━━━━━━━━━━\n"
-            f"NAME: **{user.first_name}**\n"
+            f"NAME: **{safe_name}**\n"
             f"RANK: `{badges}`\n"
             f"LEVEL: `Lv. {player_data.get('Level', 1)}`\n"
             f"━━━━━━━━━━━━━━━━━━\n"
@@ -1901,12 +1902,11 @@ async def handle_game_callback(update: Update, context: ContextTypes.DEFAULT_TYP
             f"⚔️ KILLS: `{player_data.get('Kills', 0)}` | 💀 DEATHS: `{player_data.get('Deaths', 0)}`\n"
             f"🏴‍☠️ CLAN: `{player_data.get('ClanName', 'None')}`"
         )
-        # Back button
         kb = [[InlineKeyboardButton("⬅️ Back to Menu", callback_data="game:menu:main")]]
         await query.edit_message_text(profile_ui, reply_markup=InlineKeyboardMarkup(kb), parse_mode='Markdown')
         return
 
-    # --- NEW: GAMBLE MENU HANDLER ---
+    # --- 4. GAMBLE MENU HANDLER ---
     if data == "game:menu:gamble":
         text = (
             "🎰 **LAILA CASINO** 🎰\n"
@@ -1922,7 +1922,7 @@ async def handle_game_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(kb), parse_mode='Markdown')
         return
 
-    # --- PVP / ARENA MENU HANDLER ---
+    # --- 5. PVP / ARENA MENU HANDLER (Consolidated) ---
     if data == "game:menu:pvp":
         text = (
             "⚔️ **BATTLE ARENA** ⚔️\n"
@@ -1935,29 +1935,27 @@ async def handle_game_callback(update: Update, context: ContextTypes.DEFAULT_TYP
             "🛡️ **Defense:** Buy Bodyguards in Shop."
         )
         buttons = [
-            [InlineKeyboardButton("🎯 See Bounties (Soon)", callback_data="game:menu:main")], # Placeholder
+            [InlineKeyboardButton("🕵️ How to Rob", callback_data="game:help:rob")], # You can add handlers for these later
+            [InlineKeyboardButton("🎯 How to Bounty", callback_data="game:help:bounty")],
             [InlineKeyboardButton("⬅️ Back to Menu", callback_data="game:menu:main")]
         ]
         await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(buttons), parse_mode='Markdown')
         return
         
- # --- 3. ACTIONS HANDLER (Work, Farm, Crime, etc.) ---
+    # --- 6. ACTIONS HANDLER (Work, Farm, Crime, etc.) ---
     if len(parts) > 2 and parts[1] == "action":
         action_name = parts[2]
         
-        # Special case for Heal (since it asks for item usage)
         if action_name == 'heal':
             await handle_heal(update, context)
             await query.answer()
             return
 
-        # Fetch data for cooldown checks
         player_data = await get_player_data(user.id, user.full_name)
         if not player_data:
             await query.answer("Error loading data.", show_alert=True)
             return
 
-        # Cooldown Check
         last_time_key = f"Last{action_name.capitalize()}"
         cooldown_time = COOLDOWNS.get(action_name, 0)
         is_ready, time_left = _check_cooldown(player_data.get(last_time_key, 0), cooldown_time)
@@ -1974,15 +1972,13 @@ async def handle_game_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         if action_name in EARNINGS: 
             min_earn, max_earn = EARNINGS[action_name]
             amount = random.randint(min_earn, max_earn)
-            
-            # Daily bonus logic
             if action_name == "daily":
                 streak = player_data.get('StreakCount', 0) + 1
                 player_data['StreakCount'] = streak
                 amount = int(amount * (1 + (streak * 0.1)))
-                result_msg = f"🎁 **Daily Claimed!**\nStreak: {streak}\nEarned: `${amount:,}`"
+                result_msg = f"🎁 Daily Claimed! Streak: {streak} | Earned: ${amount:,}"
             else:
-                result_msg = f"✅ **{action_name.capitalize()} Successful!**\nEarned: `${amount:,}`"
+                result_msg = f"✅ {action_name.capitalize()} Successful! Earned: ${amount:,}"
             
             player_data["Money"] += amount
             player_data["XP"] += xp_gain
@@ -1993,50 +1989,42 @@ async def handle_game_callback(update: Update, context: ContextTypes.DEFAULT_TYP
                 amount = random.randint(min_earn, max_earn)
                 player_data["Money"] += amount
                 player_data["XP"] += xp_gain
-                result_msg = f"😈 **Crime Successful!**\nYou stole `${amount:,}`"
+                result_msg = f"😈 Crime Successful! You stole ${amount:,}"
             else:
                 min_loss, max_loss = CRIME_RATES["fail"]
                 amount = random.randint(min_loss, max_loss)
                 player_data["Money"] = max(0, player_data["Money"] - amount)
-                result_msg = f"🚓 **Busted!**\nPolice fined you `${amount:,}`"
+                result_msg = f"🚓 Busted! Police fined you ${amount:,}"
 
         await update_player_data(player_data)
-        
-        # Refresh Menu Text (So they can see new cooldowns immediately)
-        # We reuse the "Actions Menu" display logic here
-        await handle_game_callback(update, context) # Recursively call to refresh menu, OR just answer
+        await handle_game_callback(update, context) # Refresh menu
         try:
-             await query.answer(result_msg.replace("*", ""), show_alert=True)
+             await query.answer(result_msg, show_alert=True)
         except:
              pass
         return
 
-    # --- 4. MENUS (Bank, Shop, Leaderboard, Actions) ---
+    # --- 7. SUB-MENUS (Actions, Bank, Assets, Leaderboard) ---
     
     # ACTIONS MENU
     if data == "game:menu:actions":
         player_data = await get_player_data(user.id, user.full_name)
-        if not player_data:
-            await query.answer("Error.", show_alert=True)
-            return
+        # Calculate cooldowns for display
+        cd_display = {}
+        for act in ["work", "farm", "mine", "crime", "task", "daily"]:
+            _, t_left = _check_cooldown(player_data.get(f"Last{act.capitalize()}", 0), COOLDOWNS[act])
+            cd_display[act] = t_left
 
-        _, work_cd = _check_cooldown(player_data["LastWork"], COOLDOWNS["work"])
-        _, farm_cd = _check_cooldown(player_data["LastFarm"], COOLDOWNS["farm"])
-        _, crime_cd = _check_cooldown(player_data["LastCrime"], COOLDOWNS["crime"])
-        _, mine_cd = _check_cooldown(player_data["LastMine"], COOLDOWNS["mine"])
-        _, task_cd = _check_cooldown(player_data["LastTask"], COOLDOWNS["task"])
-        _, daily_cd = _check_cooldown(player_data["LastDaily"], COOLDOWNS["daily"])
-        
         action_text = (
             f"⚡ **ACTIONS MENU** ⚡\n"
             f"Choose a job to earn money:\n\n"
             f"**Cooldown Status:**\n"
-            f"🎁 **Daily**: `{daily_cd}`\n"
-            f"💼 **Work**: `{work_cd}`\n"
-            f"🚜 **Farm**: `{farm_cd}`\n"
-            f"⛏️ **Mine**: `{mine_cd}`\n"
-            f"🔫 **Crime**: `{crime_cd}`\n"
-            f"📋 **Task**: `{task_cd}`"
+            f"🎁 **Daily**: `{cd_display['daily']}`\n"
+            f"💼 **Work**: `{cd_display['work']}`\n"
+            f"🚜 **Farm**: `{cd_display['farm']}`\n"
+            f"⛏️ **Mine**: `{cd_display['mine']}`\n"
+            f"🔫 **Crime**: `{cd_display['crime']}`\n"
+            f"📋 **Task**: `{cd_display['task']}`"
         )
         keyboard = [
             [InlineKeyboardButton(f"🎁 Daily Reward", callback_data="game:action:daily")],
@@ -2071,47 +2059,29 @@ async def handle_game_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         await query.edit_message_text(bank_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
         return
 
-    # LEADERBOARD MENUS
-    if data == "game:menu:leaderboard":
-        await show_leaderboard_menu(update, context)
-        return
-        
-    if len(parts) > 2 and parts[1] == "lb":
-        lb_type = parts[2] # "rich", "bank", "kills"
-        await display_leaderboard(update, context, lb_type)
-        return
-
     # ASSETS MENU
     if data == "game:menu:assets":
         player_data = await get_player_data(user.id, user.full_name)
         assets_text = "**🎒 Inventory & Assets**\n\n**Items:**\n"
-        # (Simplified inventory display for brevity)
         for item_id, count in player_data.get("Inventory", {}).items():
-            assets_text += f"• {item_id.title()}: x{count}\n"
-            
+            if count > 0: assets_text += f"• {item_id.title()}: x{count}\n"
         assets_text += "\n**Properties:**\n"
         for cat, items in player_data.get("Assets", {}).items():
-            if items:
-                assets_text += f"• {cat.title()}: {len(items)} items\n"
+            if items: assets_text += f"• {cat.title()}: {len(items)} items\n"
 
         keyboard = [[InlineKeyboardButton("⬅️ Back to Main Menu", callback_data="game:menu:main")]]
         await query.edit_message_text(assets_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
         return
 
-    # PVP MENU
-    if data == "game:menu:pvp":
-        text = "⚔️ **BATTLE ARENA**\nChoose your combat style:"
-        buttons = [
-            [InlineKeyboardButton("🕵️ How to Rob", callback_data="game:help:rob")],
-            [InlineKeyboardButton("🎯 How to Bounty", callback_data="game:help:bounty")],
-            [InlineKeyboardButton("🔙 Back", callback_data="game:menu:main")]
-        ]
-        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(buttons), parse_mode='Markdown')
+    # LEADERBOARD MENUS
+    if data == "game:menu:leaderboard":
+        await show_leaderboard_menu(update, context)
+        return
+    if len(parts) > 2 and parts[1] == "lb":
+        await display_leaderboard(update, context, parts[2])
         return
 
-    # --- 5. SHOP SYSTEM ---
-    
-    # Main Shop Menu
+    # --- 8. SHOP SYSTEM ---
     if data == "game:menu:shop":
         shop_text = "🏪 **Laila Black Market**\nSelect a category:"
         keyboard = [
@@ -2141,7 +2111,6 @@ async def handle_game_callback(update: Update, context: ContextTypes.DEFAULT_TYP
 
         cat_text = f"🛒 **Shop: {category.replace('_', ' ').title()}**\n\n"
         keyboard = []
-        
         for item in SHOP_CATALOG[category]:
             cat_text += f"▪️ **{item['name']}** - ${item['price']:,}\n_{item['description']}_\n\n"
             keyboard.append([InlineKeyboardButton(f"Buy {item['name']} (${item['price']:,})", callback_data=f"game:buy:{category}:{item['id']}")])
@@ -2153,7 +2122,6 @@ async def handle_game_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     # Buy Item Handler
     if len(parts) > 3 and parts[1] == "buy":
         category, item_id = parts[2], parts[3]
-        
         item_data = _find_item(category, item_id)
         if not item_data:
             await query.answer("Item not found.", show_alert=True)
@@ -2188,6 +2156,10 @@ async def handle_game_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         await update_player_data(player_data)
         await query.answer(f"✅ Bought {item_data['name']}!", show_alert=True)
         return     
+
+    
+
+
     # --- Family Proposal Handlers (Marry & Adopt) ---
     # Check if it is a family action and has enough data parts
     # Format expected: game:marry:accept:12345
