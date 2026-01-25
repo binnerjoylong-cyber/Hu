@@ -3469,7 +3469,7 @@ async def help_callback_handler(update: Update, context: ContextTypes.DEFAULT_TY
             "• `/shorten <url>` - URL Shortner"
         ),
         "help_game": (
-            "**🎮 Laila Game Zone (Complete Menu)**\n\n"
+            "**🎮 Laila's Game Zone (Complete Menu)**\n\n"
             "**🎲 Classic Games**\n"
             "• `/xoxo` - Tic-Tac-Toe\n"
             "• `/endxoxo` - End Tic-Tac-Toe\n"
@@ -3498,7 +3498,7 @@ async def help_callback_handler(update: Update, context: ContextTypes.DEFAULT_TY
     
             "**⚙️ Settings**\n"
             "• `/triviagame` - Auto games ON/OFF"
-        )
+        ),
         
         "help_admin": (
             "**🔒 Admin Only**\n\n"
