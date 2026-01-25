@@ -3469,16 +3469,37 @@ async def help_callback_handler(update: Update, context: ContextTypes.DEFAULT_TY
             "• `/shorten <url>` - URL Shortner"
         ),
         "help_game": (
-            "**🎮 Games (Only Best Ones)**\n\n"
-            "• `/xoxo` - Tic-Tac-Toe \n"
-            "• `/endxoxo` - Tic-Tac-Toe end"
-            "• `/startgame` - Number guessing game\n"
-            "• `/stopgame` - Game stop\n"
-            "• `/game` - Economy game\n"
-            "• `/profile` - Game Profile\n"
-            "• `/gift` - Gift Money \n"
-            "• `/check` - check other's profile\n"
-        ),
+            "**🎮 Laila's Game Zone (Complete Menu)**\n\n"
+            "**🎲 Classic Games**\n"
+            "• `/xoxo` - Tic-Tac-Toe\n"
+            "• `/endxoxo` - End Tic-Tac-Toe\n"
+            "• `/startgame` - Number Guessing\n"
+            "• `/stopgame` - Stop Guessing Game\n\n"
+   
+            "**🎭 RPG & Social**\n"
+            "• `/game` - Economy Game Menu\n"
+            "• `/profile` - View your Stats\n"
+            "• `/check` - View others profile\n"
+            "• `/marry` - Propose/Marry someone\n"
+            "• `/adopt` - Adopt a member\n"
+            "• `/disown` - Remove from family\n\n"
+
+            "**⚔️ Battle & Clan**\n"
+            "• `/kill` - Attack someone\n"
+            "• `/heal` - Restore your health\n"
+            "• `/clan` - Join or manage Clan\n"
+            "• `/bounty` - Check active bounties\n\n"
+
+            "**💰 Economy & Luck**\n"
+            "• `/daily` - Daily Reward\n"
+            "• `/gift` - Send money to others\n"
+            "• `/slots` - Spin to win coins\n"
+            "• `/shop` - Buy items/boosts\n\n"
+    
+            "**⚙️ Settings**\n"
+            "• `/triviagame` - Auto games ON/OFF"
+        )
+        
         "help_admin": (
             "**🔒 Admin Only**\n\n"
             "• `/on` | `/off` -  bot activate/deactivate\n"
