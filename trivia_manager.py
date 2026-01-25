@@ -130,7 +130,7 @@ class TriviaGame:
 
             # --- CHANGE: Font Size Bada Kar Diya ---
             # Agar word chota hai (5 letters se kam) to size 120, nahi to 90
-            font_size = 120 if len(text) < 6 else 90 
+            font_size = 250 if len(text) < 6 else 180
             font = self.get_font(font_size)
             
             bbox = draw.textbbox((0, 0), text, font=font)
