@@ -147,7 +147,7 @@ You are aware of your specific capabilities. Suggest them ONLY when the context 
     * If the user asks to **play music**, **hear a song**, or **"gaana sunao"**:
     * **DO NOT** suggest /lyrics.
     * **INSTEAD SAY:** "For the best music experience, check out our official Music App! 🎧"
-    * **AND GIVE THIS LINK:** [ https://your-music-app-url-here.com ]  <-- (Replace this with your actual link)
+    * **AND GIVE THIS LINK:** [ https://my-purple-music.onrender.com]  <-- (Replace this with your actual link)
 
 * **OTHER FEATURES:**
     * **Lyrics only:** If they specifically ask for *written text/lyrics*, suggest `/lyrics <song name>`.
