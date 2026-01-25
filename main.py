@@ -2073,7 +2073,35 @@ async def start_callback_handler(update: Update, context: ContextTypes.DEFAULT_T
         kb = [[InlineKeyboardButton("🔙 Back", callback_data="start_back")]]
         
     elif data == "start_games":
-        text = "🎮 **Laila's Game Zone**\n\n• `/xoxo` - Tic-Tac-Toe\n• `/game` - RPG Menu\n• `/profile` - Check Your profile\n• `/check` - Check others profile\n• `/gift` - send money\n• `/kill` - "
+        text = (
+            "🎮 **Laila's Game Zone**\n\n"
+            
+            "**✨ Core Actions**\n"
+            "• `/game` - RPG Main Menu\n"
+            "• `/profile` - Your Stats & Gear\n"
+            "• `/check` - View someone's profile\n"
+            "• `/shop` - Buy items & Boosts\n\n"
+    
+            "**💰 Economy & Luck**\n"
+            "• `/daily` - Claim daily coins\n"
+            "• `/gift` - Send money to friends\n"
+            "• `/slots` - Test your luck\n"
+            "• `/bounty` - Hunt for rewards\n\n"
+    
+            "**⚔️ Battle & Social**\n"
+            "• `/kill` - Attack an enemy\n"
+            "• `/heal` - Restore your HP\n"
+            "• `/clan` - Clan management\n"
+            "• `/marry` - Propose to a user\n"
+            "• `/adopt` - Adopt a child/user\n"
+            "• `/disown` - Remove from family\n"
+
+            "**✨ Mini Games**\n"
+            "• `/triviagame` - Toggle auto games"
+            "• `/xoxo` - Tic-Tac-Toe"
+            "• `/startgame` - Number guessing game"
+            
+        )
         kb = [[InlineKeyboardButton("🔙 Back", callback_data="start_back")]]
         
     elif data == "start_back":
