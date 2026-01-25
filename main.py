@@ -3621,6 +3621,8 @@ async def post_init(application: Application) -> None:
     
     if summary_bot is None:
         summary_bot = SummaryManager(application, known_users)
+    from telegram.ext import CommandHandler
+    application.add_handler(CommandHandler("triviagame", trivia_bot.toggle_game_status))
 
     try:
         # Background tasks start karein
@@ -3721,7 +3723,7 @@ def main() -> None:
     application.add_handler(CommandHandler("profile", game.profile_command))
     application.add_handler(CommandHandler("top", game.leaderboard_command))
 # ... aur baaki purane wale bhi (rob, kill, etc)
-    application.add_handler(CommandHandler("triviagame", trivia_bot.toggle_game_status))
+
     # --- NEW: Refactored Game Commands ---
     application.add_handler(CommandHandler("game", game.start_game))
     application.add_handler(CommandHandler("profile", game.start_game))
