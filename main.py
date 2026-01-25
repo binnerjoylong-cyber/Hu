@@ -3443,9 +3443,13 @@ async def help_callback_handler(update: Update, context: ContextTypes.DEFAULT_TY
         "help_game": (
             "**🎮 Games (Only Best Ones)**\n\n"
             "• `/xoxo` - Tic-Tac-Toe \n"
+            "• `/endxoxo` - Tic-Tac-Toe end"
             "• `/startgame` - Number guessing game\n"
             "• `/stopgame` - Game stop\n"
-            "• `/endxoxo` - Tic-Tac-Toe end"
+            "• `/game` - Economy game\n"
+            "• `/profile` - Game Profile\n"
+            "• `/gift` - Gift Money \n"
+            "• `/check` - check other's profile\n"
         ),
         "help_admin": (
             "**🔒 Admin Only**\n\n"
