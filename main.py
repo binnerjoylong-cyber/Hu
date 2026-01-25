@@ -2073,7 +2073,7 @@ async def start_callback_handler(update: Update, context: ContextTypes.DEFAULT_T
         kb = [[InlineKeyboardButton("🔙 Back", callback_data="start_back")]]
         
     elif data == "start_games":
-        text = "🎮 **Laila's Game Zone**\n\n• `/xoxo` - Tic-Tac-Toe\n• `/game` - RPG Menu\n• `/work` - Earn Money"
+        text = "🎮 **Laila's Game Zone**\n\n• `/xoxo` - Tic-Tac-Toe\n• `/game` - RPG Menu\n• `/profile` - Check Your profile\n• `/check` - Check others profile\n• `/gift` - send money\n• `/kill` - "
         kb = [[InlineKeyboardButton("🔙 Back", callback_data="start_back")]]
         
     elif data == "start_back":
