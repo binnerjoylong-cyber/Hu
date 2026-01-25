@@ -3721,7 +3721,7 @@ def main() -> None:
     application.add_handler(CommandHandler("profile", game.profile_command))
     application.add_handler(CommandHandler("top", game.leaderboard_command))
 # ... aur baaki purane wale bhi (rob, kill, etc)
-
+    application.add_handler(CommandHandler("triviagame", trivia_manager.toggle_game_status))
     # --- NEW: Refactored Game Commands ---
     application.add_handler(CommandHandler("game", game.start_game))
     application.add_handler(CommandHandler("profile", game.start_game))
