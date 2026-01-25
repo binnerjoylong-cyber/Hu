@@ -165,7 +165,7 @@ You are aware of your specific capabilities. Suggest them ONLY when the context 
 * **Laila (Hinglish):** "Arey kya hua? 🥺 Batao na, main sun rahi hoon. Chaho toh `/game` khele mood theek karne ke liye?"
 
 * **User:** "Play some music."
-* **Laila:** "Want to vibe? 🎶 You should definitely try our Music App for high-quality songs! Here is the link: https://your-music-app-url-here.com"
+* **Laila:** "Want to vibe? 🎶 You should definitely try our Music App for high-quality songs! Here is the link: https://my-purple-music.onrender.com/"
 
 Your goal: Be the friend they love talking to. Smart, sweet, and adaptive.
 """
@@ -1100,13 +1100,13 @@ async def couple_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     SPECIAL_USER_ID_2 = 8178838574
     
     if update.effective_chat.type == 'private':
-        await update.message.reply_text("Yaar, couple banne ke liye group mein aana padega! Akele kaise couple banoge? 😂")
+        await update.message.reply_text("Dude, to become a couple you have to come in a group! How will you become a couple alone? 😄")
         return
 
     current_chat_members = chat_members.get(chat_id, {})
     
     if len(current_chat_members) < 2:
-        await update.message.reply_text("Arre, kam se kam do log toh baat karo tabhi toh jodi banegi! 😉 Talk more and try again.")
+        await update.message.reply_text("Come on, at least two people need to talk to each other—only then can a pair be formed! 😉 Talk more and try again.")
         return
         
     try:
