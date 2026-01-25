@@ -21,10 +21,10 @@ STARTING_MONEY = 500
 STARTING_BANK = 0
 STARTING_HEALTH = 100
 # Adoption GIFs
-GIF_ADOPT_PROPOSE = "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExM3ZidXN6bm1oZ3R3eXlyZ3B6Z3B6Z3B6Z3B6Z3B6Z3B6Z3B6JmVwaT12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/brsEO1JayBVja/giphy.gif"
-GIF_ADOPT_SUCCESS = "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExM3h6OHR0eXlyZ3B6Z3B6Z3B6Z3B6Z3B6Z3B6Z3B6JmVwaT12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/MDJ9IbxxvDUQM/giphy.gif"
-GIF_DISOWN = "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExM3h6OHR0eXlyZ3B6Z3B6Z3B6Z3B6Z3B6Z3B6Z3B6JmVwaT12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/l0HlIDU8q079S37gc/giphy.gif"
-GIF_RUNAWAY = "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExM3h6OHR0eXlyZ3B6Z3B6Z3B6Z3B6Z3B6Z3B6Z3B6JmVwaT12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/3o7ZetIsj6yALBg9BS/giphy.gif"
+GIF_ADOPT_PROPOSE = "CgACAgQAAyEFAATHcBuEAAIFkWl1mUcwFgJl9Ve1es4EE_ul68m5AAKyAwAC8l61Ury452c9ObZcOAQ"
+GIF_ADOPT_SUCCESS = "CgACAgQAAyEFAATHcBuEAAIFlGl1mYmjGD1fiSICUHCb7cMXs6kGAALRAwACWsiFUHrQMp0NU8q6OAQ"
+GIF_DISOWN = "CgACAgQAAyEFAATHcBuEAAIFl2l1mccxaEpjzmhE1jS0pTXMhQABcwACCQMAAokzBFPNK5Q1uVODAAE4BA"
+GIF_RUNAWAY = "CgACAgQAAyEFAATHcBuEAAIFmml1mi5CWeLANRH_oIBft0DNiRWYAAJ-BwACx0zNUMqZZyrp8yMGOAQ"
 
 # Proposals storage
 if 'proposals' not in globals():
@@ -1268,9 +1268,9 @@ async def handle_heal(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         await update.message.reply_text("An error occurred while processing your heal.")
 # --- Family Command Handlers ---
 # --- GIF Links (Inhe aap badal sakte hain) ---
-GIF_PROPOSE = "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExNHJmZzBqZzBqZzBqZzBqZzBqZzBqZzBqZzBqZzBqZzBqZzBqJmVwaT12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/L95W4M8qO1MeY/giphy.gif"
-GIF_MARRY_SUCCESS = "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExNHJmZzBqZzBqZzBqZzBqZzBqZzBqZzBqZzBqZzBqZzBqZzBqJmVwaT12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/vS7pC7iH0AWRy/giphy.gif"
-GIF_MARRY_REJECT = "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExNHJmZzBqZzBqZzBqZzBqZzBqZzBqZzBqZzBqZzBqZzBqZzBqJmVwaT12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/26vUxO6iRj8T2K3K0/giphy.gif"
+GIF_PROPOSE = "CgACAgQAAyEFAATHcBuEAAIFnml1m1e8hWcuovXtyGvmxh59RqjrAAJgBAAC1uOdUAx8PitI8A4EOAQ"
+GIF_MARRY_SUCCESS = "CgACAgQAAyEFAATHcBuEAAIFoWl1m3stcC2wNxbKHs0iMgkHXCQTAAKkBwACifodU213DI59q0fMOAQ"
+GIF_MARRY_REJECT = "CgACAgQAAyEFAATHcBuEAAIFpGl1m7PRD4P5ph0UzbWMYE33CH8nAAKbAwACmSQtUmq-XbExyEIgOAQ"
 
 async def handle_marry(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Proposes marriage with a GIF."""
@@ -1817,8 +1817,8 @@ async def handle_kill(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         await update_player_data(target_data)
         
         kill_gifs = [
-            "https://media.giphy.com/media/l3vRkvDA9uZYh2dGg/giphy.gif",
-            "https://media.giphy.com/media/3o7TKwBfD4O3n0gpp6/giphy.gif"
+            "CgACAgQAAyEFAATHcBuEAAIDlmlx4XZbdLsI-AGxmqlBcidUQbtGAAJTBgAC0SVEUJA3IrvmNBz6OAQ",
+            "CgACAgQAAyEFAATHcBuEAAIDl2lx4XdkuWN7w6-fjVdZ7vGrvBgtAALsAgACu8gUU6xvuGs1-sZeOAQ"
         ]
         
         await update.message.reply_animation(
