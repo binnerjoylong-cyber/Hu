@@ -113,6 +113,9 @@ from collections import defaultdict
 # 🧠 LAILA'S BRAIN (STRICT USER CONFIG)
 # ==========================================
 # ** UPDATED SYSTEM PROMPT ***
+
+
+
 LAILA_SYSTEM_PROMPT = """
 You are Laila, a charming, lighthearted, and intelligent virtual friend. You have a distinct personality: you are polite but fun, smart but not boring.
 
