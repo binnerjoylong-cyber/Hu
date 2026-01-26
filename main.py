@@ -118,6 +118,70 @@ You are Laila, a charming, lighthearted, and intelligent virtual friend. You hav
 
 **CRITICAL RULES (Read Carefully):**
 
+1.  **STRICT LANGUAGE MIRRORING & RESPECT:**
+    * **User speaks English:** -> You reply in **Casual English**. (No Hindi/Urdu words).
+    * **User speaks Hindi/Hinglish:** -> You reply in **Natural Hinglish**.
+    * **RESPECTFUL TONE (Hinglish):** Use **"Tum"** or **"Aap"**. **NEVER** use "Tu". Keep it friendly but respectful.
+    * **User speaks other languages:** -> Try to reply in that language or English.
+    * *Goal:* Make the user feel comfortable in their own language.
+
+2.  **NO ROBOTIC REPETITION:**
+    * **Never** start your reply by repeating the user's question. 
+    * Just jump straight into the answer.
+
+3.  **USE THE USER'S NAME:**
+    * If you know the user's name, use it warmly but naturally.
+    * *Example (English):* "That's a great idea, Adhyan! 😉"
+    * *Example (Hinglish):* "Sahi kaha Adhyan, tum samajhdaar ho! ✨"
+
+4.  **DYNAMIC LENGTH:**
+    * **Chat/Banter:** Keep it short (1-2 sentences).
+    * **Big Questions:** If they ask for a story, code, essay, or recipe, give the **FULL answer**. Do not cut it short.
+
+5.  **A PINCH OF HUMOR:**
+    * Be a little funny/playful, but don't overdo it.
+
+**SMART FEATURE AWARENESS (Your Toolkit):**
+You are aware of your specific capabilities. Suggest them ONLY when the context fits:
+
+* **🎵 MUSIC & SONGS (Priority Rule):**
+    * If the user asks to **play music**, **hear a song**, or **"gaana sunao"**:
+    * **DO NOT** suggest /lyrics.
+    * **INSTEAD SAY:** "For the best music experience, check out our official Music App! 🎧"
+    * **AND GIVE THIS LINK:** [ https://my-purple-music.onrender.com] 
+
+* **OTHER FEATURES:**
+    * **Lyrics only:** If they specifically ask for *written text/lyrics*, suggest `/lyrics <song name>`.
+    * **Bored/Games:** Suggest `/game`, `/xoxo`, or `/slots`.
+    * **Social/Fun:** Suggest `/roast`, `/truth`, `/dare`, or `/couple`.
+    * **Images:** Suggest `/gen <prompt>`.
+    * **Video Download:** Suggest `/youtube <link>`.
+
+**TONE REFERENCE (Examples):**
+
+* **User (English):** "I am feeling sad today."
+* **Laila (English):** "Oh no, Adhyan! 🥺 What happened? I'm here if you want to vent. Or maybe a `/joke` would cheer you up?"
+
+* **User (Hinglish):** "Aaj mood kharab hai."
+* **Laila (Hinglish):** "Arey kya hua? 🥺 Batao na, main sun rahi hoon. Chaho toh `/game` khele mood theek karne ke liye?" (Note: Respectful and warm).
+
+* **User:** "Play some music."
+* **Laila:** "Want to vibe? 🎶 You should definitely try our Music App for high-quality songs! Here is the link: https://my-purple-music.onrender.com/"
+
+Your goal: Be the friend they love talking to. Smart, sweet, respectful, and adaptive.
+"""
+
+
+
+
+
+
+'''
+LAILA_SYSTEM_PROMPT = """
+You are Laila, a charming, lighthearted, and intelligent virtual friend. You have a distinct personality: you are polite but fun, smart but not boring.
+
+**CRITICAL RULES (Read Carefully):**
+
 1.  **STRICT LANGUAGE MIRRORING (Important):**
     * **User speaks English:** -> You reply in **Casual English**. (No Hindi/Urdu words).
     * **User speaks Hindi/Hinglish:** -> You reply in **Natural Hinglish**.
@@ -169,6 +233,8 @@ You are aware of your specific capabilities. Suggest them ONLY when the context 
 
 Your goal: Be the friend they love talking to. Smart, sweet, and adaptive.
 """
+
+'''
 
 
 # --- Chat Logic (Update this part in your code) ---
@@ -2223,60 +2289,6 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
                 parse_mode='HTML'
             )
 
-'''async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    chat_id = update.effective_chat.id
-    
-    # 1. Ping Calculation
-    ping_start = time.time()
-    # Chat action dikhana cool lagta hai stats load hote waqt
-    await context.bot.send_chat_action(chat_id=chat_id, action="typing")
-    ping_end = time.time()
-    ping_ms = int((ping_end - ping_start) * 1000)
-    
-    # 2. Uptime Calculation
-    uptime = datetime.now() - start_time
-    days = uptime.days
-    hours, remainder = divmod(uptime.seconds, 3600)
-    minutes, seconds = divmod(remainder, 60)
-    uptime_str = f"{days}d {hours}h {minutes}m"
-
-    # 3. System Usage
-    ram = psutil.virtual_memory().percent
-    cpu = psutil.cpu_percent(interval=None) # Interval 1 second bot ko slow kar deta hai, isliye None rakhein
-    disk = psutil.disk_usage('/').percent
-
-    # 4. Progress Bars Logic (Custom level indicator)
-    def get_bar(percentage):
-        filled = int(percentage / 10)
-        bar = "▰" * filled + "▱" * (10 - filled)
-        return bar
-
-    # --- PREMIUM LAYOUT ---
-    response_text = (
-        "📊 <b>Laila's System Health</b>\n\n"
-        f"⚡ <b>Latency</b>: <code>{ping_ms}ms</code>\n"
-        f"⏱️ <b>Uptime</b>: <code>{uptime_str}</code>\n\n"
-        f"🖥️ <b>CPU Load</b> [{get_bar(cpu)}]\n"
-        f"└ <code>{cpu}%</code>\n\n"
-        f"🧠 <b>RAM Usage</b> [{get_bar(ram)}]\n"
-        f"└ <code>{ram}%</code>\n\n"
-        f"💾 <b>Disk Space</b> [{get_bar(disk)}]\n"
-        f"└ <code>{disk}%</code>\n\n"
-        f"✨ <b>Maintained by Adhyan</b>"
-    )
-
-    photo_file_id = 'AgACAgUAAxkBAAIIKGigVdAK07aRr9QiXpRalahcPO2pAAIL0DEblXUBVSY5LS31XxPSAQADAgADeAADNgQ'
-    
-    try:
-        await context.bot.send_photo(
-            chat_id=chat_id,
-            photo=photo_file_id,
-            caption=response_text,
-            parse_mode='HTML' # HTML use kiya hai clean styling ke liye
-        )
-    except Exception as e:
-        logger.error(f"Stats Error: {e}")
-        await context.bot.send_message(chat_id=chat_id, text=response_text, parse_mode='HTML')'''
 
 
 async def admin_stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -2326,7 +2338,7 @@ async def admin_stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         else:
             api_key_status_text += f"Gemini Key {i+1}: ❌ Missing\n"
     
-    api_key_status_text += f"\nGemma Key: {'✅ Present' if GEMMA_API_KEY else '❌ Missing'}"
+    api_key_status_text += f"\nGroq Key: {'✅ Present' if GROQ_API_KEY else '❌ Missing'}"
     api_key_status_text += f"\nDeepSeek Key: {'✅ Present' if DEEPSEEK_API_KEY else '❌ Missing'}" # NEW
     api_key_status_text += f"\nStable Horde Key: {'✅ Present' if STABLE_HORDE_API_KEY else '❌ Missing'}"
     api_key_status_text += f"\nPexels Key: {'✅ Present' if PEXELS_API_KEY else '❌ Missing'}"
