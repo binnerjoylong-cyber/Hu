@@ -1203,7 +1203,7 @@ async def couple_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         if is_special:
             couple_message = (
                 f"☄️ **KIMI NO NAWA MOMENT** ☄️\n\n"
-                f"{user1_mention} 💫 {user2_mention}\n\n"
+                f"{user1_name} 💫 {user2_name}\n\n"
                 f"_Woah! Destiny has reunited Taki and Mitsuha in this group! ❤️_"
             )
         else:
