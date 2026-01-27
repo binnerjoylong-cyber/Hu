@@ -138,6 +138,67 @@ class TriviaGame:
 
     # --- IMAGE GENERATOR: WORD (NEON) --
     async def create_word_image(self, text):
+    try:
+        frame_data = await self.get_cached_file(WORD_FRAME_FILE_ID, "word")
+        if not frame_data: return None
+
+        img = Image.open(io.BytesIO(frame_data)).convert("RGBA")
+        draw = ImageDraw.Draw(img)
+        width, height = img.size
+
+        # 1. Define maximum width (leaving some padding on sides)
+        max_width = width * 0.90  
+        
+        # 2. Start with a large font size
+        font_size = 250 
+        font = self.get_font(font_size)
+        
+        # 3. Dynamic Scaling Loop
+        # Reduce font size until the text width fits inside max_width
+        while font_size > 10: # Minimum font size safety
+            bbox = draw.textbbox((0, 0), text, font=font)
+            text_w = bbox[2] - bbox[0]
+            text_h = bbox[3] - bbox[1]
+            
+            if text_w <= max_width:
+                # Also check if height fits to be safe
+                if text_h < height * 0.8: 
+                    break
+            
+            # Reduce size and try again
+            font_size -= 10 
+            font = self.get_font(font_size)
+
+        # Recalculate bbox one last time with the final font
+        bbox = draw.textbbox((0, 0), text, font=font)
+        text_w = bbox[2] - bbox[0]
+        text_h = bbox[3] - bbox[1]
+        
+        # 4. Calculate Center Logic
+        # (width - text_w) / 2 is the margin. 
+        # We subtract bbox[0] to account for font offsets.
+        x = (width - text_w) / 2 - bbox[0]
+        y = (height - text_h) / 2 - bbox[1]
+
+        neon_color = random.choice(NEON_COLORS)
+        
+        # Draw Shadow/Stroke
+        draw.text((x+4, y+4), text, font=font, fill="black") 
+        # Draw Main Text
+        draw.text((x, y), text, font=font, fill=neon_color)
+
+        img_byte_arr = io.BytesIO()
+        img.save(img_byte_arr, format='PNG')
+        img_byte_arr.seek(0)
+        return img_byte_arr
+    except Exception as e:
+        logger.error(f"Word Image Error: {e}")
+        return None
+
+
+
+    '''
+    async def create_word_image(self, text):
         try:
             frame_data = await self.get_cached_file(WORD_FRAME_FILE_ID, "word")
             if not frame_data: return None
@@ -165,6 +226,8 @@ class TriviaGame:
         except Exception as e:
             logger.error(f"Word Image Error: {e}")
             return None
+
+            '''
 
     # --- API HELPERS ---
     def get_trivia_question(self):
