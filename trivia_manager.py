@@ -1,4 +1,4 @@
-import asyncio
+ximport asyncio
 import random
 import logging
 import html
@@ -33,106 +33,82 @@ WORD_FRAME_FILE_ID = "AgACAgUAAxkBAAIY8Wl4kB1kYInYopFFqOUX3mrFrYA0AAI0D2sb5MDAVz
 
 # ### NEW: Footer Text constant
 GAME_FOOTER = "\n\n⚙️ <i>Want to turn off this feature? Use /triviagame</i>"
+import asyncio
+import random
+import logging
+import html
+import time
+import io
+import gspread
+from datetime import datetime, timedelta
+from PIL import Image, ImageDraw, ImageFont
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import ContextTypes, Application, CommandHandler
 
+logger = logging.getLogger(__name__)
+
+# Footer configuration
+GAME_FOOTER = "\n\n✨ ᴘᴏᴡᴇʀᴇᴅ ʙʏ @Laila_X_Bot"
 
 class TriviaGame:
-    def __init__(self, application, known_users_list, gspread_client=None):
+    def __init__(self, application, gspread_client=None):
         self.application = application
-        self.known_users = known_users_list
         self.client = gspread_client
         self.disabled_chats = set()
         self.active_games = {}
         
+        # Initialize Sheet and Load Data
         if self.client:
-            self.disabled_chats = self.load_disabled_chats_from_sheet()
+            self.sheet = self.get_or_create_sheet()
+            self.load_disabled_chats()
         
+        # Handler setup
         self.application.add_handler(CommandHandler("triviagame", self.toggle_game_status))
-        logger.info("✅ TriviaGame Module Loaded Successfully")
+        logger.info("✅ TriviaGame Module Initialized")
 
     def get_or_create_sheet(self):
-        """Sheet check karega, nahi mili to naye tab banayega"""
-        if not self.client:
-            logger.error("Gspread client not provided to TriviaGame")
-            return None
-            
+        """Sahi tarike se sheet open ya create karega"""
         try:
-            # TRY BY NAME FIRST (Ensure 'Trivia' sheet exists and shared with Service Account)
+            # Apni main spreadsheet ka naam ya ID yahan likhein
+            spreadsheet = self.client.open("Trivia") 
             try:
-                spreadsheet = self.client.open("Trivia")
-            except Exception:
-                # Fallback: Agar naam se nahi milti toh main sheet (Laila) use karein
-                # Ya aap yahan open_by_key("YOUR_SHEET_ID") bhi daal sakte hain
-                logger.error("Main 'Trivia' spreadsheet not found. Check sharing permissions.")
-                return None
-
-            try:
-                sheet = spreadsheet.worksheet("disabled_chats")
-            except Exception:
+                return spreadsheet.worksheet("disabled_chats")
+            except gspread.WorksheetNotFound:
                 sheet = spreadsheet.add_worksheet(title="disabled_chats", rows="1000", cols="2")
                 sheet.append_row(["chat_id", "date_disabled"])
-                logger.info("🆕 'disabled_chats' worksheet created!")
-            return sheet
+                return sheet
         except Exception as e:
-            # Detailed error logging
-            logger.error(f"Critical Sheet Error: {str(e)}")
+            logger.error(f"❌ Sheet Access Error: {e}")
             return None
 
-    def load_disabled_chats_from_sheet(self):
-        sheet = self.get_or_create_sheet()
-        if not sheet: return set()
+    def load_disabled_chats(self):
+        if not self.sheet: return
         try:
-            records = sheet.get_all_records()
-            return set(int(r['chat_id']) for r in records if str(r.get('chat_id', '')).strip().replace('-','').isdigit())
+            records = self.sheet.get_all_records()
+            self.disabled_chats = {int(r['chat_id']) for r in records if str(r.get('chat_id')).replace('-','').isdigit()}
+            logger.info(f"Loaded {len(self.disabled_chats)} disabled chats.")
         except Exception as e:
-            logger.error(f"Load Error: {e}")
-            return set()
-
-    # ... (Keep the rest of the game loop and toggle logic) ...
-
+            logger.error(f"Error loading disabled chats: {e}")
 
     async def toggle_game_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         chat_id = update.effective_chat.id
+        # Check admin permission here if needed
         
-        if update.effective_chat.type == "private":
-            await update.message.reply_text("❌ Bhai, ye command sirf groups ke liye hai!")
-            return
+        if chat_id in self.disabled_chats:
+            self.disabled_chats.remove(chat_id)
+            # Remove from sheet logic here
+            await update.message.reply_text("✅ Trivia Game Enabled in this chat!")
+        else:
+            self.disabled_chats.add(chat_id)
+            if self.sheet:
+                self.sheet.append_row([str(chat_id), str(datetime.now())])
+            await update.message.reply_text("❌ Trivia Game Disabled in this chat!")
 
-        sheet = self.get_or_create_sheet()
-        if not sheet:
-            await update.message.reply_text("⚠️ Database error! Sheet nahi mil rahi.")
-            return
-
-        try:
-            if chat_id in self.disabled_chats:
-                # OFF se ON karna (Delete from sheet)
-                self.disabled_chats.remove(chat_id)
-                try:
-                    cell = sheet.find(str(chat_id))
-                    if cell:
-                        sheet.delete_rows(cell.row)
-                except: pass
-                
-                await update.message.reply_text("✅ <b>Trivia Games Enabled!</b>\nAb is group mein games aayenge.", parse_mode='HTML')
-            
-            else:
-                # ON se OFF karna (Add to sheet)
-                self.disabled_chats.add(chat_id)
-                from datetime import datetime
-                now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                sheet.append_row([str(chat_id), now])
-                
-                await update.message.reply_text("🚫 <b>Trivia Games Disabled!</b>\nAb is group mein games nahi aayenge.", parse_mode='HTML')
-
-        except Exception as e:
-            # gspread 200 response fix
-            if "200" in str(e):
-                await update.message.reply_text("✅ Setting updated!")
-            else:
-                logger.error(f"Toggle Error: {e}")
-                await update.message.reply_text("⚠️ Error: Sheet update fail ho gayi.")
+    # ... (Baki aapka Emoji, Word, Trivia logic yahan paste karein) ...
+    # Dhyaan rahe ki loops mein `self.disabled_chats` ko check karein.
 
 
-
+    # ... (Keep the rest of the game loop and toggle logic) ...
 
 
 
