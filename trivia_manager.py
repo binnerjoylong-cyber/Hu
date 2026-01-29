@@ -5,6 +5,7 @@ import html
 import time
 import io
 import requests
+import gspread
 from datetime import datetime, timedelta
 from PIL import Image, ImageDraw, ImageFont
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReactionTypeEmoji
@@ -33,54 +34,61 @@ WORD_FRAME_FILE_ID = "AgACAgUAAxkBAAIY8Wl4kB1kYInYopFFqOUX3mrFrYA0AAI0D2sb5MDAVz
 # ### NEW: Footer Text constant
 GAME_FOOTER = "\n\n⚙️ <i>Want to turn off this feature? Use /triviagame</i>"
 
+
 class TriviaGame:
     def __init__(self, application, known_users_list, gspread_client=None):
         self.application = application
         self.known_users = known_users_list
         self.client = gspread_client
         self.disabled_chats = set()
+        self.active_games = {}
         
-        # Startup par sheet check aur data load karein
         if self.client:
             self.disabled_chats = self.load_disabled_chats_from_sheet()
         
-        # Command register
         self.application.add_handler(CommandHandler("triviagame", self.toggle_game_status))
-        logger.info("✅ TriviaGame Module Loaded with Auto-Sheet Creation")
+        logger.info("✅ TriviaGame Module Loaded Successfully")
 
     def get_or_create_sheet(self):
-        """Sheet check karega, nahi mili to bana dega"""
+        """Sheet check karega, nahi mili to naye tab banayega"""
+        if not self.client:
+            logger.error("Gspread client not provided to TriviaGame")
+            return None
+            
         try:
-            # Check karein ki client sahi se initialize hua hai ya nahi
-            if not self.client:
-                logger.error("Gspread Client not found in TriviaGame!")
+            # TRY BY NAME FIRST (Ensure 'Trivia' sheet exists and shared with Service Account)
+            try:
+                spreadsheet = self.client.open("Trivia")
+            except Exception:
+                # Fallback: Agar naam se nahi milti toh main sheet (Laila) use karein
+                # Ya aap yahan open_by_key("YOUR_SHEET_ID") bhi daal sakte hain
+                logger.error("Main 'Trivia' spreadsheet not found. Check sharing permissions.")
                 return None
 
-            spreadsheet = self.client.open("Trivia") 
             try:
                 sheet = spreadsheet.worksheet("disabled_chats")
             except Exception:
-                # Agar worksheet nahi mili to naye tab banao
                 sheet = spreadsheet.add_worksheet(title="disabled_chats", rows="1000", cols="2")
-                sheet.append_row(["chat_id", "date_disabled"]) 
-                logger.info("🆕 'disabled_chats' sheet automatically created!")
+                sheet.append_row(["chat_id", "date_disabled"])
+                logger.info("🆕 'disabled_chats' worksheet created!")
             return sheet
         except Exception as e:
-            # Yahan error ko detail mein print karein
-            logger.error(f"Sheet Access Error Details: {str(e)}")
+            # Detailed error logging
+            logger.error(f"Critical Sheet Error: {str(e)}")
             return None
 
     def load_disabled_chats_from_sheet(self):
         sheet = self.get_or_create_sheet()
         if not sheet: return set()
-        
         try:
             records = sheet.get_all_records()
-            # Sare IDs ko set me daalna taaki fast lookup ho
-            return set(int(r['chat_id']) for r in records if r.get('chat_id'))
+            return set(int(r['chat_id']) for r in records if str(r.get('chat_id', '')).strip().replace('-','').isdigit())
         except Exception as e:
-            logger.error(f"Data loading error: {e}")
+            logger.error(f"Load Error: {e}")
             return set()
+
+    # ... (Keep the rest of the game loop and toggle logic) ...
+
 
     async def toggle_game_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         chat_id = update.effective_chat.id
