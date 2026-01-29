@@ -31,10 +31,13 @@ WORD_FRAME_FILE_ID = "AgACAgUAAxkBAAIY8Wl4kB1kYInYopFFqOUX3mrFrYA0AAI0D2sb5MDAVz
 # ### NEW: Footer Text constant
 GAME_FOOTER = "\n\n⚙️ <i>Want to turn off this feature? Use /triviagame</i>"
 
+
 class TriviaGame:
     def __init__(self, application: Application, known_users_list):
         self.application = application
         self.known_users = known_users_list
+        self.client = gspread_client
+        self.disabled_chats = self.load_disabled_chats_from_sheet()
         self.game_modes = ["emoji", "trivia", "word"]
         self.current_mode_index = 0
         self.active_games = {} 
@@ -43,13 +46,70 @@ class TriviaGame:
         self.custom_font = None
         
         # ### NEW: Disabled Chats ka record rakhne ke liye set
-        self.disabled_chats = set()
 
         # ### NEW: Command Handler Register karna (Class initialize hote hi)
         self.application.add_handler(CommandHandler("triviagame", self.toggle_game_status))
 
+    def load_disabled_chats_from_sheet(self):
+        """Sheet se IDs load karke Set me save karna"""
+        try:
+            # Apni sheet ka sahi naam yahan likhein
+            sheet = self.client.open("Aapki_Sheet_Ka_Name").worksheet("disabled_chats")
+            records = sheet.get_all_records()
+            return set(int(r['chat_id']) for r in records)
+        except Exception as e:
+            print(f"Error loading disabled chats: {e}")
+            return set()
+            
+
     # --- ### NEW: TOGGLE COMMAND HANDLER ---
     async def toggle_game_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        chat_id = update.effective_chat.id
+        
+        # Check agar chat group hai ya private
+        if update.effective_chat.type == "private":
+            await update.message.reply_text("❌ Ye command sirf groups ke liye hai!")
+            return
+
+        try:
+            # 1. Google Sheet open karein (Yahan apni sheet ka sahi naam likhein)
+            # Agar main.py me client pass kiya hai to self.client use hoga
+            sheet = self.client.open("Trivia").worksheet("disabled_chats")
+
+            # 2. Toggle Logic
+            if chat_id in self.disabled_chats:
+                # AGAR OFF THA -> TOH AB ON KARO
+                self.disabled_chats.remove(chat_id)
+                
+                # Sheet se ID delete karo
+                try:
+                    cell = sheet.find(str(chat_id))
+                    if cell:
+                        sheet.delete_rows(cell.row)
+                except:
+                    pass # Agar sheet me na mile to koi baat nahi
+                
+                await update.message.reply_text(
+                    "✅ <b>Trivia Games Enabled!</b>\nAb is group mein automatically games aayenge.", 
+                    parse_mode='HTML'
+                )
+            else:
+                # AGAR ON THA -> TOH AB OFF KARO
+                self.disabled_chats.add(chat_id)
+                
+                # Sheet mein ID save karo taaki restart ke baad bhi OFF rahe
+                sheet.append_row([chat_id])
+                
+                await update.message.reply_text(
+                    "🚫 <b>Trivia Games Disabled!</b>\nTrivia games are disabled for this Group.\n"
+                    "To enable Trivia games please use /triviagame  command.", 
+                    parse_mode='HTML'
+                )
+        except Exception as e:
+            logger.error(f"Sheet Update Error: {e}")
+            await update.message.reply_text("⚠️ Sheet update karne mein error aaya. Check console.")    
+            
+   ''' async def toggle_game_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         chat_id = update.effective_chat.id
         
         # Check agar chat group hai ya private (Optional security)
@@ -65,7 +125,7 @@ class TriviaGame:
         else:
             self.disabled_chats.add(chat_id)
             await update.message.reply_text("🚫 <b>Trivia Games Disabled!</b>\nAb is group me games nahi aayenge.\nWapas chalu karne ke liye /triviagame dabayein.", parse_mode='HTML')
-
+          '''  
     # --- HELPER: GET TELEGRAM FILE ---
     async def get_cached_file(self, file_id, type_key):
         target_cache = self.cached_frame if type_key == "emoji" else self.cached_word_frame
