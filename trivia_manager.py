@@ -33,86 +33,94 @@ WORD_FRAME_FILE_ID = "AgACAgUAAxkBAAIY8Wl4kB1kYInYopFFqOUX3mrFrYA0AAI0D2sb5MDAVz
 # ### NEW: Footer Text constant
 GAME_FOOTER = "\n\n⚙️ <i>Want to turn off this feature? Use /triviagame</i>"
 
-
 class TriviaGame:
-    def __init__(self, application: Application, known_users_list,gspread_client=None):
+    def __init__(self, application, known_users_list, gspread_client=None):
         self.application = application
         self.known_users = known_users_list
         self.client = gspread_client
-        self.disabled_chats = self.load_disabled_chats_from_sheet()
-        self.game_modes = ["emoji", "trivia", "word"]
-        self.current_mode_index = 0
-        self.active_games = {} 
-        self.cached_frame = None
-        self.cached_word_frame = None
-        self.custom_font = None
+        self.disabled_chats = set()
         
-        # ### NEW: Disabled Chats ka record rakhne ke liye set
-
-        # ### NEW: Command Handler Register karna (Class initialize hote hi)
+        # Startup par sheet check aur data load karein
+        if self.client:
+            self.disabled_chats = self.load_disabled_chats_from_sheet()
+        
+        # Command register
         self.application.add_handler(CommandHandler("triviagame", self.toggle_game_status))
+        logger.info("✅ TriviaGame Module Loaded with Auto-Sheet Creation")
+
+    def get_or_create_sheet(self):
+        """Sheet check karega, nahi mili to bana dega"""
+        try:
+            spreadsheet = self.client.open("Trivia") # Apni Spreadsheet ka main naam
+            try:
+                sheet = spreadsheet.worksheet("disabled_chats")
+            except Exception:
+                # Agar worksheet nahi mili to naye tab banao
+                sheet = spreadsheet.add_worksheet(title="disabled_chats", rows="1000", cols="2")
+                sheet.append_row(["chat_id", "date_disabled"]) # Headers
+                logger.info("🆕 'disabled_chats' sheet automatically created!")
+            return sheet
+        except Exception as e:
+            logger.error(f"Sheet Access Error: {e}")
+            return None
 
     def load_disabled_chats_from_sheet(self):
-        """Sheet se IDs load karke Set me save karna"""
+        sheet = self.get_or_create_sheet()
+        if not sheet: return set()
+        
         try:
-            # Apni sheet ka sahi naam yahan likhein
-            sheet = self.client.open("Aapki_Sheet_Ka_Name").worksheet("disabled_chats")
             records = sheet.get_all_records()
-            return set(int(r['chat_id']) for r in records)
+            # Sare IDs ko set me daalna taaki fast lookup ho
+            return set(int(r['chat_id']) for r in records if r.get('chat_id'))
         except Exception as e:
-            print(f"Error loading disabled chats: {e}")
+            logger.error(f"Data loading error: {e}")
             return set()
-            
 
-    # --- ### NEW: TOGGLE COMMAND HANDLER ---
     async def toggle_game_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """
-        Groups mein trivia game on ya off karne ke liye aur Google Sheets mein save karne ke liye.
-        """
         chat_id = update.effective_chat.id
         
-        # Check agar chat private hai
         if update.effective_chat.type == "private":
-            await update.message.reply_text("❌ Ye command sirf groups ke liye hai!")
+            await update.message.reply_text("❌ Bhai, ye command sirf groups ke liye hai!")
+            return
+
+        sheet = self.get_or_create_sheet()
+        if not sheet:
+            await update.message.reply_text("⚠️ Database error! Sheet nahi mil rahi.")
             return
 
         try:
-            # Google Sheet ka 'Trivia' name check kar lena sahi hai ya nahi
-            sheet = self.client.open("Trivia").worksheet("disabled_chats")
-
             if chat_id in self.disabled_chats:
-                # OFF se ON karna
+                # OFF se ON karna (Delete from sheet)
                 self.disabled_chats.remove(chat_id)
-                
-                # Sheet se ID delete karo
                 try:
                     cell = sheet.find(str(chat_id))
                     if cell:
                         sheet.delete_rows(cell.row)
-                except Exception:
-                    pass
+                except: pass
                 
-                await update.message.reply_text(
-                    "✅ <b>Trivia Games Enabled!</b>\nAb is group mein automatically games aayenge.", 
-                    parse_mode='HTML'
-                )
+                await update.message.reply_text("✅ <b>Trivia Games Enabled!</b>\nAb is group mein games aayenge.", parse_mode='HTML')
             
             else:
-                # ON se OFF karna
+                # ON se OFF karna (Add to sheet)
                 self.disabled_chats.add(chat_id)
+                from datetime import datetime
+                now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                sheet.append_row([str(chat_id), now])
                 
-                # Sheet mein ID save karna
-                sheet.append_row([chat_id])
-                
-                await update.message.reply_text(
-                    "🚫 <b>Trivia Games Disabled!</b>\nTrivia games are disabled for this Group.\n"
-                    "To enable Trivia games please use /triviagame command.", 
-                    parse_mode='HTML'
-                )
+                await update.message.reply_text("🚫 <b>Trivia Games Disabled!</b>\nAb is group mein games nahi aayenge.", parse_mode='HTML')
 
         except Exception as e:
-            logger.error(f"Sheet Update Error: {e}")
-            await update.message.reply_text("⚠️ Google Sheet update karne mein error aaya. Check console logs.")
+            # gspread 200 response fix
+            if "200" in str(e):
+                await update.message.reply_text("✅ Setting updated!")
+            else:
+                logger.error(f"Toggle Error: {e}")
+                await update.message.reply_text("⚠️ Error: Sheet update fail ho gayi.")
+
+
+
+
+
 
     # --- HELPER: GET TELEGRAM FILE ---
     async def get_cached_file(self, file_id, type_key):
