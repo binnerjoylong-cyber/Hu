@@ -21,7 +21,7 @@ EMOJI_POOL = [
     "🍍", "🦚", "🎲", "🛸", "🍟", "🍿", "🛹", "🎯", "🎭", "🎬", "🎨", "🧩", "🎤", "🎧", "🎷", "🎸", "🎺", "🎻", "🎬", "🏹",
     "🌋", "🛰", "🎡", "🎢", "🚢", "🛫", "🪐", "🌟", "🌙", "🥨", "🥓", "🍔", "🍣", "🌮", "🍭", "🍫", "🍯", "🥂", "🥃", "🧉"
     "🦙", "☠️", "👹", "☃️", "💌", "💅", "🧟", "💐", "🏖️", "🌀", "🌍", "🐱", "🐼", "🐲", "🐘", "🥝", "🫘", "🥙", "🍰", "🥂"
-]
+    "🚗", "🚁", "⛩️", "🗺️", "🎎", "🪔", "🪅", "🎄", "🥋", "📸", "📺", "📱", "👘", "💍", "📓", "🔮", "🎵", "🔒", "💣", "🔏"
 ]
 
 REACTION_POOL = ["❤️", "🔥", "🎉", "👏", "🤩", "👀", "🏆"]
@@ -114,13 +114,6 @@ class TriviaGame:
             logger.error(f"Sheet Update Error: {e}")
             await update.message.reply_text("⚠️ Google Sheet update karne mein error aaya. Check console logs.")
 
-
-
-
-
-    
-    async def toggle_game_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-    
     # --- HELPER: GET TELEGRAM FILE ---
     async def get_cached_file(self, file_id, type_key):
         target_cache = self.cached_frame if type_key == "emoji" else self.cached_word_frame
