@@ -118,51 +118,7 @@ class TriviaGame:
 
     
     async def toggle_game_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        chat_id = update.effective_chat.id
-        
-        # Check agar chat group hai ya private
-        if update.effective_chat.type == "private":
-            await update.message.reply_text("❌ Ye command sirf groups ke liye hai!")
-            return
-
-        try:
-            # 1. Google Sheet open karein (Yahan apni sheet ka sahi naam likhein)
-            # Agar main.py me client pass kiya hai to self.client use hoga
-            sheet = self.client.open("Trivia").worksheet("disabled_chats")
-
-            # 2. Toggle Logic
-            if chat_id in self.disabled_chats:
-                # AGAR OFF THA -> TOH AB ON KARO
-                self.disabled_chats.remove(chat_id)
-                
-                # Sheet se ID delete karo
-                try:
-                    cell = sheet.find(str(chat_id))
-                    if cell:
-                        sheet.delete_rows(cell.row)
-                except:
-                    pass # Agar sheet me na mile to koi baat nahi
-                
-                await update.message.reply_text(
-                    "✅ <b>Trivia Games Enabled!</b>\nAb is group mein automatically games aayenge.", 
-                    parse_mode='HTML'
-                )
-            else:
-                # AGAR ON THA -> TOH AB OFF KARO
-                self.disabled_chats.add(chat_id)
-                
-                # Sheet mein ID save karo taaki restart ke baad bhi OFF rahe
-                sheet.append_row([chat_id])
-                
-                await update.message.reply_text(
-                    "🚫 <b>Trivia Games Disabled!</b>\nTrivia games are disabled for this Group.\n"
-                    "To enable Trivia games please use /triviagame  command.", 
-                    parse_mode='HTML'
-                )
-        except Exception as e:
-            logger.error(f"Sheet Update Error: {e}")
-            await update.message.reply_text("⚠️ Sheet update karne mein error aaya. Check console.")    
-
+    
     # --- HELPER: GET TELEGRAM FILE ---
     async def get_cached_file(self, file_id, type_key):
         target_cache = self.cached_frame if type_key == "emoji" else self.cached_word_frame
