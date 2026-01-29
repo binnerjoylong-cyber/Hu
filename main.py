@@ -36,7 +36,8 @@ import io
 import glob
 # --- NEW: IMPORT THE GAME MODULE ---
 import game
-
+from trivia_manager import TriviaGame
+from summary_manager import SummaryManager
 # Agar file ka naam yt_bypass.py hai toh:
 # main.py ke top par
 from yt_bypass import social_media_handler, youtube_command
@@ -3675,7 +3676,7 @@ trivia_bot = None
 summary_bot = None
 
 # --- 2. Post Init (Sahi jagah initialization ke liye) ---
-async def post_init(application: Application) -> None:
+'''async def post_init(application: Application) -> None:
     """Ye background tasks ko sahi event loop mein start karega"""
     global trivia_bot, summary_bot
     
@@ -3698,7 +3699,7 @@ async def post_init(application: Application) -> None:
         asyncio.create_task(summary_bot.run_scheduler())
         logger.info("✅ Laila's Background Tasks (Trivia & Summary) Started.")
     except Exception as e:
-        logger.error(f"❌ Error starting background tasks: {e}")
+        logger.error(f"❌ Error starting background tasks: {e}")'''
 
 # --- 3. Main function ---
 def main() -> None:
@@ -3714,12 +3715,22 @@ def main() -> None:
     application = (
         Application.builder()
         .token(TELEGRAM_BOT_TOKEN)
-        .post_init(post_init) 
+       # .post_init(post_init) 
         .build()
     )
 
     # C. HANDLERS (Order is perfect)
+    if trivia_bot is None:
+        # TriviaGame class apne __init__ me hi handler add kar leti hai
+        trivia_bot = TriviaGame(application, known_users)
+        print("✅ Trivia Bot Initialized in Main")
     
+    if summary_bot is None:
+        summary_bot = SummaryManager(application, known_users)
+        asyncio.get_event_loop().create_task(summary_bot.run_scheduler()) # Scheduler start
+
+    loop = asyncio.get_event_loop()
+    loop.create_task(trivia_bot.start_loop())
     # Trivia buttons (Lambda is important here)
     application.add_handler(CallbackQueryHandler(
         lambda u, c: trivia_bot.handle_callback(u, c) if trivia_bot else None, 
@@ -3898,15 +3909,17 @@ def main() -> None:
     # 5. Phir Voice Messages
     application.add_handler(MessageHandler(filters.VOICE, handle_voice_message))
 
+    
+    
+    application.add_handler(MessageHandler(
+        (filters.UpdateType.EDITED_MESSAGE & (filters.TEXT | filters.CAPTION)), 
+        process_message
+    ))
+
     # 6. SABSE NICHE: General AI Chat (process_message)
     # Isko upar rakhoge toh buttons aur baki cheezein block ho jayengi
     application.add_handler(MessageHandler(
         (filters.TEXT | filters.CAPTION) & (~filters.UpdateType.EDITED_MESSAGE), 
-        process_message
-    ))
-    
-    application.add_handler(MessageHandler(
-        (filters.UpdateType.EDITED_MESSAGE & (filters.TEXT | filters.CAPTION)), 
         process_message
     ))
 
