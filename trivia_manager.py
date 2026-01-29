@@ -35,7 +35,7 @@ GAME_FOOTER = "\n\n⚙️ <i>Want to turn off this feature? Use /triviagame</i>"
 
 
 class TriviaGame:
-    def __init__(self, application: Application, known_users_list):
+    def __init__(self, application: Application, known_users_list,gspread_client=None):
         self.application = application
         self.known_users = known_users_list
         self.client = gspread_client
