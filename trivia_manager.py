@@ -51,17 +51,23 @@ class TriviaGame:
     def get_or_create_sheet(self):
         """Sheet check karega, nahi mili to bana dega"""
         try:
-            spreadsheet = self.client.open("Trivia") # Apni Spreadsheet ka main naam
+            # Check karein ki client sahi se initialize hua hai ya nahi
+            if not self.client:
+                logger.error("Gspread Client not found in TriviaGame!")
+                return None
+
+            spreadsheet = self.client.open("Trivia") 
             try:
                 sheet = spreadsheet.worksheet("disabled_chats")
             except Exception:
                 # Agar worksheet nahi mili to naye tab banao
                 sheet = spreadsheet.add_worksheet(title="disabled_chats", rows="1000", cols="2")
-                sheet.append_row(["chat_id", "date_disabled"]) # Headers
+                sheet.append_row(["chat_id", "date_disabled"]) 
                 logger.info("🆕 'disabled_chats' sheet automatically created!")
             return sheet
         except Exception as e:
-            logger.error(f"Sheet Access Error: {e}")
+            # Yahan error ko detail mein print karein
+            logger.error(f"Sheet Access Error Details: {str(e)}")
             return None
 
     def load_disabled_chats_from_sheet(self):
