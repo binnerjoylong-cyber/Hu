@@ -3711,6 +3711,7 @@ def main() -> None:
     load_sudo_users()
     load_welcome_settings()
 
+
     # B. PHIR: Application Build karein
     application = (
         Application.builder()
@@ -3722,7 +3723,7 @@ def main() -> None:
     # C. HANDLERS (Order is perfect)
     if trivia_bot is None:
         # TriviaGame class apne __init__ me hi handler add kar leti hai
-        trivia_bot = TriviaGame(application, known_users)
+        trivia_bot = TriviaGame(application, known_users,gspread_client=client)
         print("✅ Trivia Bot Initialized in Main")
     
     if summary_bot is None:
