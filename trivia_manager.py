@@ -64,6 +64,60 @@ class TriviaGame:
 
     # --- ### NEW: TOGGLE COMMAND HANDLER ---
     async def toggle_game_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """
+        Groups mein trivia game on ya off karne ke liye aur Google Sheets mein save karne ke liye.
+        """
+        chat_id = update.effective_chat.id
+        
+        # Check agar chat private hai
+        if update.effective_chat.type == "private":
+            await update.message.reply_text("❌ Ye command sirf groups ke liye hai!")
+            return
+
+        try:
+            # Google Sheet ka 'Trivia' name check kar lena sahi hai ya nahi
+            sheet = self.client.open("Trivia").worksheet("disabled_chats")
+
+            if chat_id in self.disabled_chats:
+                # OFF se ON karna
+                self.disabled_chats.remove(chat_id)
+                
+                # Sheet se ID delete karo
+                try:
+                    cell = sheet.find(str(chat_id))
+                    if cell:
+                        sheet.delete_rows(cell.row)
+                except Exception:
+                    pass
+                
+                await update.message.reply_text(
+                    "✅ <b>Trivia Games Enabled!</b>\nAb is group mein automatically games aayenge.", 
+                    parse_mode='HTML'
+                )
+            
+            else:
+                # ON se OFF karna
+                self.disabled_chats.add(chat_id)
+                
+                # Sheet mein ID save karna
+                sheet.append_row([chat_id])
+                
+                await update.message.reply_text(
+                    "🚫 <b>Trivia Games Disabled!</b>\nTrivia games are disabled for this Group.\n"
+                    "To enable Trivia games please use /triviagame command.", 
+                    parse_mode='HTML'
+                )
+
+        except Exception as e:
+            logger.error(f"Sheet Update Error: {e}")
+            await update.message.reply_text("⚠️ Google Sheet update karne mein error aaya. Check console logs.")
+
+
+
+
+
+    
+    async def toggle_game_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         chat_id = update.effective_chat.id
         
         # Check agar chat group hai ya private
@@ -108,24 +162,7 @@ class TriviaGame:
         except Exception as e:
             logger.error(f"Sheet Update Error: {e}")
             await update.message.reply_text("⚠️ Sheet update karne mein error aaya. Check console.")    
-            
-   ''' async def toggle_game_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        chat_id = update.effective_chat.id
-        
-        # Check agar chat group hai ya private (Optional security)
-        chat_type = update.effective_chat.type
-        if chat_type == "private":
-            await update.message.reply_text("This command is for groups only!")
-            return
 
-        # Toggle Logic
-        if chat_id in self.disabled_chats:
-            self.disabled_chats.remove(chat_id)
-            await update.message.reply_text("✅ <b>Trivia Games Enabled!</b>\nAb games aayenge.", parse_mode='HTML')
-        else:
-            self.disabled_chats.add(chat_id)
-            await update.message.reply_text("🚫 <b>Trivia Games Disabled!</b>\nAb is group me games nahi aayenge.\nWapas chalu karne ke liye /triviagame dabayein.", parse_mode='HTML')
-          '''  
     # --- HELPER: GET TELEGRAM FILE ---
     async def get_cached_file(self, file_id, type_key):
         target_cache = self.cached_frame if type_key == "emoji" else self.cached_word_frame
