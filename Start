@@ -1,0 +1,220 @@
+async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user_name = update.effective_user.first_name
+    chat_id = update.effective_chat.id
+    
+    if str(chat_id) not in known_users:
+        known_users.add(str(chat_id))
+        save_chat_id(chat_id)
+        
+    # --- RANDOM STICKER LOGIC ---
+    
+    stickers = [
+        "CAACAgUAAxkBAAICJWluJpC0moBhmALc1eo3GqZM7ffCAAJvFQACmqrpV1rSsUKBdGP1OAQ", # Sticker 1
+        "CAACAgQAAxkBAAICKmluKhxCeOlVEb357k4M0yNRg5IvAALADQAC1nJpULtZ6ZfKPPTlOAQ", # Sticker 2
+        "CAACAgUAAxkBAAICK2luKi-9tuG_N9VszOj_9DWfcq-rAAIPBwACmwrJVOgP4GWkCZ8oOAQ", # Sticker 3
+        "CAACAgUAAxkBAAICLGluKjNZFw-BX0CcwJ0GrC1tfYnYAAI6BwACoNCAVMlPvVDzz6xaOAQ",
+        "CAACAgUAAxkBAAICLWluKjlp7XHKU26Pdq5ue6UAAR5-HgACkAwAAlHdGFepE1TlanVlnTgE",
+        "CAACAgUAAxkBAAICLmluKjq0FcWQl_AbpQqreX4roPILAALzDgACjhMZV-pSy49zGP2POAQ",
+        "CAACAgUAAxkBAAICL2luKj46gODVUjZxuAHNgD6koE6-AALQDQACpbgYV6hnMYBk9VjnOAQ",
+        "CAACAgUAAxkBAAICMGluKj9qu7zLNAlihBBfkc8tOkk_AAJZDAAC8joYVxSvbmeS6ZJ2OAQ",
+        "CAACAgQAAxkBAAICMmluKl4LK-6FRbSZgVVA2JQmwPa_AAK7DQAC9rWAU6rmvcwOimgtOAQ",
+        "CAACAgUAAxkBAAICM2luKmRhduZ7DxjApVIZFf5SR5mxAAKACwAC608YV_GnDnvXtlUbOAQ",
+        "CAACAgUAAxkBAAICNGluKmR9nTmIxDdgzf0tmNzJa61rAAJODAACcRoZV0TlfGSmEagpOAQ",
+        "CAACAgUAAxkBAAICMGluKj9qu7zLNAlihBBfkc8tOkk_AAJZDAAC8joYVxSvbmeS6ZJ2OAQ",
+        "CAACAgUAAxkBAAICNmluKnZ_kAnncU1JAZ90uX1pjLLjAAIeCwACmRsZVxAWUhPKSg4vOAQ",
+        "CAACAgUAAxkBAAICN2luKna-JrXWby0tBe2gIMZ0UO8YAAK-CwAClPgZVzj6oYpO-eoOOAQ",
+        "CAACAgUAAxkBAAICOGluKna59nMxoyOmvqqLeqoU4QNmAAJlDQACbDMYV9jD6girj9aYOAQ",
+        "CAACAgUAAxkBAAICOWluKnaFAYynpTixbkvC5x4NmONuAAKXDAACjF8YV7R86189B6RSOAQ",
+        "CAACAgUAAxkBAAICOmluKnZqwXYuCOkPmzjDqdhu-cMgAAIICwACOCcYV69ItU-VKOpcOAQ",
+        "CAACAgUAAxkBAAICO2luKnaVkXBUv1BpMhbPp-5EZANgAAJ3DwAC9hUYV7wT2ytE5ZJUOAQ",
+        "CAACAgQAAxkBAAICPGluKoS-qJSEe3JbX1yHp6SnIGBpAAJEDgACMtGBUy-17WBCU847OAQ",
+        "CAACAgUAAxkBAAICPWluKo3J2m4CcAPLq5hXCoplCbDxAAKWDAAC_JIYVxZipnroWRtPOAQ",
+        "CAACAgUAAxkBAAICPmluKo6TabOzU1eWseZjGElZLrXWAALMDAACy7UYV6_Sw7asrBpSOAQ",
+        "CAACAgUAAxkBAAICP2luKpE-2485OGMaqndKv-8on09aAAK4DgACSk0ZV05fX7b7cK7NOAQ",
+        "CAACAgUAAxkBAAICQGluKpGBeTxmEnacZ6MsI_nBeP1dAAJ4DQACY9oYV-Jn3LMMMdnKOAQ",
+        "CAACAgUAAxkBAAICQWluKpHnaaM5iRe5aU2XBeRf2_dCAAJGCwACPhYYVz0b1ienmuCrOAQ",
+        "CAACAgUAAxkBAAICQmluKpP2q5iPaL8vMKmoTRcZNQeFAAJNDQACfG8QV7lNjaOujQ8dOAQ",
+        "CAACAgUAAxkBAAICQ2luKpOlg8QfMyZhkKWSc1EWxTBIAAJ6CwACW_QZVzvUcZddAAHgZjgE",
+        "CAACAgUAAxkBAAICRGluKpYtgwb8h3wbLeplHcWDc4THAAI7DAACHZ8ZVz2MSCF2sykWOAQ",
+        "CAACAgUAAxkBAAICRWluKpZOhNedxjagynBuFsTXukOaAAI9DAACUaMZV7AaoE0_IYbvOAQ",
+        "CAACAgUAAxkBAAICRmluKpyelvFdUjLlREP0gJ99WKeNAAJTDAAC_2wYV4atCzf5CrQUOAQ",
+        "CAACAgUAAxkBAAICR2luKp59GRgxiEGCvwE-1aMfrYXnAAJQDAAC0F0ZV6fl5LvpxjTUOAQ",
+        "CAACAgUAAxkBAAICSGluKp4d8UKVHLk5KX5k7vBDhJAdAAI8CwACfWwYV_EU6VttwDCVOAQ",
+        "CAACAgUAAxkBAAICSWluKp-myf6fQRPuI7WYPVtcNw8lAAKJDAACm-4ZV6IBcaWIf4JvOAQ",
+        "CAACAgUAAxkBAAICSmluKqD8VFd9XpyqCUrx8K0_zVrfAAJtCgACkQ0YV72nHhu8m6YbOAQ",
+        "CAACAgUAAxkBAAICS2luKqGA3agP1DitA_hjH_18lP6YAAIeDAACqtEZVwRAIkB4e6BKOAQ",
+        "CAACAgUAAxkBAAICTGluKqIJjBYQ7p7kIyydT-zLLtcPAALUDQACqFoYV-iJtexBYZVJOAQ",
+        "CAACAgUAAxkBAAICTWluKqNbTITzUcqG4u9MOYopAuxgAAIQDwACNmUZV1A_4gABy6ET3DgE",
+        "CAACAgUAAxkBAAICTmluKqMLGL8dZCFA08p_OeoWtlBuAAKHCwACCDsYV8r74rfWLyeGOAQ",
+        "CAACAgUAAxkBAAICT2luKqSZ5OJ7LGmwAqxsnQoqg_ejAAI6DQACqksZVxQ-YfhXhsj2OAQ",
+        "CAACAgUAAxkBAAICUGluKqZO--t6UyYuwRAAAUfSg9vSXgACEQ4AAsb1GVfQ-oDJGQS43jgE",
+        "CAACAgUAAxkBAAICUWluKqdtCC02kX3ptlD0Cb8kYttmAAK0CQACBJgZV8gDqkhH3dWIOAQ",
+        "CAACAgUAAxkBAAICUmluKqfce-_AMKeLf6S0zx8ezQWZAAJFDwACgH0YV8WXPlh2LHssOAQ",
+        "CAACAgUAAxkBAAICU2luKqgPYhGuulcPQziwuzLP3i6wAAJkCgACGSUZV8QY1qIDYa9AOAQ",
+        "CAACAgUAAxkBAAICVGluKqqKPGp0EF5iZnYvH87TF13vAALlCQACyKEZV0kX3pag9HFmOAQ",
+        "CAACAgUAAxkBAAICVWluKq30XvIYEaAPz5p0vxW4TRzgAAIBDQAClxAZV5vrOGXCJ5BBOAQ",
+        "CAACAgUAAxkBAAICVmluKq5W-zrHyfpvqAoHCBjW6g4cAAIkCwACAgYZV8cW9_k4qHvcOAQ",
+        "CAACAgUAAxkBAAICV2luKrAJ3xGSU0fivRb6WL-uYnkfAAKiDAACpVAZVx65Phm3hv9UOAQ",
+        "CAACAgUAAxkBAAICWGluKrLlq89za5maD-dA9BZe-cvlAALgCwACT_wYVwwXSogHJOYIOAQ",
+        "CAACAgUAAxkBAAICWWluKrTtCBXEOiXcBvqlxX0cJnFCAALMDAACKWQZVydST61VUCbQOAQ",
+        "CAACAgUAAxkBAAICWmluKrR-wrcjRBAVIDjJsu62LTDyAAMKAAJaAhhXRcDrnXfFzfE4BA",
+        "CAACAgEAAxkBAAICu2luLfK4BdwZFrS4unlGx9hamemjAAL6AANRKQ05EglJURQpGuE4BA",
+        "CAACAgEAAxkBAAICvGluLfa9WZXCWCMPA0W3voZY5QhJAALjAANRKQ05F6bHecKQ5Js4BA",
+        "CAACAgUAAxkBAAICvWluLgoET5jm90Ot_gGK2yl08sT9AAJfIAACw96pVPZvnczMPP_NOAQ"
+        
+        
+        
+    ]
+    
+    temp_msgs = []
+    try:
+        # 1. Fast Sticker
+        sticker_msg = await context.bot.send_sticker(chat_id=chat_id, sticker=random.choice(stickers))
+        temp_msgs.append(sticker_msg)
+
+        # 2. Smooth & Fast Progress Bar
+        # Hum 5 steps use karenge par 100% tak jayenge (20% each step)
+        progress_msg = await context.bot.send_message(
+            chat_id=chat_id, 
+            text="🚀 **Laila is loading...**\n`░░░░░░░░░░` 0%", 
+            parse_mode='Markdown'
+        )
+        temp_msgs.append(progress_msg)
+
+        for i in range(1, 6):
+            await asyncio.sleep(0.1)  # Super fast speed
+            percent = i * 20          # 20, 40, 60, 80, 100
+            # 10 blocks total (2 blocks per 20%)
+            bar = "█" * (i * 2) + "░" * (10 - (i * 2))
+            try:
+                await progress_msg.edit_text(
+                    text=f"🚀 **Laila is loading...**\n`{bar}` {percent}%", 
+                    parse_mode='Markdown'
+                )
+            except:
+                pass
+
+        # 3. Cleanup
+        for msg in temp_msgs:
+            try: await msg.delete()
+            except: pass
+            
+    except Exception as e:
+        print(f"Animation Error: {e}")
+
+    # --- 🏠 FINAL START MENU ---
+    bot_info = await context.bot.get_me()
+    keyboard = [
+        [
+            InlineKeyboardButton("🚀 Features", callback_data="start_features"),
+            InlineKeyboardButton("🎮 Game Zone", callback_data="start_games")
+        ],
+        [InlineKeyboardButton("➕ Add Me To Your Group", url=f"https://t.me/{bot_info.username}?startgroup=true")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    media_url = 'BAACAgUAAxkBAAIDeWlvYGERe7_qUvtpzfTTA2_ixCNtAAKaGwACast5V4jMsXzNS0DmOAQ'
+    welcome_text = f"Hey {user_name}! 👋\n\nI'm **Laila**, your advanced AI companion. 💖\n\n👇 **Choose an option:**"
+
+    try:
+        
+        await context.bot.send_video(
+            chat_id=chat_id, 
+            video=media_url, 
+            caption=welcome_text, 
+            reply_markup=reply_markup, 
+            parse_mode='Markdown'
+        )
+    except Exception:
+        try:
+            
+            await context.bot.send_photo(
+                chat_id=chat_id, 
+                photo=media_url, 
+                caption=welcome_text, 
+                reply_markup=reply_markup, 
+                parse_mode='Markdown'
+            )
+        except Exception:
+            
+            await context.bot.send_message(
+                chat_id=chat_id, 
+                text=welcome_text, 
+                reply_markup=reply_markup, 
+                parse_mode='Markdown'
+            )
+
+# --- 🛠 FIXED CALLBACK HANDLER ---
+async def start_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    data = query.data
+    user_name = update.effective_user.first_name
+    await query.answer()
+    
+    
+    is_media = bool(query.message.photo or query.message.video or query.message.animation or query.message.caption)
+
+    if data == "start_features":
+        text = "📂 **Laila's Quick Features**\n\nI can do AI Chat, Image Gen, Lyrics, and more!\n\nUse `/help` for all commands."
+        kb = [[InlineKeyboardButton("🔙 Back", callback_data="start_back")]]
+        
+    elif data == "start_games":
+        text = (
+            "🎮 **Laila's Game Zone**\n\n"
+            
+            "**✨ Core Actions**\n"
+            "• `/game` - RPG Main Menu\n"
+            "• `/profile` - Your Stats & Gear\n"
+            "• `/check` - View someone's profile\n"
+            "• `/shop` - Buy items & Boosts\n\n"
+    
+            "**💰 Economy & Luck**\n"
+            "• `/daily` - Claim daily coins\n"
+            "• `/gift` - Send money to friends\n"
+            "• `/slots` - Test your luck\n"
+            "• `/bounty` - Hunt for rewards\n\n"
+    
+            "**⚔️ Battle & Social**\n"
+            "• `/kill` - Attack an enemy\n"
+            "• `/heal` - Restore your HP\n"
+            "• `/clan` - Clan management\n"
+            "• `/marry` - Propose to a user\n"
+            "• `/adopt` - Adopt a child/user\n"
+            "• `/disown` - Remove from family\n"
+
+            "**✨ Mini Games**\n"
+            "• `/triviagame` - Toggle auto games"
+            "• `/xoxo` - Tic-Tac-Toe"
+            "• `/startgame` - Number guessing game"
+            
+        )
+        kb = [[InlineKeyboardButton("🔙 Back", callback_data="start_back")]]
+        
+    elif data == "start_back":
+        bot_info = await context.bot.get_me()
+        text = f"Hey {user_name}! 👋\n\nI'm **Laila**, your advanced AI companion. 💖"
+        kb = [
+            [InlineKeyboardButton("🚀 Features", callback_data="start_features"),
+             InlineKeyboardButton("🎮 Game Zone", callback_data="start_games")],
+            [InlineKeyboardButton("➕ Add Me To Your Group", url=f"https://t.me/{bot_info.username}?startgroup=true")]
+        ]
+
+    try:
+        
+        if is_media:
+            await query.edit_message_caption(
+                caption=text, 
+                reply_markup=InlineKeyboardMarkup(kb), 
+                parse_mode='Markdown'
+            )
+        else:
+            # 3. Agar normal text message hai
+            await query.edit_message_text(
+                text=text, 
+                reply_markup=InlineKeyboardMarkup(kb), 
+                parse_mode='Markdown'
+            )
+    except Exception as e:
+        
+        print(f"Button Error: {e}")
+        
