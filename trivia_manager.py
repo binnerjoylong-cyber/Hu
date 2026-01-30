@@ -32,72 +32,75 @@ WORD_FRAME_FILE_ID = "AgACAgUAAxkBAAIY8Wl4kB1kYInYopFFqOUX3mrFrYA0AAI0D2sb5MDAVz
 
 # ### NEW: Footer Text constant
 GAME_FOOTER = "\n\n⚙️ <i>Want to turn off this feature? Use /triviagame</i>"
-
-
 class TriviaGame:
     def __init__(self, application, known_users, mongo_db=None):
         self.application = application
         self.known_users = known_users
-        
-        # MongoDB Setup
-        self.db = mongo_db
-        self.collection = None
-        if self.db is not None:
-            # Automatic: Agar 'disabled_chats' collection nahi hogi to ban jayegi
-            self.collection = self.db["disabled_chats"]
-            
+        self.db = mongo_db  # Ye SummaryManager.db hi hai
         self.disabled_chats = set()
         self.active_games = {}
         
-        # Caches
+        # Collection Setup
+        self.collection = None
+        if self.db is not None:
+            # Note: Database 'laila_summaries' ke andar ek nayi table 'trivia_settings' banegi
+            self.collection = self.db["trivia_settings"]
+            # Startup par async load task chalana
+            asyncio.create_task(self.load_disabled_chats())
+        
+        # Caches & Modes
         self.cached_frame = None
         self.cached_word_frame = None
         self.custom_font = None
         self.game_modes = ["emoji", "trivia", "word"]
         self.current_mode_index = 0
-
-        # Load Data
-        if self.collection is not None:
-            self.load_disabled_chats()
         
         # Handler setup
         self.application.add_handler(CommandHandler("triviagame", self.toggle_game_status))
         logger.info("✅ TriviaGame Module Initialized with MongoDB")
 
-    def load_disabled_chats(self):
-        """MongoDB se data load karega"""
+    async def load_disabled_chats(self):
+        """Async MongoDB se data load karega (Motor style)"""
+        if self.collection is None: return
         try:
-            # Saare documents fetch karo
+            # Motor me cursor use hota hai
             cursor = self.collection.find({})
-            self.disabled_chats = {doc['chat_id'] for doc in cursor}
+            async for doc in cursor:
+                self.disabled_chats.add(doc['chat_id'])
             logger.info(f"✅ Loaded {len(self.disabled_chats)} disabled chats from Mongo.")
         except Exception as e:
             logger.error(f"❌ MongoDB Load Error: {e}")
 
     async def toggle_game_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         chat_id = update.effective_chat.id
-        
+        if self.collection is None:
+            await update.message.reply_text("⚠️ Database not connected!")
+            return
+            
         try:
             if chat_id in self.disabled_chats:
-                # --- ENABLE GAME (Delete from DB) ---
                 self.disabled_chats.remove(chat_id)
-                if self.collection is not None:
-                    self.collection.delete_one({"chat_id": chat_id})
-                await update.message.reply_text("✅ Trivia Game **Enabled** in this chat!")
+                await self.collection.delete_one({"chat_id": chat_id})
+                await update.message.reply_text("✅ <b>Trivia Game Enabled!</b> Game ab is group me chalega.", parse_mode='HTML')
             else:
-                # --- DISABLE GAME (Insert into DB) ---
                 self.disabled_chats.add(chat_id)
-                if self.collection is not None:
-                    # Sirf chat_id aur date insert kar rahe hain
-                    self.collection.insert_one({
-                        "chat_id": chat_id,
-                        "disabled_at": datetime.now()
-                    })
-                await update.message.reply_text("❌ Trivia Game **Disabled** in this chat!")
-                
+                await self.collection.update_one(
+                    {"chat_id": chat_id},
+                    {"$set": {"chat_id": chat_id, "disabled_at": datetime.now()}},
+                    upsert=True
+                )
+                await update.message.reply_text("❌ <b>Trivia Game Disabled!</b> Ab is group me game nahi aayega.", parse_mode='HTML')
         except Exception as e:
             logger.error(f"MongoDB Update Error: {e}")
-            await update.message.reply_text("⚠️ Database Error (Memory updated temporarily).")
+            await update.message.reply_text("⚠️ Database Error.")
+
+    # ... get_cached_file aur baki functions wahi rahenge ...
+
+
+
+    
+
+    
 
     # ... (Baaki saara code EXACTLY same rahega: get_cached_file, start_loop, images, etc.) ...
     
