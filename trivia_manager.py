@@ -1,11 +1,10 @@
-ximport asyncio
+import asyncio
 import random
 import logging
 import html
 import time
 import io
 import requests
-import gspread
 from datetime import datetime, timedelta
 from PIL import Image, ImageDraw, ImageFont
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReactionTypeEmoji
@@ -33,108 +32,111 @@ WORD_FRAME_FILE_ID = "AgACAgUAAxkBAAIY8Wl4kB1kYInYopFFqOUX3mrFrYA0AAI0D2sb5MDAVz
 
 # ### NEW: Footer Text constant
 GAME_FOOTER = "\n\n⚙️ <i>Want to turn off this feature? Use /triviagame</i>"
-import asyncio
-import random
-import logging
-import html
-import time
-import io
-import gspread
-from datetime import datetime, timedelta
-from PIL import Image, ImageDraw, ImageFont
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ContextTypes, Application, CommandHandler
 
-logger = logging.getLogger(__name__)
-
-# Footer configuration
-GAME_FOOTER = "\n\n✨ ᴘᴏᴡᴇʀᴇᴅ ʙʏ @Laila_X_Bot"
 
 class TriviaGame:
-    def __init__(self, application, gspread_client=None):
+    def __init__(self, application, known_users, mongo_db=None):
         self.application = application
-        self.client = gspread_client
+        self.known_users = known_users
+        
+        # MongoDB Setup
+        self.db = mongo_db
+        self.collection = None
+        if self.db is not None:
+            # Automatic: Agar 'disabled_chats' collection nahi hogi to ban jayegi
+            self.collection = self.db["disabled_chats"]
+            
         self.disabled_chats = set()
         self.active_games = {}
         
-        # Initialize Sheet and Load Data
-        if self.client:
-            self.sheet = self.get_or_create_sheet()
+        # Caches
+        self.cached_frame = None
+        self.cached_word_frame = None
+        self.custom_font = None
+        self.game_modes = ["emoji", "trivia", "word"]
+        self.current_mode_index = 0
+
+        # Load Data
+        if self.collection is not None:
             self.load_disabled_chats()
         
         # Handler setup
         self.application.add_handler(CommandHandler("triviagame", self.toggle_game_status))
-        logger.info("✅ TriviaGame Module Initialized")
-
-    def get_or_create_sheet(self):
-        """Sahi tarike se sheet open ya create karega"""
-        try:
-            # Apni main spreadsheet ka naam ya ID yahan likhein
-            spreadsheet = self.client.open("Trivia") 
-            try:
-                return spreadsheet.worksheet("disabled_chats")
-            except gspread.WorksheetNotFound:
-                sheet = spreadsheet.add_worksheet(title="disabled_chats", rows="1000", cols="2")
-                sheet.append_row(["chat_id", "date_disabled"])
-                return sheet
-        except Exception as e:
-            logger.error(f"❌ Sheet Access Error: {e}")
-            return None
+        logger.info("✅ TriviaGame Module Initialized with MongoDB")
 
     def load_disabled_chats(self):
-        if not self.sheet: return
+        """MongoDB se data load karega"""
         try:
-            records = self.sheet.get_all_records()
-            self.disabled_chats = {int(r['chat_id']) for r in records if str(r.get('chat_id')).replace('-','').isdigit()}
-            logger.info(f"Loaded {len(self.disabled_chats)} disabled chats.")
+            # Saare documents fetch karo
+            cursor = self.collection.find({})
+            self.disabled_chats = {doc['chat_id'] for doc in cursor}
+            logger.info(f"✅ Loaded {len(self.disabled_chats)} disabled chats from Mongo.")
         except Exception as e:
-            logger.error(f"Error loading disabled chats: {e}")
+            logger.error(f"❌ MongoDB Load Error: {e}")
 
     async def toggle_game_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         chat_id = update.effective_chat.id
-        # Check admin permission here if needed
         
-        if chat_id in self.disabled_chats:
-            self.disabled_chats.remove(chat_id)
-            # Remove from sheet logic here
-            await update.message.reply_text("✅ Trivia Game Enabled in this chat!")
-        else:
-            self.disabled_chats.add(chat_id)
-            if self.sheet:
-                self.sheet.append_row([str(chat_id), str(datetime.now())])
-            await update.message.reply_text("❌ Trivia Game Disabled in this chat!")
+        try:
+            if chat_id in self.disabled_chats:
+                # --- ENABLE GAME (Delete from DB) ---
+                self.disabled_chats.remove(chat_id)
+                if self.collection is not None:
+                    self.collection.delete_one({"chat_id": chat_id})
+                await update.message.reply_text("✅ Trivia Game **Enabled** in this chat!")
+            else:
+                # --- DISABLE GAME (Insert into DB) ---
+                self.disabled_chats.add(chat_id)
+                if self.collection is not None:
+                    # Sirf chat_id aur date insert kar rahe hain
+                    self.collection.insert_one({
+                        "chat_id": chat_id,
+                        "disabled_at": datetime.now()
+                    })
+                await update.message.reply_text("❌ Trivia Game **Disabled** in this chat!")
+                
+        except Exception as e:
+            logger.error(f"MongoDB Update Error: {e}")
+            await update.message.reply_text("⚠️ Database Error (Memory updated temporarily).")
 
-    # ... (Baki aapka Emoji, Word, Trivia logic yahan paste karein) ...
-    # Dhyaan rahe ki loops mein `self.disabled_chats` ko check karein.
-
-
-    # ... (Keep the rest of the game loop and toggle logic) ...
-
-
-
+    # ... (Baaki saara code EXACTLY same rahega: get_cached_file, start_loop, images, etc.) ...
+    
     # --- HELPER: GET TELEGRAM FILE ---
     async def get_cached_file(self, file_id, type_key):
         target_cache = self.cached_frame if type_key == "emoji" else self.cached_word_frame
-        
         if target_cache is None:
             try:
-                if file_id == "YOUR_WORD_FRAME_FILE_ID_HERE":
-                    file_id = FRAME_FILE_ID
-                    
                 file = await self.application.bot.get_file(file_id)
                 photo_bytes = await file.download_as_bytearray()
-                
                 if type_key == "emoji":
                     self.cached_frame = bytes(photo_bytes)
                     target_cache = self.cached_frame
                 else:
                     self.cached_word_frame = bytes(photo_bytes)
                     target_cache = self.cached_word_frame
-                    
-                logger.info(f"✅ {type_key.upper()} Frame Cached!")
             except Exception as e:
                 logger.error(f"❌ Frame Error ({type_key}): {e}")
         return target_cache
+
+    # ... (Please include get_font, create_emoji_ima
+
+    def get_seconds_until_next_slot(self):
+        now = datetime.now()
+        if now.minute < 30:
+            target_minute = 30
+            next_hour = now.hour
+        else:
+            target_minute = 0
+            next_hour = (now.hour + 1) % 24  
+        if target_minute == 0 and next_hour == 0:
+            target_time = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+        else:
+            target_time = now.replace(hour=next_hour, minute=target_minute, second=0, microsecond=0)
+        return (target_time - now).total_seconds()
+
+
+
+
 
     # --- HELPER: LOAD FONT ---
     def get_font(self, size=60):
