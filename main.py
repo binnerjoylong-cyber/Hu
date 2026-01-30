@@ -3721,28 +3721,29 @@ def main() -> None:
     )
 
     # C. HANDLERS (Order is perfect)
+    
+    if summary_bot is None:
+        summary_bot = SummaryManager(application, known_users)
+        asyncio.get_event_loop().create_task(summary_bot.run_scheduler()) # Scheduler start
     if trivia_bot is None:
         # TriviaGame class apne __init__ me hi handler add kar leti hai
         trivia_bot = TriviaGame(application, known_users,mongo_db=summary_bot.db)
         print("✅ Trivia Bot Initialized in Main")
     
-    if summary_bot is None:
-        summary_bot = SummaryManager(application, known_users)
-        asyncio.get_event_loop().create_task(summary_bot.run_scheduler()) # Scheduler start
 
     loop = asyncio.get_event_loop()
     loop.create_task(trivia_bot.start_loop())
     # Trivia buttons (Lambda is important here)
-    application.add_handler(CallbackQueryHandler(
-        lambda u, c: trivia_bot.handle_callback(u, c) if trivia_bot else None, 
-        pattern="^trivia:"
-    ))
     
     # Summary recording (Group 1)
     application.add_handler(MessageHandler(
         filters.TEXT & ~filters.COMMAND, 
         lambda u, c: summary_bot.record_message(u, c) if summary_bot else None
     ), group=1)
+    application.add_handler(CallbackQueryHandler(
+        lambda u, c: trivia_bot.handle_callback(u, c) if trivia_bot else None, 
+        pattern="^trivia:"
+    ))
     
     # Commands
     application.add_handler(CommandHandler("testsummary", lambda u, c: summary_bot.test_summary_command(u, c) if summary_bot else None))
