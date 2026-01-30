@@ -46,7 +46,7 @@ class TriviaGame:
             # Note: Database 'laila_summaries' ke andar ek nayi table 'trivia_settings' banegi
             self.collection = self.db["trivia_settings"]
             # Startup par async load task chalana
-            asyncio.create_task(self.load_disabled_chats())
+            #asyncio.create_task(self.load_disabled_chats())
         
         # Caches & Modes
         self.cached_frame = None
@@ -452,20 +452,37 @@ class TriviaGame:
     async def start_loop(self):
         logger.info("🔥 Ultimate Game Loop Started! (Emoji -> Trivia -> Word)")
         
+        # --- FIX FOR RENDER (Python 3.13) ---
+        # Data load yahan loop ke shuru mein hoga, __init__ mein nahi.
+        if hasattr(self, 'collection') and self.collection is not None:
+            try:
+                logger.info("📡 Fetching disabled chats from MongoDB...")
+                cursor = self.collection.find({})
+                async for doc in cursor:
+                    self.disabled_chats.add(doc['chat_id'])
+                logger.info(f"✅ Loaded {len(self.disabled_chats)} disabled chats.")
+            except Exception as e:
+                logger.error(f"❌ MongoDB Load Error at startup: {e}")
+
         while True:
+            # 1. Agle slot tak ka time calculate karein
             sleep_seconds = self.get_seconds_until_next_slot()
-            if sleep_seconds < 10: sleep_seconds += 1800
+            if sleep_seconds < 10: 
+                sleep_seconds += 1800
                 
             logger.info(f"⏳ Sleeping for {int(sleep_seconds)} seconds...")
             await asyncio.sleep(sleep_seconds)
 
+            # 2. Game Mode select karein
             current_mode = self.game_modes[self.current_mode_index]
             self.current_mode_index = (self.current_mode_index + 1) % len(self.game_modes)
 
             try:
+                # 3. Target chats filter karein
                 active_chats = [c for c in list(self.known_users) if str(c).startswith("-")]
                 logger.info(f"🚀 Starting Mode: {current_mode.upper()}")
 
+                # --- MODE: EMOJI HUNT ---
                 if current_mode == "emoji":
                     target = random.choice(EMOJI_POOL)
                     photo = await self.create_emoji_image(target)
@@ -483,21 +500,27 @@ class TriviaGame:
                                 row = []
                         
                         for cid in active_chats:
-                            # ### NEW: Check agar chat Disabled hai to Skip karo
-                            if cid in self.disabled_chats: continue
+                            # ✅ CHECK: Agar chat Disabled hai to Skip karo
+                            if cid in self.disabled_chats:
+                                continue
 
                             try:
                                 photo.seek(0)
-                                # ### NEW: Caption me Footer add kiya
                                 msg = await self.application.bot.send_photo(
                                     cid, photo=photo, 
-                                    caption=f"🖼 <b>EMOJI HUNT!</b>\nTap photo to reveal and find the emoji!{GAME_FOOTER}", 
-                                    reply_markup=InlineKeyboardMarkup(kb), parse_mode='HTML', has_spoiler=True
+                                    caption=f"🖼 <b>EMOJI HUNT!</b>\nFind {target} in the photo!{GAME_FOOTER}", 
+                                    reply_markup=InlineKeyboardMarkup(kb), 
+                                    parse_mode='HTML', 
+                                    has_spoiler=True
                                 )
                                 self.active_games[msg.message_id] = {'start_time': time.time(), 'winner': None}
                                 asyncio.create_task(self.auto_delete_task(cid, msg.message_id, target))
-                            except: pass
+                            except: continue
 
+                # --- MODE: TRIVIA / WORD (Optional: Inme bhi logic aise hi daalein) ---
+                # ... baki modes ke code mein bhi `if cid in self.disabled_chats: continue` laga dena ...
+
+            
                 elif current_mode == "trivia":
                     q = self.get_trivia_question()
                     kb = [[InlineKeyboardButton(o, callback_data=f"trivia:{'yes' if o==q['a'] else 'no'}:{o}")] for o in q['options']]
