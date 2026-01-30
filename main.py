@@ -3700,7 +3700,13 @@ summary_bot = None
         logger.info("✅ Laila's Background Tasks (Trivia & Summary) Started.")
     except Exception as e:
         logger.error(f"❌ Error starting background tasks: {e}")'''
-
+async def post_init(application: Application) -> None:
+    # Saare background tasks yahan start karein
+    if summary_bot:
+        asyncio.create_task(summary_bot.run_scheduler())
+    if trivia_bot:
+        asyncio.create_task(trivia_bot.start_loop())
+    print("🚀 All Background Tasks Started!")
 # --- 3. Main function ---
 def main() -> None:
     global trivia_bot, summary_bot
@@ -3716,23 +3722,17 @@ def main() -> None:
     application = (
         Application.builder()
         .token(TELEGRAM_BOT_TOKEN)
-       # .post_init(post_init) 
+        .post_init(post_init) 
         .build()
     )
+    summary_bot = SummaryManager(application, known_users)
+
+    # Trivia Bot initialize (Pass mongo_db)
+    # Yahan 'asyncio.create_task' init se hatakar hum manually call karenge niche
+    trivia_bot = TriviaGame(application, known_users, mongo_db=summary_bot.db)
 
     # C. HANDLERS (Order is perfect)
     
-    if summary_bot is None:
-        summary_bot = SummaryManager(application, known_users)
-        asyncio.get_event_loop().create_task(summary_bot.run_scheduler()) # Scheduler start
-    if trivia_bot is None:
-        # TriviaGame class apne __init__ me hi handler add kar leti hai
-        trivia_bot = TriviaGame(application, known_users,mongo_db=summary_bot.db)
-        print("✅ Trivia Bot Initialized in Main")
-    
-
-    loop = asyncio.get_event_loop()
-    loop.create_task(trivia_bot.start_loop())
     # Trivia buttons (Lambda is important here)
     
     # Summary recording (Group 1)
