@@ -1501,7 +1501,76 @@ async def clan_war(update: Update, context: ContextTypes.DEFAULT_TYPE):
         msg = f"💀 **WAR DEFEAT!**\n\n{target_clan} defended their base. You lost **$25,000** in damages."
     
     await update.message.reply_text(msg, parse_mode='Markdown')
+ async def create_clan_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Creates a new clan for $100,000."""
+    user = update.effective_user
     
+    # 1. Input Validation
+    if not context.args:
+        await update.message.reply_text("⚠️ **Usage:** `/create_clan <Clan Name>`\nExample: `/create_clan Peaky Blinders`", parse_mode='Markdown')
+        return
+
+    clan_name = " ".join(context.args)
+    
+    # Limit clan name length
+    if len(clan_name) > 20:
+        await update.message.reply_text("❌ Clan name is too long! (Max 20 characters)")
+        return
+
+    # 2. Fetch Player Data
+    data = await get_player_data(user.id, user.full_name)
+    if not data:
+        await update.message.reply_text("❌ Error loading your profile.")
+        return
+
+    # 3. Check Constraints
+    current_clan = data.get('ClanName', 'None')
+    if current_clan != "None" and current_clan != "0":
+        await update.message.reply_text(f"❌ You are already in a clan: **{current_clan}**.\nYou must leave it first.", parse_mode='Markdown')
+        return
+
+    CLAN_COST = 100000
+    if data['Money'] < CLAN_COST:
+        await update.message.reply_text(f"💸 You need **${CLAN_COST:,}** to register a clan!\nYour balance: `${data['Money']:,}`", parse_mode='Markdown')
+        return
+
+    # 4. Process Transaction
+    data['Money'] -= CLAN_COST
+    data['ClanName'] = clan_name
+    data['ClanRole'] = "Leader"
+
+    # 5. Save Data
+    if await update_player_data(data):
+        msg = (
+            f"🏴‍☠️ **CLAN ESTABLISHED!** 🏴‍☠️\n"
+            f"━━━━━━━━━━━━━━━━━━\n"
+            f"🏰 **Clan Name:** {clan_name}\n"
+            f"👑 **Leader:** {user.first_name}\n"
+            f"💰 **Cost:** ${CLAN_COST:,}\n\n"
+            f"⚠️ *Note: Other players can join if they know the exact name.*"
+        )
+        await update.message.reply_text(msg, parse_mode='Markdown')
+    else:
+        await update.message.reply_text("❌ Database error. Clan creation failed.")
+
+
+async def leave_clan_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Allows a user to leave their current clan."""
+    user = update.effective_user
+    data = await get_player_data(user.id, user.full_name)
+    
+    if data.get('ClanName', 'None') == "None":
+        await update.message.reply_text("❌ You are not in a clan!")
+        return
+
+    old_clan = data['ClanName']
+    data['ClanName'] = "None"
+    data['ClanRole'] = "None"
+    
+    await update_player_data(data)
+    await update.message.reply_text(f"👋 You have left **{old_clan}**.", parse_mode='Markdown')
+
+
 async def handle_deposit(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Deposits money into the bank."""
     user = update.effective_user
