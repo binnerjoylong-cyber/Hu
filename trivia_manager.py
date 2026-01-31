@@ -142,6 +142,23 @@ class TriviaGame:
 
 
     # --- HELPER: LOAD FONT ---
+    # --- HELPER: LOAD FONT ---
+    def get_font(self, size=60):
+        if self.custom_font is None:
+            try:
+                font_url = "https://github.com/google/fonts/raw/main/ofl/lilitaone/LilitaOne-Regular.ttf"
+                resp = requests.get(font_url, timeout=10)
+                self.custom_font = io.BytesIO(resp.content)
+            except:
+                return ImageFont.load_default()
+        
+        try:
+            self.custom_font.seek(0) # <--- यह लाइन (This Line) बहुत ज़रूरी है
+            return ImageFont.truetype(self.custom_font, size)
+        except:
+            return ImageFont.load_default()
+
+    '''
     def get_font(self, size=60):
         if self.custom_font is None:
             try:
@@ -154,7 +171,7 @@ class TriviaGame:
         try:
             return ImageFont.truetype(self.custom_font, size)
         except:
-            return ImageFont.load_default()
+            return ImageFont.load_default()'''
 
     # --- IMAGE GENERATOR: EMOJI ---
     def get_emoji_image_url(self, emoji):
