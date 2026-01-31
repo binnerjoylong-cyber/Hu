@@ -3823,6 +3823,9 @@ def main() -> None:
     application.add_handler(CommandHandler("runaway", game.handle_runaway))
     application.add_handler(CommandHandler("shop", game.shop_menu))
 
+    # In your main.py file:
+    application.add_handler(CommandHandler("create_clan", game.create_clan_command))
+    application.add_handler(CommandHandler("leave_clan", game.leave_clan_command))
     # --- Admin Commands (Group Admin required) ---
     application.add_handler(CommandHandler("on", on_command))
     application.add_handler(CommandHandler("off", off_command))
