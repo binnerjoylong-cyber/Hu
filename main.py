@@ -1167,7 +1167,7 @@ async def couple_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     """Selects a random couple from the chat members and mentions them."""
     chat_id = update.effective_chat.id
     SPECIAL_USER_ID_1 = 6086655225
-    SPECIAL_USER_ID_2 = 8178838574
+    SPECIAL_USER_ID_2 = 8032696195
     
     if update.effective_chat.type == 'private':
         await update.message.reply_text("Dude, to become a couple you have to come in a group! How will you become a couple alone? 😄")
