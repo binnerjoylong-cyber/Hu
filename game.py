@@ -1501,11 +1501,12 @@ async def clan_war(update: Update, context: ContextTypes.DEFAULT_TYPE):
         msg = f"💀 **WAR DEFEAT!**\n\n{target_clan} defended their base. You lost **$25,000** in damages."
     
     await update.message.reply_text(msg, parse_mode='Markdown')
- async def create_clan_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    
+async def create_clan_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Creates a new clan for $100,000."""
     user = update.effective_user
     
-    # 1. Input Validation
+     # 1. Input Validation
     if not context.args:
         await update.message.reply_text("⚠️ **Usage:** `/create_clan <Clan Name>`\nExample: `/create_clan Peaky Blinders`", parse_mode='Markdown')
         return
