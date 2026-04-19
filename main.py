@@ -38,6 +38,7 @@ import glob
 import game
 from trivia_manager import TriviaGame
 from summary_manager import SummaryManager
+import duo_game
 # Agar file ka naam yt_bypass.py hai toh:
 # main.py ke top par
 from yt_bypass import social_media_handler, youtube_command
@@ -3826,6 +3827,12 @@ def main() -> None:
     # In your main.py file:
     application.add_handler(CommandHandler("create_clan", game.create_clan_command))
     application.add_handler(CommandHandler("leave_clan", game.leave_clan_command))
+    # --- Duo Match & Chat Commands ---
+    application.add_handler(CommandHandler("host", duo_game.host_game))
+    application.add_handler(CommandHandler("join", duo_game.join_game))
+    application.add_handler(CommandHandler("c", duo_game.in_game_chat))
+    application.add_handler(CommandHandler("quitgame", duo_game.quit_game))
+    application.add_handler(CallbackQueryHandler(duo_game.duo_callback, pattern="^duo_"))
     # --- Admin Commands (Group Admin required) ---
     application.add_handler(CommandHandler("on", on_command))
     application.add_handler(CommandHandler("off", off_command))
