@@ -43,6 +43,7 @@ from trivia_manager import TriviaGame
 from summary_manager import SummaryManager
 import duo_game
 import chameleon_game
+from anon_chat import AnonChat
 # Agar file ka naam yt_bypass.py hai toh:
 # main.py ke top par
 from yt_bypass import social_media_handler, youtube_command
@@ -2056,6 +2057,7 @@ async def start_callback_handler(update: Update, context: ContextTypes.DEFAULT_T
             "• `/disown` - Remove from family\n"
 
             "**✨ Mini Games**\n"
+            "• `/games` - 🎮 See ALL games in one menu\n"
             "• `/triviagame` - Toggle auto games"
             "• `/xoxo` - Tic-Tac-Toe"
             "• `/startgame` - Number guessing game"
@@ -3536,6 +3538,184 @@ def check_sudo_wrapper(handler):
 # --- Global variables (initialized properly inside main()/post_init) ---
 trivia_bot = None
 summary_bot = None
+anon_bot = None
+
+# =====================================================================
+# ---  🎮  UNIFIED GAMES HUB (/games)  ---
+# One place that lists every game in the bot with inline buttons.
+# Tapping a game shows its description + exact commands to use.
+# =====================================================================
+
+GAMES_CATALOG = {
+    "trivia": {
+        "emoji": "🧠",
+        "title": "Trivia",
+        "desc": (
+            "Auto quiz questions posted in groups. Answer using the inline buttons "
+            "to earn points on the leaderboard."
+        ),
+        "commands": [
+            ("/triviagame", "Turn auto-trivia ON/OFF in this group"),
+        ],
+        "scope": "Group chats",
+    },
+    "chameleon": {
+        "emoji": "🦎",
+        "title": "The Chameleon",
+        "desc": (
+            "Party game: everyone gets a secret word except the Chameleon, who has to "
+            "bluff their way through without getting caught."
+        ),
+        "commands": [
+            ("/chameleon", "Start a new lobby in the group"),
+            ("/endchameleon", "Force-end the current round"),
+        ],
+        "scope": "Group chats",
+    },
+    "duo": {
+        "emoji": "👥",
+        "title": "Duo Match & Chat",
+        "desc": "Host or join a 1-on-1 matched game session and chat privately inside it.",
+        "commands": [
+            ("/host", "Host a new duo session"),
+            ("/join", "Join an open session"),
+            ("/c <text>", "Send a message inside the session"),
+            ("/quitgame", "Leave the session"),
+        ],
+        "scope": "Private chat",
+    },
+    "xoxo": {
+        "emoji": "❌⭕",
+        "title": "Tic-Tac-Toe",
+        "desc": "Classic 3x3 Tic-Tac-Toe against another member, played with inline buttons.",
+        "commands": [
+            ("/xoxo", "Start a new game (alias: /tictactoe)"),
+            ("/endxoxo", "End the current game (alias: /endgame)"),
+        ],
+        "scope": "Group or private",
+    },
+    "rpg": {
+        "emoji": "💰",
+        "title": "Economy / RPG",
+        "desc": (
+            "Full RPG-style economy: work, farm, rob, fight, marry, join clans, and climb "
+            "the leaderboard. Open /game for the complete interactive menu."
+        ),
+        "commands": [
+            ("/game", "Open the full RPG menu"),
+            ("/profile", "View your profile & stats"),
+            ("/daily", "Claim your daily reward"),
+            ("/work · /farm · /mine · /crime", "Earn currency"),
+            ("/rob <user> · /kill <user>", "PvP actions"),
+            ("/shop · /inventory", "Buy & view items"),
+            ("/clan · /clanwar", "Clan system"),
+            ("/marry <user> · /divorce", "Relationships"),
+            ("/top", "Leaderboard"),
+        ],
+        "scope": "Group or private",
+    },
+    "waifu": {
+        "emoji": "💞",
+        "title": "Waifu Collection",
+        "desc": "Waifus randomly spawn in active groups — be the fastest to claim them.",
+        "commands": [
+            ("/claim", "Claim the waifu that just spawned"),
+            ("/harem", "View your collected waifus (alias: /mywaifus)"),
+        ],
+        "scope": "Group chats",
+    },
+    "anon": {
+        "emoji": "🎭",
+        "title": "Anonymous Chat",
+        "desc": "Get randomly paired with a stranger and chat 1-on-1, fully anonymously.",
+        "commands": [
+            ("/pair", "Find a random anonymous partner"),
+            ("/skip", "Leave & find a new partner"),
+            ("/unpair", "End the anonymous chat"),
+        ],
+        "scope": "Private chat only",
+    },
+    "party": {
+        "emoji": "🎲",
+        "title": "Fun & Party Commands",
+        "desc": "Quick one-shot fun commands, no setup needed.",
+        "commands": [
+            ("/truth · /dare", "Truth or Dare"),
+            ("/slap <user>", "Slap someone"),
+            ("/roll", "Roll a dice"),
+            ("/coinflip", "Flip a coin"),
+            ("/couple", "Pick a random couple of the day"),
+            ("/startgame · /stopgame", "Start/stop a group mini-game round"),
+        ],
+        "scope": "Group or private",
+    },
+}
+
+
+def _games_hub_main_markup() -> InlineKeyboardMarkup:
+    rows = []
+    row = []
+    for key, g in GAMES_CATALOG.items():
+        row.append(InlineKeyboardButton(f"{g['emoji']} {g['title']}", callback_data=f"hub_{key}"))
+        if len(row) == 2:
+            rows.append(row)
+            row = []
+    if row:
+        rows.append(row)
+    rows.append([InlineKeyboardButton("✖️ Close", callback_data="hub_close")])
+    return InlineKeyboardMarkup(rows)
+
+
+def _games_hub_main_text() -> str:
+    return (
+        "🎮 *Games Hub*\n\n"
+        "Yeh raha bot ke sare games ek jagah pe. Kisi bhi game ka button daba kar "
+        "uske commands aur details dekho.\n\n"
+        "_Tap a game below to see how to play it:_"
+    )
+
+
+async def games_hub_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Entry point: /games — shows every game as an inline button."""
+    await update.message.reply_text(
+        _games_hub_main_text(),
+        parse_mode="Markdown",
+        reply_markup=_games_hub_main_markup(),
+    )
+
+
+async def games_hub_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handles taps inside the /games hub (pattern: ^hub_)."""
+    query = update.callback_query
+    await query.answer()
+    data = query.data
+
+    if data == "hub_close":
+        await query.edit_message_text("🎮 Games hub closed. Use /games anytime to reopen it.")
+        return
+
+    if data == "hub_back":
+        await query.edit_message_text(
+            _games_hub_main_text(),
+            parse_mode="Markdown",
+            reply_markup=_games_hub_main_markup(),
+        )
+        return
+
+    key = data.replace("hub_", "", 1)
+    game = GAMES_CATALOG.get(key)
+    if not game:
+        await query.edit_message_text("⚠️ Unknown game. Use /games to reopen the menu.")
+        return
+
+    lines = [f"{game['emoji']} *{game['title']}*", "", game["desc"], "", f"📍 Where: {game['scope']}", "", "*Commands:*"]
+    for cmd, desc in game["commands"]:
+        lines.append(f"• `{cmd}` — {desc}")
+
+    back_markup = InlineKeyboardMarkup([
+        [InlineKeyboardButton("🔙 Back to Games Hub", callback_data="hub_back")]
+    ])
+    await query.edit_message_text("\n".join(lines), parse_mode="Markdown", reply_markup=back_markup)
 
 async def post_init(application: Application) -> None:
     """Starts background tasks in the correct event loop, once the bot is fully initialized."""
@@ -3558,7 +3738,7 @@ async def post_init(application: Application) -> None:
 
 # --- Main function ---
 def main() -> None:
-    global trivia_bot, summary_bot
+    global trivia_bot, summary_bot, anon_bot
 
     # A. PEHLE: Data load karein
     client, error = get_google_sheet_connection()
@@ -3579,6 +3759,9 @@ def main() -> None:
     # Trivia Bot initialize (Pass mongo_db)
     # Yahan 'asyncio.create_task' init se hatakar hum manually call karenge niche
     trivia_bot = TriviaGame(application, known_users, mongo_db=summary_bot.db)
+
+    # Anonymous 1-on-1 Chat (/pair) — reuses the same Mongo connection as SummaryManager
+    anon_bot = AnonChat(application, mongo_client=summary_bot.client)
 
     # C. HANDLERS (Order is perfect)
     
@@ -3687,6 +3870,19 @@ def main() -> None:
     application.add_handler(CommandHandler("quitgame", duo_game.quit_game))
     application.add_handler(CallbackQueryHandler(duo_game.duo_callback, pattern="^duo_"))
 
+    # --- Anonymous 1-on-1 Chat (/pair) ---
+    # relay_message MUST run before the general AI handler, so it's on group=-1
+    # (groups run lowest-number first; default/AI handlers are group=0).
+    application.add_handler(MessageHandler(
+        filters.ChatType.PRIVATE & (filters.TEXT | filters.CAPTION | filters.Sticker.ALL
+        | filters.PHOTO | filters.VIDEO | filters.VOICE | filters.Document.ALL) & ~filters.COMMAND,
+        anon_bot.relay_message
+    ), group=-1)
+    application.add_handler(CommandHandler("pair", anon_bot.pair_command))
+    application.add_handler(CommandHandler("skip", anon_bot.skip_command))
+    application.add_handler(CommandHandler("unpair", anon_bot.unpair_command))
+    application.add_handler(CommandHandler("anonstats", check_sudo_wrapper(anon_bot.anonstats_command)))
+
     # --- The Chameleon (group party game) ---
     application.add_handler(CommandHandler("chameleon", chameleon_game.chameleon_command))
     application.add_handler(CommandHandler("endchameleon", chameleon_game.end_chameleon_command))
@@ -3730,6 +3926,11 @@ def main() -> None:
     # --- Owner-Only Sudo Management Commands (BROADCAST_ADMIN_ID required) ---
     application.add_handler(CommandHandler("addsudo", add_sudo_command))
     application.add_handler(CommandHandler("removesudo", remove_sudo_command))
+
+    # --- Unified Games Hub (/games) ---
+    application.add_handler(CommandHandler("games", games_hub_command))
+    application.add_handler(CommandHandler("allgames", games_hub_command))
+    application.add_handler(CallbackQueryHandler(games_hub_callback, pattern="^hub_"))
 
     # --- Callback Query Handlers (order matters: specific patterns before the generic game one) ---
     application.add_handler(CallbackQueryHandler(start_callback_handler, pattern="^start_"))
