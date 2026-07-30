@@ -382,110 +382,6 @@ async def get_player_data(user_id: int, user_name: str) -> dict | None:
         logger.error(f"Critical data parsing error for {user_id}: {e}")
         return player_data
 
-'''async def get_player_data(user_id: int, user_name: str) -> dict | None:
-    """Fetches or creates a player's account. Returns a dictionary mapped by headers."""
-    
-    # Use a thread for blocking gspread call
-    cell = await asyncio.to_thread(_get_player_row, user_id)
-    
-    player_data = {}
-    
-    if cell:
-        # User found, fetch data
-        row_values = await asyncio.to_thread(game_sheet.row_values, cell.row)
-        
-        # Map values to headers
-        for i, header in enumerate(PLAYER_HEADERS):
-            try:
-                player_data[header] = row_values[i]
-            except IndexError:
-                player_data[header] = "" # Fill missing columns
-        
-        # Update username if it changed
-        if player_data["UserName"] != user_name:
-            await asyncio.to_thread(game_sheet.update_cell, cell.row, 2, user_name)
-            player_data["UserName"] = user_name
-            
-    else:
-        # User not found, create new account
-        default_row = {
-            "UserID": str(user_id),
-            "UserName": user_name,
-            "Money": STARTING_MONEY,
-            "Bank": STARTING_BANK,
-            "Health": STARTING_HEALTH,
-            "MarriedToID": 0,
-            "ChildrenIDs": "[]",
-            "Pet": "",
-            "Inventory": "{}", # { "item_id": count }
-            "Assets": "{}",    # { "category": ["item_id_1", "item_id_2"] }
-            "Weapon": "",      # "weapon_id"
-            "LastWork": 0.0,
-            "LastFarm": 0.0,
-            "LastCrime": 0.0,
-            "LastMine": 0.0,
-            "LastRob": 0.0,
-            "LastKill": 0.0,
-            "LastHeal": 0.0,
-            "LastTask": 0.0,
-            "LastDaily": 0.0,
-            "Kills": 0,
-            "Deaths": 0
-        }
-        
-        # Ensure values are in the correct header order
-        new_row_values = [default_row.get(h, "") for h in PLAYER_HEADERS]
-        try:
-            await asyncio.to_thread(game_sheet.append_row, new_row_values)
-            logger.info(f"Created new game account for {user_name} ({user_id})")
-            player_data = default_row
-        except Exception as e:
-            logger.error(f"Failed to create new game account for {user_id}: {e}", exc_info=True)
-            return None
-
-    # --- Type Conversion and JSON Parsing ---
-    try:
-        player_data["UserID"] = int(player_data["UserID"])
-        player_data["Money"] = int(player_data["Money"])
-        player_data["Bank"] = int(player_data["Bank"])
-        player_data["Health"] = int(player_data["Health"])
-        player_data["MarriedToID"] = int(player_data["MarriedToID"])
-        player_data["Kills"] = int(player_data["Kills"])
-        player_data["Deaths"] = int(player_data["Deaths"])
-        
-        # Cooldowns
-        for h in PLAYER_HEADERS:
-            if h.startswith("Last"):
-                player_data[h] = float(player_data[h])
-
-        # JSON Fields
-        # Handle potential data corruption or old format
-        try:
-            player_data["ChildrenIDs"] = json.loads(player_data["ChildrenIDs"])
-            if not isinstance(player_data["ChildrenIDs"], list):
-                player_data["ChildrenIDs"] = []
-        except:
-            player_data["ChildrenIDs"] = []
-
-        try:
-            player_data["Inventory"] = json.loads(player_data["Inventory"])
-            if not isinstance(player_data["Inventory"], dict):
-                player_data["Inventory"] = {}
-        except:
-            player_data["Inventory"] = {}
-
-        try:
-            player_data["Assets"] = json.loads(player_data["Assets"])
-            if not isinstance(player_data["Assets"], dict):
-                player_data["Assets"] = {}
-        except:
-            player_data["Assets"] = {}
-        
-        return player_data
-
-    except (ValueError, TypeError) as e:
-        logger.error(f"Data type error for user {user_id}: {e}. Returning raw data.")
-        return player_data # Return as-is, let handler fail'''
 
 async def profile_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
@@ -575,89 +471,86 @@ async def update_player_data(player_data: dict) -> bool:
 
 # --- Main Game Command Handlers ---
 # --- 🎰 THE CASINO ENGINE ---
-async def slots_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    if not context.args:
-        await update.message.reply_text("🎰 **Usage:** `/slots <amount>`\nExample: `/slots 500`")
-        return
-
-    try:
-        bet = int(context.args[0])
-        if bet < 100:
-            await update.message.reply_text("❌ Minimum bet is `$100`.")
-            return
-    except:
-        await update.message.reply_text("❌ Please enter a valid number.")
-        return
-
-    data = await get_player_data(user.id, user.full_name)
-    if data['Money'] < bet:
-        await update.message.reply_text("💸 You don't have enough money in your wallet!")
-        return
-
-    # Slot items
-    items = ["🍎", "💎", "🎰", "🔔", "🍒", "⭐"]
-    result = [random.choice(items) for _ in range(3)]
-    
-    # Visual spinning effect
-    spinning_msg = await update.message.reply_text("🎰 **SPINNING...**\n`[ ⌛ | ⌛ | ⌛ ]`")
-    await asyncio.sleep(1) # Fake delay for suspense
-    
-    # Calculate Winnings
-    win_multiplier = 0
-    if result[0] == result[1] == result[2]:
-        win_multiplier = 10 if result[0] == "💎" else 5
-    elif result[0] == result[1] or result[1] == result[2] or result[0] == result[2]:
-        win_multiplier = 2
-    
-    if win_multiplier > 0:
-        winnings = bet * win_multiplier
-        data['Money'] += winnings
-        status = f"🎉 **YOU WON!**\n💰 Payout: `${winnings:,}`"
-    else:
-        data['Money'] -= bet
-        status = f"💀 **YOU LOST!**\n💸 Better luck next time."
-
-    await update_player_data(data)
-    
-    final_view = (
-        f"🎰 **LAILA CASINO** 🎰\n"
-        f"━━━━━━━━━━━━━━━━━━\n"
-        f"  `[ {result[0]} | {result[1]} | {result[2]} ]`  \n"
-        f"━━━━━━━━━━━━━━━━━━\n"
-        f"{status}\n"
-        f"💰 **New Balance:** `${data['Money']:,}`"
-    )
-    await spinning_msg.edit_text(final_view, parse_mode='Markdown')
-
+# (See `handle_slots` further below — that's the version actually wired to /slots.)
 
 async def shop_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Laila Black Market Menu"""
+    """Laila Black Market Menu — categories match the real SHOP_CATALOG buy flow."""
     keyboard = [
         [
-            InlineKeyboardButton("⚪ Common", callback_data="shop_tier_common"),
-            InlineKeyboardButton("🟣 Epic", callback_data="shop_tier_epic")
+            InlineKeyboardButton("🩹 Items", callback_data="game:shop:category:items"),
+            InlineKeyboardButton("⚔️ Weapons", callback_data="game:shop:category:weapons")
         ],
-        [InlineKeyboardButton("🟡 Legendary", callback_data="shop_tier_legendary")],
-        [InlineKeyboardButton("🔙 Back to Game", callback_data="help_main")]
+        [
+            InlineKeyboardButton("🐾 Pets", callback_data="game:shop:category:pets"),
+            InlineKeyboardButton("🚗 Vehicles", callback_data="game:shop:category:vehicles")
+        ],
+        [
+            InlineKeyboardButton("🛥️ Yachts", callback_data="game:shop:category:yachts"),
+            InlineKeyboardButton("🏡 Real Estate", callback_data="game:shop:category:real_estate")
+        ],
+        [InlineKeyboardButton("⬅️ Back to Game", callback_data="game:menu:main")]
     ]
-    text = "🛒 **LAILA BLACK MARKET**\nSelect a rarity tier to browse items:"
-    
+    text = "🏪 **Laila Black Market**\nSelect a category to browse and buy:"
+
     try:
         if update.callback_query:
             await update.callback_query.edit_message_text(
-                text, 
-                reply_markup=InlineKeyboardMarkup(keyboard), 
+                text,
+                reply_markup=InlineKeyboardMarkup(keyboard),
                 parse_mode='Markdown'
             )
         else:
             await update.message.reply_text(
-                text, 
-                reply_markup=InlineKeyboardMarkup(keyboard), 
+                text,
+                reply_markup=InlineKeyboardMarkup(keyboard),
                 parse_mode='Markdown'
             )
     except Exception as e:
         logger.error(f"Error in shop_menu: {e}")
+
+
+async def inventory_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Text version of the inventory/assets screen — usable directly as /inventory or /bag."""
+    user = update.effective_user
+    player_data = await get_player_data(user.id, user.full_name)
+    if not player_data:
+        await update.message.reply_text("Error accessing your account.")
+        return
+
+    weapon_data = _find_item("weapons", player_data.get("Weapon", ""))
+    pet_data = _find_item("pets", player_data.get("Pet", ""))
+
+    text = "🎒 **Your Inventory**\n━━━━━━━━━━━━━━━━━━\n"
+    text += f"⚔️ **Weapon:** {weapon_data['name'] if weapon_data else 'None'}\n"
+    text += f"🐾 **Pet:** {pet_data['name'] if pet_data else 'None'}\n\n"
+
+    text += "**Consumables:**\n"
+    inv = player_data.get("Inventory", {})
+    has_items = False
+    for item_id, count in inv.items():
+        if count and count > 0:
+            item_data = _find_item("items", item_id)
+            name = item_data["name"] if item_data else item_id.title()
+            text += f"• {name} x{count}\n"
+            has_items = True
+    if not has_items:
+        text += "_Empty — visit `/shop` to stock up!_\n"
+
+    text += "\n**Properties:**\n"
+    assets = player_data.get("Assets", {})
+    has_assets = False
+    for category, item_list in assets.items():
+        if not isinstance(item_list, list):
+            continue
+        for item_id in item_list:
+            item_data = _find_item(category, item_id)
+            name = item_data["name"] if item_data else f"{category}:{item_id}"
+            text += f"• {name}\n"
+            has_assets = True
+    if not has_assets:
+        text += "_None yet — flex a little, buy a Ferrari 🏎️_\n"
+
+    await update.message.reply_text(text, parse_mode='Markdown')
 
 async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Main game entry point. Shows profile and main menu."""
@@ -800,10 +693,6 @@ async def daily_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     await update.message.reply_text(msg, parse_mode='Markdown')
 
-async def leaderboard_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Shows the top players by XP or Money."""
-    # Agar aapne leaderboard logic abhi nahi likha hai, to ye temporary message dikhayega
-    await update.message.reply_text("🏆 **Leaderboard**\n\nFeature coming soon! We are still ranking the top players.", parse_mode='Markdown')
 # --- 🎯 GLOBAL BOUNTY SYSTEM ---
 async def bounty_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Command: /bounty @user 5000"""
@@ -1146,60 +1035,116 @@ async def display_leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE
     except Exception as e:
         logger.error(f"Error in display_leaderboard: {e}", exc_info=True)
         await query.edit_message_text(text="An error occurred while fetching the leaderboard.")
-async def work_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# --- Shared job/action engine, used by BOTH the direct slash commands
+#     (/work /farm /mine /crime /task) and the /game button menu, so the
+#     numbers and cooldowns can never drift out of sync between the two. ---
+
+JOB_FLAVOR = {
+    "work":  ("👷‍♀️", "Work", ["clocked in and crushed it", "hustled hard at the office", "picked up a solid shift"]),
+    "farm":  ("🚜", "Farm", ["harvested a great crop", "sold a truckload of veggies", "had a productive day on the farm"]),
+    "mine":  ("⛏️", "Mine", ["struck a nice vein of ore", "hauled up a good load from the mine", "found some shiny gems"]),
+    "task":  ("📋", "Task", ["completed a side gig", "finished an odd job", "delivered a package on time"]),
+}
+
+async def _perform_job_action(update: Update, context: ContextTypes.DEFAULT_TYPE, action_name: str):
+    """Runs a cooldown-gated earning action (work/farm/mine/task) and replies with the result."""
     user = update.effective_user
-    # 1. Fetch player data
-    data = await get_player_data(user.id, user.first_name)
+    data = await get_player_data(user.id, user.full_name)
     if not data:
-        return await update.effective_message.reply_text("❌ Error: Could not retrieve your data.")
+        await update.effective_message.reply_text("❌ Error: Could not retrieve your data.")
+        return
 
-    now = time.time()
-    last_work = data.get("LastWork", 0)
-
-    # 2. Cooldown Check (20 Minutes)
-    if now - last_work < COOLDOWNS["work"]:
-        remaining = int((COOLDOWNS["work"] - (now - last_work)) // 60)
-        return await update.effective_message.reply_text(
-            f"⏳ You are exhausted! Come back in {remaining} minutes."
+    last_key = f"Last{action_name.capitalize()}"
+    is_ready, time_left = _check_cooldown(data.get(last_key, 0), COOLDOWNS[action_name])
+    if not is_ready:
+        emoji, label, _ = JOB_FLAVOR.get(action_name, ("⏳", action_name.capitalize(), [""]))
+        await update.effective_message.reply_text(
+            f"{emoji} You're still tired from your last **{label}**! Try again in `{time_left}`.",
+            parse_mode='Markdown'
         )
+        return
 
-    # 3. Calculate Earnings and XP
-    gain = random.randint(EARNINGS["work"][0], EARNINGS["work"][1])
-    xp_gain = 50
-    
-    # Lucky Bonus (5% chance)
+    gain = random.randint(*EARNINGS[action_name])
+    xp_gain = random.randint(20, 50)
+
     bonus_text = ""
     if random.random() < 0.05:
-        bonus = random.randint(500, 1000)
+        bonus = random.randint(500, 1500)
         gain += bonus
-        bonus_text = f"\n✨ **Jackpot!** You received an extra ₹{bonus} bonus!"
+        bonus_text = f"\n✨ **Lucky break!** +${bonus:,} bonus!"
 
-    # 4. Update Data Object
     data["Money"] += gain
     data["XP"] += xp_gain
-    data["LastWork"] = now
-    
-    # Level Up Logic
-    old_level = data["Level"]
+    data[last_key] = time.time()
+
+    old_level = data.get("Level", 1)
     new_level = (data["XP"] // 1000) + 1
     data["Level"] = new_level
 
-    # 5. Save to Google Sheets
     success = await update_player_data(data)
-    
-    if success:
-        msg = (
-            f"👷‍♂️ **Work Complete!**\n\n"
-            f"💰 You earned: ₹{gain}\n"
-            f"⭐ XP Gained: +{xp_gain}\n"
-            f"{bonus_text}"
+    if not success:
+        await update.effective_message.reply_text("❌ Database update failed. Please try again.")
+        return
+
+    emoji, label, flavor_lines = JOB_FLAVOR.get(action_name, ("✅", action_name.capitalize(), ["got it done"]))
+    flavor = random.choice(flavor_lines)
+    msg = (
+        f"{emoji} **{label} Complete!**\n"
+        f"You {flavor} and earned `${gain:,}`!\n"
+        f"⭐ XP: +{xp_gain}"
+        f"{bonus_text}"
+    )
+    if new_level > old_level:
+        msg += f"\n\n🎊 **LEVEL UP!** You're now Level {new_level}! (+$5,000 bonus banked on your next /profile check)"
+
+    await update.effective_message.reply_text(msg, parse_mode='Markdown')
+
+
+async def _perform_crime_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Runs /crime — a higher-risk, higher-reward action with a success/fail chance."""
+    user = update.effective_user
+    data = await get_player_data(user.id, user.full_name)
+    if not data:
+        await update.effective_message.reply_text("❌ Error: Could not retrieve your data.")
+        return
+
+    is_ready, time_left = _check_cooldown(data.get("LastCrime", 0), COOLDOWNS["crime"])
+    if not is_ready:
+        await update.effective_message.reply_text(
+            f"🚔 The heat is still on you! Try again in `{time_left}`.", parse_mode='Markdown'
         )
-        if new_level > old_level:
-            msg += f"\n\n🎊 **LEVEL UP!** You are now Level {new_level}!"
-            
-        await update.effective_message.reply_text(msg, parse_mode='Markdown')
+        return
+
+    data["LastCrime"] = time.time()
+
+    if random.randint(1, 100) <= CRIME_RATES["chance"]:
+        amount = random.randint(*CRIME_RATES["success"])
+        data["Money"] += amount
+        data["XP"] = data.get("XP", 0) + 40
+        msg = f"😈 **Crime Successful!**\nYou pulled it off and scored `${amount:,}`!\n⭐ XP: +40"
     else:
-        await update.effective_message.reply_text("❌ Database update failed. Please contact admin.")
+        amount = random.randint(*CRIME_RATES["fail"])
+        data["Money"] = max(0, data["Money"] - amount)
+        msg = f"🚓 **Busted!**\nThe cops caught you and fined you `${amount:,}`."
+
+    await update_player_data(data)
+    await update.effective_message.reply_text(msg, parse_mode='Markdown')
+
+
+async def work_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await _perform_job_action(update, context, "work")
+
+async def farm_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await _perform_job_action(update, context, "farm")
+
+async def mine_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await _perform_job_action(update, context, "mine")
+
+async def task_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await _perform_job_action(update, context, "task")
+
+async def crime_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await _perform_crime_action(update, context)
 
 
 async def handle_heal(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -1851,13 +1796,18 @@ async def handle_kill(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     success_chance = 35 + (level_diff * 2) # Slightly nerfed bonus for better balance
     success_chance = max(10, min(85, success_chance))
 
-    # 4. Defense Check
-    inventory = target_data.get("Inventory", [])
-    if isinstance(inventory, str): # Handle if sheet returns string instead of list
-        inventory = json.loads(inventory) if inventory else []
+    # 4. Defense Check (Inventory is a dict of item_id -> count)
+    inventory = target_data.get("Inventory", {})
+    if isinstance(inventory, str):  # Handle if sheet returns a raw JSON string
+        try:
+            inventory = json.loads(inventory) if inventory else {}
+        except Exception:
+            inventory = {}
+    if not isinstance(inventory, dict):
+        inventory = {}
 
-    if "bodyguard" in inventory:
-        inventory.remove("bodyguard")
+    if inventory.get("bodyguard", 0) > 0:
+        inventory["bodyguard"] -= 1
         target_data["Inventory"] = inventory
         await update_player_data(killer_data) 
         await update_player_data(target_data)

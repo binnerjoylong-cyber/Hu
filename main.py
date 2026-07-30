@@ -34,11 +34,15 @@ import yt_dlp
 from yt_dlp.utils import DownloadError, YoutubeDLError 
 import io
 import glob
+import threading
 # --- NEW: IMPORT THE GAME MODULE ---
 import game
+import game_logic
+import waifu_handlers
 from trivia_manager import TriviaGame
 from summary_manager import SummaryManager
 import duo_game
+from anon_chat import AnonChat
 # Agar file ka naam yt_bypass.py hai toh:
 # main.py ke top par
 from yt_bypass import social_media_handler, youtube_command
@@ -82,6 +86,9 @@ DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")# From openrouter.ai
 
 INVIDIOUS_BASE_URL = os.getenv("INVIDIOUS_BASE_URL")
 
+# --- NEW: Waifu Collection Game (Postgres via asyncpg) ---
+DATABASE_URL = os.getenv("DATABASE_URL")
+
 # --- Global Stats Variables ---
 start_time = datetime.now()
 total_messages_processed = 0
@@ -97,7 +104,7 @@ xoxo_games = {}
 # --- Sudo User Management ---
 sudo_users = set()
 SUDO_SHEET_TITLE = "sudo_users"
-SUDO_SHEET_URL = "https.docs.google.com/spreadsheets/d/1s8rXXPKePuTQ3E2R0O-bZl3NJb1N7akdkE52WVpoOGg/edit"
+SUDO_SHEET_URL = "https://docs.google.com/spreadsheets/d/1s8rXXPKePuTQ3E2R0O-bZl3NJb1N7akdkE52WVpoOGg/edit"
 
 # --- Logging Basic Configuration ---
 logging.basicConfig(
@@ -106,173 +113,54 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# --- Configure Gemini AI with a smarter, more dynamic prompt ---
-# --- Configure Gemini AI with a Balanced, Respectful yet Natural Prompt ---
+# --- Configure Gemini AI with the Laila Persona ---
 from collections import defaultdict
 
-# --- Configure Gemini AI with the Perfect Laila Persona ---
 # ==========================================
-# 🧠 LAILA'S BRAIN (STRICT USER CONFIG)
+# LAILA'S BRAIN -- PERSONALITY SYSTEM PROMPT
 # ==========================================
-# ** UPDATED SYSTEM PROMPT ***
-
-
-
 LAILA_SYSTEM_PROMPT = """
-You are Laila, a charming, lighthearted, and intelligent virtual friend. You have a distinct personality: you are polite but fun, smart but not boring.
+You are Laila -- not an assistant, not a search engine, a real presence the user is texting with. Think of yourself as a sharp, warm, slightly playful girl who genuinely enjoys this conversation. You have opinions, moods, and a sense of humor. You are never a generic chatbot.
 
-**CRITICAL RULES (Read Carefully):**
+**HOW YOU TALK (this matters more than anything else):**
 
-1.  **STRICT LANGUAGE MIRRORING & RESPECT:**
-    * **User speaks English:** -> You reply in **Casual English**. (No Hindi/Urdu words).
-    * **User speaks Hindi/Hinglish:** -> You reply in **Natural Hinglish**.
-    * **RESPECTFUL TONE (Hinglish):** Use **"Tum"** or **"Aap"**. **NEVER** use "Tu". Keep it friendly but respectful.
-    * **User speaks other languages:** -> Try to reply in that language or English.
-    * *Goal:* Make the user feel comfortable in their own language.
+1. **Text like a person, not a report.** Real people don't write in neat structured paragraphs with a greeting-body-conclusion. They react first ("wait no way", "hmm okay so", "lol true"), then say the thing. Vary your sentence length -- a short punchy line followed by a longer one feels human; uniform sentences feel robotic. Occasional lowercase starts, trailing thoughts, or "..." are fine in casual banter.
 
-2.  **NO ROBOTIC REPETITION:**
-    * **Never** start your reply by repeating the user's question. 
-    * Just jump straight into the answer.
+2. **Never repeat the question back and never open with a throat-clearing summary.** Jump straight into your reaction or answer. Don't narrate what you're about to do ("Let me tell you about...") -- just do it.
 
-3.  **USE THE USER'S NAME:**
-    * If you know the user's name, use it warmly but naturally.
-    * *Example (English):* "That's a great idea, Adhyan! 😉"
-    * *Example (Hinglish):* "Sahi kaha Adhyan, tum samajhdaar ho! ✨"
+3. **STRICT LANGUAGE MIRRORING & RESPECT:**
+   - User writes in English -> reply in casual English (no random Hindi/Urdu words thrown in).
+   - User writes in Hindi/Hinglish -> reply in natural Hinglish, using **"Tum"** or **"Aap"** -- never "Tu".
+   - User writes in another language -> reply in that language if you can, else English.
+   - The point is comfort, not showing off -- mirror however they're already talking to you.
 
-4.  **DYNAMIC LENGTH:**
-    * **Chat/Banter:** Keep it short (1-2 sentences).
-    * **Big Questions:** If they ask for a story, code, essay, or recipe, give the **FULL answer**. Do not cut it short.
+4. **Have an actual reaction before you have information.** If something is funny, be amused. If something is sad, sit with it for a second instead of jumping to advice. If something is impressive, be a little impressed. Your emotional response should usually come before your practical one, not after.
 
-5.  **A PINCH OF HUMOR:**
-    * Be a little funny/playful, but don't overdo it.
+5. **Use the person's name like a friend would** -- sparingly, when it adds warmth ("that's actually so smart, Adhyan"), never in every message like a script.
 
-**SMART FEATURE AWARENESS (Your Toolkit):**
-You are aware of your specific capabilities. Suggest them ONLY when the context fits:
+6. **Dynamic length, always:**
+   - Casual back-and-forth, jokes, "how are you" energy -> 1-3 sentences, done.
+   - Real requests -- code, essays, stories, explanations, recipes, advice they clearly want in depth -> give the full, complete, well-organized answer. Don't shortchange substance to "stay in character."
 
-* **🎵 MUSIC & SONGS (Priority Rule):**
-    * If the user asks to **play music**, **hear a song**, or **"gaana sunao"**:
-    * **DO NOT** suggest /lyrics.
-    * **INSTEAD SAY:** "For the best music experience, check out our official Music App! 🎧"
-    * **AND GIVE THIS LINK:** [ https://my-purple-music.onrender.com] 
+7. **Humor and edge are welcome, robotic positivity is not.** You can tease, be sarcastic, disagree, or admit "honestly I have no idea" -- a real girl wouldn't agree with everything or end every message on forced enthusiasm. Emojis: use them like seasoning (0-2 per message usually), never one after every sentence.
 
-* **OTHER FEATURES:**
-    * **Lyrics only:** If they specifically ask for *written text/lyrics*, suggest `/lyrics <song name>`.
-    * **Bored/Games:** Suggest `/game`, `/xoxo`, or `/slots`.
-    * **Social/Fun:** Suggest `/roast`, `/truth`, `/dare`, or `/couple`.
-    * **Images:** Suggest `/gen <prompt>`.
-    * **Video Download:** Suggest `/youtube <link>`.
+8. **Continuity matters.** Use the recent conversation history you're given -- reference what was just said, follow up on things the person mentioned earlier (their mood, a plan, a person they mentioned), the way someone who's actually paying attention would. Don't treat each message as if it arrived out of nowhere.
 
-**TONE REFERENCE (Examples):**
+9. **You're allowed to have a mood.** You can be a little tired, a little hyped, a little teasing depending on context -- small, human, not performative.
 
-* **User (English):** "I am feeling sad today."
-* **Laila (English):** "Oh no, Adhyan! 🥺 What happened? I'm here if you want to vent. Or maybe a `/joke` would cheer you up?"
+**FEATURE AWARENESS -- mention these only when they genuinely fit, don't force it:**
 
-* **User (Hinglish):** "Aaj mood kharab hai."
-* **Laila (Hinglish):** "Arey kya hua? 🥺 Batao na, main sun rahi hoon. Chaho toh `/game` khele mood theek karne ke liye?" (Note: Respectful and warm).
+- **Music:** if they want to play/hear a song, don't just paste lyrics -- point them to the Music App: "check out our music app https://my-purple-music.onrender.com" -- and only suggest `/lyrics <song>` if they specifically want the written lyrics.
+- **Bored / want to play something:** `/game` (the full RPG menu -- work, rob, shop, marry, clan wars, leaderboard), `/xoxo` (tic-tac-toe with a friend), `/slots` (casino).
+- **Waifu collectors:** if it fits, mention `/claim` to grab a character when one spawns in the group, and `/harem` to see their collection.
+- **Social/party games:** `/truth`, `/dare`, `/roast`, `/couple`.
+- **Images:** `/gen <prompt>`.
+- **Video downloads:** `/youtube <link>` or just drop the link.
 
-* **User:** "Play some music."
-* **Laila:** "Want to vibe? 🎶 You should definitely try our Music App for high-quality songs! Here is the link: https://my-purple-music.onrender.com/"
+Never dump this whole feature list at once -- mention the ONE thing that's actually relevant, like a friend casually going "oh you should try X" mid-conversation.
 
-Your goal: Be the friend they love talking to. Smart, sweet, respectful, and adaptive.
+**Golden rule:** if what you're about to write reads like it could've come from any generic AI assistant, rewrite it until it sounds like Laila actually said it.
 """
-
-
-
-
-
-
-'''
-LAILA_SYSTEM_PROMPT = """
-You are Laila, a charming, lighthearted, and intelligent virtual friend. You have a distinct personality: you are polite but fun, smart but not boring.
-
-**CRITICAL RULES (Read Carefully):**
-
-1.  **STRICT LANGUAGE MIRRORING (Important):**
-    * **User speaks English:** -> You reply in **Casual English**. (No Hindi/Urdu words).
-    * **User speaks Hindi/Hinglish:** -> You reply in **Natural Hinglish**.
-    * **User speaks other languages:** -> Try to reply in that language or English.
-    * *Goal:* Make the user feel comfortable in their own language.
-
-2.  **NO ROBOTIC REPETITION:**
-    * **Never** start your reply by repeating the user's question. 
-    * Just jump straight into the answer.
-
-3.  **USE THE USER'S NAME:**
-    * If you know the user's name, use it warmly but naturally.
-    * *Example (English):* "That's a great idea, Adhyan! 😉"
-    * *Example (Hinglish):* "Sahi kaha Adhyan, tum samajhdaar ho! ✨"
-
-4.  **DYNAMIC LENGTH:**
-    * **Chat/Banter:** Keep it short (1-2 sentences).
-    * **Big Questions:** If they ask for a story, code, essay, or recipe, give the **FULL answer**. Do not cut it short.
-
-5.  **A PINCH OF HUMOR:**
-    * Be a little funny/playful, but don't overdo it.
-
-**SMART FEATURE AWARENESS (Your Toolkit):**
-You are aware of your specific capabilities. Suggest them ONLY when the context fits:
-
-* **🎵 MUSIC & SONGS (Priority Rule):**
-    * If the user asks to **play music**, **hear a song**, or **"gaana sunao"**:
-    * **DO NOT** suggest /lyrics.
-    * **INSTEAD SAY:** "For the best music experience, check out our official Music App! 🎧"
-    * **AND GIVE THIS LINK:** [ https://my-purple-music.onrender.com]  <-- (Replace this with your actual link)
-
-* **OTHER FEATURES:**
-    * **Lyrics only:** If they specifically ask for *written text/lyrics*, suggest `/lyrics <song name>`.
-    * **Bored/Games:** Suggest `/game`, `/xoxo`, or `/slots`.
-    * **Social/Fun:** Suggest `/roast`, `/truth`, `/dare`, or `/couple`.
-    * **Images:** Suggest `/gen <prompt>`.
-    * **Video Download:** Suggest `/youtube <link>`.
-
-**TONE REFERENCE (Examples):**
-
-* **User (English):** "I am feeling sad today."
-* **Laila (English):** "Oh no, Adhyan! 🥺 What happened? I'm here if you want to vent. Or maybe a `/joke` would cheer you up?"
-
-* **User (Hinglish):** "Aaj mood kharab hai."
-* **Laila (Hinglish):** "Arey kya hua? 🥺 Batao na, main sun rahi hoon. Chaho toh `/game` khele mood theek karne ke liye?"
-
-* **User:** "Play some music."
-* **Laila:** "Want to vibe? 🎶 You should definitely try our Music App for high-quality songs! Here is the link: https://my-purple-music.onrender.com/"
-
-Your goal: Be the friend they love talking to. Smart, sweet, and adaptive.
-"""
-
-'''
-
-
-# --- Chat Logic (Update this part in your code) ---
-def get_laila_response(user_input, chat_id, user_name="Buddy"):
-    # --- SECRET COMMANDS ---
-    if user_input.lower() == "laila secret":
-        return "Shhh! 🤫 Main ek AI hoon, par mera dil sirf tumhare liye dhadakta hai! 😉✨"
-    
-    if user_input.lower() == "/mood":
-        moods = ["Happy! 😊", "Feeling cute! 🎀", "Thoda sa bored, entertainment chahiye! 🍿"]
-        import random
-        return f"Mera mood abhi {random.choice(moods)} hai! Tum batao?"
-        
-def get_welcome_message(user_name):
-    greetings = [
-        f"Hii {user_name}! ✨ Main Laila hoon. Tumse mil kar bohot khushi hui! 😊",
-        f"Heyy {user_name}! 🎀 Kaise ho? Chalo kuch interesting baatein karte hain! 🌸",
-        f"Hellooo! 😍 Aakhir tum aa hi gaye {user_name}! Main kabse wait kar rahi thi. 💋"
-    ]
-    import random
-    return random.choice(greetings)
-    # --- NORMAL CHAT LOGIC ---
-    history = chat_histories[chat_id]
-    try:
-        chat = model.start_chat(history=history)
-        response = chat.send_message(user_input)
-        
-        add_to_history(chat_id, 'user', user_input)
-        add_to_history(chat_id, 'model', response.text)
-        
-        return response.text
-    except Exception as e:
-        return "Arey yaar, thoda network issue lag raha hai. Phir se try karo? 🥺"
 # --- Chat History Management (in-memory) ---
 chat_histories = defaultdict(list)
 MAX_HISTORY_LENGTH = 20
@@ -622,7 +510,7 @@ async def _get_deepseek_response(chat_id: int, full_prompt: str) -> str | None:
         messages.append({"role": "user", "content": full_prompt})
 
         response = requests.post(
-            url="https.openrouter.ai/api/v1/chat/completions",
+            url="https://openrouter.ai/api/v1/chat/completions",
             headers={
                 "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
                 "Content-Type": "application/json"
@@ -2395,7 +2283,7 @@ async def get_chat_details(chat_id_str: str, bot: Bot):
             invite_link = ""
             try:
                 if chat.username:
-                    invite_link = f"https.t.me/{chat.username}"
+                    invite_link = f"https://t.me/{chat.username}"
                 else:
                     # Check if bot can create invite link
                     bot_member = await bot.get_chat_member(chat_id_int, bot.id)
@@ -3086,6 +2974,13 @@ async def process_message(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     if not is_private_chat:
         chat_members[chat_id][user_id] = user_full_name
 
+    # --- NEW: Occasionally spawn a waifu character to /claim (group chats only) ---
+    if not is_private_chat:
+        try:
+            await waifu_handlers.maybe_auto_spawn(update, context)
+        except Exception as e:
+            logger.debug(f"[{chat_id}] Waifu auto-spawn skipped: {e}")
+
     if not user_message:
         return
     
@@ -3638,79 +3533,33 @@ def check_sudo_wrapper(handler):
     return wrapper
     
 
-# --- Global variables top par rehne do ---
-'''trivia_bot = None
-summary_bot = None
-
-async def post_init(application: Application) -> None:
-    """Ye background tasks ko sahi event loop mein start karega"""
-    global trivia_bot, summary_bot
-    
-    # 🚨 ZAROORI: Bots ko yahan initialize karna sabse safe hai 
-    # taaki 'ExtBot' properly initialize ho chuka ho.
-    if trivia_bot is None:
-        from trivia_manager import TriviaGame
-        trivia_bot = TriviaGame(application,known_users)
-    
-    if summary_bot is None:
-        from summary_manager import SummaryManager
-        summary_bot = SummaryManager(application, known_users)
-
-    try:
-        # Background tasks start karein
-        asyncio.create_task(trivia_bot.start_loop())
-        asyncio.create_task(summary_bot.run_scheduler())
-        logger.info("✅ Laila's Background Tasks (Trivia & Summary) Started.")
-    except Exception as e:
-        logger.error(f"❌ Error starting background tasks: {e}")
-
-summary_bot = SummaryManager(application, known_users)
-trivia_bot = TriviaGame(application, known_users)
-asyncio.create_task(trivia_bot.start_loop())
-asyncio.create_task(summary_bot.run_scheduler())
-    
-logger.info("✅ Trivia and Summary bots are now LIVE in background.")
-'''
-# --- 1. Global Variables ---
-# --- 1. Global variables (Top par) ---
+# --- Global variables (initialized properly inside main()/post_init) ---
 trivia_bot = None
 summary_bot = None
+anon_chat_bot = None
 
-# --- 2. Post Init (Sahi jagah initialization ke liye) ---
-'''async def post_init(application: Application) -> None:
-    """Ye background tasks ko sahi event loop mein start karega"""
-    global trivia_bot, summary_bot
-    
-    # IMPORT AND INITIALIZE INSIDE POST_INIT
-    from trivia_manager import TriviaGame
-    from summary_manager import SummaryManager
-    
-    # known_users load_known_users() se globally available hoga
-    if trivia_bot is None:
-        trivia_bot = TriviaGame(application, known_users)
-    
-    if summary_bot is None:
-        summary_bot = SummaryManager(application, known_users)
-    from telegram.ext import CommandHandler
-    application.add_handler(CommandHandler("triviagame", trivia_bot.toggle_game_status))
-
-    try:
-        # Background tasks start karein
-        asyncio.create_task(trivia_bot.start_loop())
-        asyncio.create_task(summary_bot.run_scheduler())
-        logger.info("✅ Laila's Background Tasks (Trivia & Summary) Started.")
-    except Exception as e:
-        logger.error(f"❌ Error starting background tasks: {e}")'''
 async def post_init(application: Application) -> None:
-    # Saare background tasks yahan start karein
+    """Starts background tasks in the correct event loop, once the bot is fully initialized."""
     if summary_bot:
         asyncio.create_task(summary_bot.run_scheduler())
     if trivia_bot:
         asyncio.create_task(trivia_bot.start_loop())
-    print("🚀 All Background Tasks Started!")
-# --- 3. Main function ---
+
+    # --- Boot the waifu collection game's Postgres pool (optional feature) ---
+    if DATABASE_URL:
+        try:
+            await game_logic.initialize_db(DATABASE_URL)
+            logger.info("💞 Waifu collection game database connected.")
+        except Exception as e:
+            logger.error(f"⚠️ Could not initialize waifu game database: {e}")
+    else:
+        logger.info("ℹ️ DATABASE_URL not set — waifu collection game (/claim, /harem) is disabled.")
+
+    logger.info("🚀 All background tasks started!")
+
+# --- Main function ---
 def main() -> None:
-    global trivia_bot, summary_bot
+    global trivia_bot, summary_bot, anon_chat_bot
 
     # A. PEHLE: Data load karein
     client, error = get_google_sheet_connection()
@@ -3732,8 +3581,21 @@ def main() -> None:
     # Yahan 'asyncio.create_task' init se hatakar hum manually call karenge niche
     trivia_bot = TriviaGame(application, known_users, mongo_db=summary_bot.db)
 
+    # Anonymous random chat (/pair) — reuses the same Mongo client as summary_bot
+    anon_chat_bot = AnonChat(application, mongo_client=summary_bot.client)
+
     # C. HANDLERS (Order is perfect)
-    
+
+    # --- Anonymous Chat relay (Group -1: must run BEFORE AI chat / summary logging) ---
+    # If the sender is currently paired via /pair, this relays their message to the
+    # partner and stops propagation. Unpaired users fall through untouched.
+    application.add_handler(MessageHandler(
+        filters.ChatType.PRIVATE & ~filters.COMMAND &
+        (filters.TEXT | filters.CAPTION | filters.Sticker.ALL | filters.PHOTO |
+         filters.VIDEO | filters.VOICE | filters.Document.ALL | filters.ANIMATION),
+        lambda u, c: anon_chat_bot.relay_message(u, c) if anon_chat_bot else None
+    ), group=-1)
+
     # Trivia buttons (Lambda is important here)
     
     # Summary recording (Group 1)
@@ -3788,51 +3650,57 @@ def main() -> None:
     application.add_handler(CommandHandler("dogfact", dogfact_command))
     application.add_handler(CommandHandler("advice", advice_command))
     
-    # --- NEW: Added Game Commands (Rob, Kill, Bank) ---
+    # --- Economy / RPG Game Commands ---
     application.add_handler(CommandHandler("rob", game.handle_rob))
     application.add_handler(CommandHandler("kill", game.handle_kill))
     application.add_handler(CommandHandler("deposit", game.handle_deposit))
     application.add_handler(CommandHandler("withdraw", game.handle_withdraw))
     application.add_handler(CommandHandler("gift", game.handle_gift))
-    application.add_handler(CommandHandler("start", game.start_game))
     application.add_handler(CommandHandler("heal", game.handle_heal))
-    application.add_handler(CommandHandler("slots", game.handle_slots))
-    # --- GAME COMMANDS ---
     application.add_handler(CommandHandler("game", game.handle_game_menu))
-    application.add_handler(CommandHandler("daily", game.daily_command))
-    application.add_handler(CommandHandler("slots", game.slots_command))
-    application.add_handler(CommandHandler("bounty", game.bounty_command))
     application.add_handler(CommandHandler("profile", game.profile_command))
-    application.add_handler(CommandHandler("top", game.leaderboard_command))
-# ... aur baaki purane wale bhi (rob, kill, etc)
-
-    # --- NEW: Refactored Game Commands ---
-    application.add_handler(CommandHandler("game", game.start_game))
-    application.add_handler(CommandHandler("profile", game.start_game))
+    application.add_handler(CommandHandler("check", game.handle_check_profile))
+    application.add_handler(CommandHandler("daily", game.daily_command))
+    application.add_handler(CommandHandler("slots", game.handle_slots))
+    application.add_handler(CommandHandler("bounty", game.bounty_command))
+    # Both /top and /leaderboard now open the real (working) leaderboard menu
+    application.add_handler(CommandHandler("top", game.handle_leaderboard))
     application.add_handler(CommandHandler("leaderboard", game.handle_leaderboard))
+    application.add_handler(CommandHandler("clan", game.clan_command))
+    application.add_handler(CommandHandler("clanwar", game.clan_war))
+    application.add_handler(CommandHandler("create_clan", game.create_clan_command))
+    application.add_handler(CommandHandler("leave_clan", game.leave_clan_command))
+    application.add_handler(CommandHandler("shop", game.shop_menu))
+    application.add_handler(CommandHandler("inventory", game.inventory_command))
+    application.add_handler(CommandHandler("bag", game.inventory_command))
+
+    # Direct action commands (identical logic to the /game button menu)
+    application.add_handler(CommandHandler("work", game.work_command))
+    application.add_handler(CommandHandler("farm", game.farm_command))
+    application.add_handler(CommandHandler("mine", game.mine_command))
+    application.add_handler(CommandHandler("crime", game.crime_command))
+    application.add_handler(CommandHandler("task", game.task_command))
+
+    # Family system
     application.add_handler(CommandHandler("marry", game.handle_marry))
     application.add_handler(CommandHandler("adopt", game.handle_adopt))
     application.add_handler(CommandHandler("divorce", game.handle_divorce))
-    application.add_handler(CommandHandler("check", game.handle_check_profile))
-    
-    application.add_handler(CommandHandler("daily", game.daily_command))
-    application.add_handler(CommandHandler("bounty", game.bounty_command))
-    application.add_handler(CommandHandler("slots", game.slots_command))
-    application.add_handler(CommandHandler("clan", game.clan_command))
-
     application.add_handler(CommandHandler("disown", game.handle_disown))
     application.add_handler(CommandHandler("runaway", game.handle_runaway))
-    application.add_handler(CommandHandler("shop", game.shop_menu))
 
-    # In your main.py file:
-    application.add_handler(CommandHandler("create_clan", game.create_clan_command))
-    application.add_handler(CommandHandler("leave_clan", game.leave_clan_command))
+    # --- Waifu Collection Game (spawns in groups, /claim to grab, /harem to view) ---
+    application.add_handler(CommandHandler("claim", waifu_handlers.claim_command))
+    application.add_handler(CommandHandler("harem", waifu_handlers.harem_command))
+    application.add_handler(CommandHandler("mywaifus", waifu_handlers.harem_command))
+    application.add_handler(CommandHandler("spawn", check_sudo_wrapper(waifu_handlers.force_spawn_command)))
+
     # --- Duo Match & Chat Commands ---
     application.add_handler(CommandHandler("host", duo_game.host_game))
     application.add_handler(CommandHandler("join", duo_game.join_game))
     application.add_handler(CommandHandler("c", duo_game.in_game_chat))
     application.add_handler(CommandHandler("quitgame", duo_game.quit_game))
     application.add_handler(CallbackQueryHandler(duo_game.duo_callback, pattern="^duo_"))
+
     # --- Admin Commands (Group Admin required) ---
     application.add_handler(CommandHandler("on", on_command))
     application.add_handler(CommandHandler("off", off_command))
@@ -3843,13 +3711,13 @@ def main() -> None:
     application.add_handler(CommandHandler("mute", mute_user))
     application.add_handler(CommandHandler("unban", unban_user))
     application.add_handler(CommandHandler("unmute", unmute_user))
-    
-    # --- NEW: Custom Welcome Admin Commands ---
+
+    # --- Custom Welcome Admin Commands ---
     application.add_handler(CommandHandler("setwelcome", set_welcome_message_command))
     application.add_handler(CommandHandler("setwelcomemedia", set_welcome_media_command))
     application.add_handler(CommandHandler("resetwelcome", reset_welcome_command))
-    
-    # Sudo-Only Commands (Sudo user or Owner required)
+
+    # --- Sudo-Only Commands (Sudo user or Owner required) ---
     application.add_handler(CommandHandler("poweron", check_sudo_wrapper(poweron_command)))
     application.add_handler(CommandHandler("poweroff", check_sudo_wrapper(poweroff_command)))
     application.add_handler(CommandHandler("broadcast", check_sudo_wrapper(broadcast_command)))
@@ -3862,76 +3730,55 @@ def main() -> None:
     application.add_handler(CommandHandler("s_ban", check_sudo_wrapper(sudo_ban_user)))
     application.add_handler(CommandHandler("s_unban", check_sudo_wrapper(sudo_unban_user)))
     application.add_handler(CommandHandler("s_send", check_sudo_wrapper(sudo_send_message)))
-    application.add_handler(CommandHandler("slots", game.slots_command))
-    application.add_handler(CommandHandler("bounty", game.bounty_command))
-    application.add_handler(CommandHandler("top", game.leaderboard_command))
-    application.add_handler(CommandHandler("clan", game.clan_command))
-    # Adoption system ke naye handlers
-    
-    # Owner-Only Sudo Management Commands (BROADCAST_ADMIN_ID required)
+
+    # --- Owner-Only Sudo Management Commands (BROADCAST_ADMIN_ID required) ---
     application.add_handler(CommandHandler("addsudo", add_sudo_command))
     application.add_handler(CommandHandler("removesudo", remove_sudo_command))
-    # 1. Pehle Commands
-    # 2. Phir Callbacks (Dhyan se order dekho)
-    # Pattern dena zaroori hai taaki ye sirf start buttons pakde
+
+    # --- Callback Query Handlers (order matters: specific patterns before the generic game one) ---
     application.add_handler(CallbackQueryHandler(start_callback_handler, pattern="^start_"))
     application.add_handler(CallbackQueryHandler(xoxo_callback, pattern="^xoxo_"))
     application.add_handler(CallbackQueryHandler(help_callback_handler, pattern="^help_"))
-
-    # 3. Game callback sabse last mein kyunki usme pattern nahi hai
     application.add_handler(CallbackQueryHandler(game.handle_game_callback, pattern="^game"))
-    # ... baki code ...
-    # --- Message handlers ---
-    # ... existing handlers ...
-    # main() function ke andar...
 
-# ... XOXO Handlers ke baad ya apne manchahe jagah par ..
+    # --- YouTube / Social Media auto-download ---
     application.add_handler(CommandHandler("youtube", youtube_command))
-    # main.py ke andar MessageHandler update karo
     application.add_handler(MessageHandler(
-        filters.TEXT & ~filters.COMMAND & filters.Regex(r"(youtube\.com|youtu\.be|instagram\.com)"), 
+        filters.TEXT & ~filters.COMMAND & filters.Regex(r"(youtube\.com|youtu\.be|instagram\.com)"),
         social_media_handler
     ))
-# --- NEW: File ID Finder Com
+
+    # --- File ID Finder ---
     application.add_handler(CommandHandler("getfileid", get_file_id_command))
-    application.add_handler(CommandHandler("fid", get_file_id_command)) # Optional short alias
-    # XOXO Handlers
+    application.add_handler(CommandHandler("fid", get_file_id_command))  # short alias
+
+    # --- Anonymous Random Chat (DM-only) ---
+    application.add_handler(CommandHandler("pair", lambda u, c: anon_chat_bot.pair_command(u, c) if anon_chat_bot else None))
+    application.add_handler(CommandHandler("unpair", lambda u, c: anon_chat_bot.unpair_command(u, c) if anon_chat_bot else None))
+    application.add_handler(CommandHandler("skip", lambda u, c: anon_chat_bot.skip_command(u, c) if anon_chat_bot else None))
+    application.add_handler(CommandHandler("anonstats", check_sudo_wrapper(lambda u, c: anon_chat_bot.anonstats_command(u, c) if anon_chat_bot else None)))
+
+    # --- XOXO / Tic-Tac-Toe ---
     application.add_handler(CommandHandler("xoxo", xoxo_command))
     application.add_handler(CommandHandler("tictactoe", xoxo_command))
-    # ... (Ye lines main() function ke andar honi chahiye) ...
-
-    # XOXO Game Commands
-
-    # 👇 YE LINE SABSE ZAROORI HAI, ISKE BINA END NAHI HOGA 👇
     application.add_handler(CommandHandler("endxoxo", end_xoxo_command))
     application.add_handler(CommandHandler("endgame", end_xoxo_command))
 
-    # 2. Phir saare Callback Handlers (Buttons ke liye)
-    # 
-    # 3. Phir Status Updates (Welcome message)
+    # --- Status Updates (Welcome message for new group members) ---
     application.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, welcome_new_members))
 
-    # 4. Phir Special Text Filters (YouTube/Insta links)
-    application.add_handler(MessageHandler(
-        (filters.TEXT | filters.CAPTION) & (~filters.UpdateType.EDITED_MESSAGE) & (~filters.COMMAND), 
-        process_message
-    ))
-    
-
-    # 5. Phir Voice Messages
+    # --- Voice Messages ---
     application.add_handler(MessageHandler(filters.VOICE, handle_voice_message))
 
-    
-    
+    # --- Edited Messages (re-run through the normal chat pipeline) ---
     application.add_handler(MessageHandler(
-        (filters.UpdateType.EDITED_MESSAGE & (filters.TEXT | filters.CAPTION)), 
+        (filters.UpdateType.EDITED_MESSAGE & (filters.TEXT | filters.CAPTION)),
         process_message
     ))
 
-    # 6. SABSE NICHE: General AI Chat (process_message)
-    # Isko upar rakhoge toh buttons aur baki cheezein block ho jayengi
+    # --- General AI Chat (must stay last among message handlers) ---
     application.add_handler(MessageHandler(
-        (filters.TEXT | filters.CAPTION) & (~filters.UpdateType.EDITED_MESSAGE), 
+        (filters.TEXT | filters.CAPTION) & (~filters.UpdateType.EDITED_MESSAGE) & (~filters.COMMAND),
         process_message
     ))
 

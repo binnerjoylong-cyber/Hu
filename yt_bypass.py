@@ -1,10 +1,14 @@
+import os
 import httpx
 import re
 from telegram import Update
 from telegram.ext import ContextTypes
 
 # --- CONFIGURATION ---
-RAPID_API_KEY = "37c6bbf0b8msh8958361d209856ep1583d8jsnb0a351252afd"
+# SECURITY NOTE: this used to be a hardcoded plaintext RapidAPI key committed
+# to the repo. Treat the old key as compromised and rotate it on RapidAPI —
+# anyone with the source code had it. Now read from the environment.
+RAPID_API_KEY = os.getenv("RAPIDAPI_KEY", "")
 API_HOST = "social-media-video-downloader.p.rapidapi.com"
 
 import asyncio
@@ -51,7 +55,10 @@ async def get_video_data(url: str):
 
     # --- YOUTUBE ---
     elif any(x in clean_url for x in ["youtube.com", "youtu.be"]):
-        video_id = re.search(r'(?:v=|youtu\.be/|watch\?v=|shorts/|reel/)([a-zA-Z0-9_-]{11})', clean_url).group(1)
+        video_id_match = re.search(r'(?:v=|youtu\.be/|watch\?v=|shorts/|reel/)([a-zA-Z0-9_-]{11})', clean_url)
+        if not video_id_match:
+            return None, "Couldn't find a video ID in that link (is it a channel/playlist link?)."
+        video_id = video_id_match.group(1)
         api_url = "https://social-media-video-downloader.p.rapidapi.com/youtube/v3/video/details"
         
         async with httpx.AsyncClient(timeout=45.0) as client:
@@ -88,7 +95,11 @@ async def handle_youtube_link(update: Update, context: ContextTypes.DEFAULT_TYPE
     chat_id = update.effective_chat.id
     msg = await context.bot.send_message(chat_id=chat_id, text="🎯 **API Gateway Connected. Fetching Video...**")
 
-    direct_url, title = await get_video_data(url)
+    try:
+        direct_url, title = await get_video_data(url)
+    except Exception as e:
+        await msg.edit_text(f"🛑 **Failed:** Unexpected error while fetching this video ({e}).")
+        return
 
     if direct_url:
         try:

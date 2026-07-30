@@ -116,8 +116,8 @@ async def join_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Send board to P1
     await context.bot.send_message(chat_id=lobby['p1']['chat_id'], text=start_msg, reply_markup=markup, parse_mode='Markdown')
-    # Send board to P2
-    await context.message.reply_text(start_msg, reply_markup=markup, parse_mode='Markdown')
+    # Send board to P2 (the person who just ran /join)
+    await update.message.reply_text(start_msg, reply_markup=markup, parse_mode='Markdown')
 
 async def in_game_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Command: /c <msg> - Sends a message to the opponent."""

@@ -1,3 +1,4 @@
+import os
 import logging
 import datetime
 import asyncio
@@ -13,19 +14,31 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
 logger = logging.getLogger(__name__)
 
 # --- CONFIGURATION ---
-MONGO_URI = "mongodb+srv://Lailamongo:Adhyan134@laila.o7zkcis.mongodb.net/?appName=Laila" 
-GROQ_API_KEY = "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"
+# SECURITY NOTE: these used to be hardcoded plaintext secrets committed to the
+# repo. They now come from environment variables. If you were using the old
+# hardcoded MongoDB password / Groq key, treat them as compromised and
+# rotate/revoke them — anyone with the source code had them.
+MONGO_URI = os.getenv("MONGO_URI")
+GROQ_API_KEY = os.getenv("SUMMARY_GROQ_API_KEY") or os.getenv("GROQ_API_KEY")
 
 # Timezone Configuration (India Standard Time)
 IST = pytz.timezone('Asia/Kolkata')
 
 class SummaryManager:
     def __init__(self, application, known_users_list):
-        self.client = AsyncIOMotorClient(MONGO_URI)
-        self.db = self.client["laila_summaries"]
         self.app = application
         self.known_users = known_users_list
-        self.ai_client = Groq(api_key=GROQ_API_KEY)
+        self.enabled = bool(MONGO_URI)
+
+        if self.enabled:
+            self.client = AsyncIOMotorClient(MONGO_URI)
+            self.db = self.client["laila_summaries"]
+        else:
+            logger.warning("MONGO_URI not set — chat summary feature is disabled.")
+            self.client = None
+            self.db = None
+
+        self.ai_client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
 
     async def record_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Records incoming messages to the database."""
