@@ -180,6 +180,14 @@ awaiting_name = defaultdict(lambda: False)
 key_cooldown_until = defaultdict(lambda: 0)
 current_model_mode = 'dynamic'
 
+# --- Cached bot username (avoids a Telegram API round-trip on every single message) ---
+_CACHED_BOT_USERNAME = None
+async def get_cached_bot_username(bot) -> str:
+    global _CACHED_BOT_USERNAME
+    if _CACHED_BOT_USERNAME is None:
+        _CACHED_BOT_USERNAME = (await bot.get_me()).username
+    return _CACHED_BOT_USERNAME
+
 # *** MODEL CONFIGURATION ***
 model_name = 'gemini-2.5-flash-lite' 
 # Note: 2.5 is currently in preview/beta. If it fails, fallback logic handles it.
@@ -631,9 +639,9 @@ async def get_bot_response(user_message: str, chat_id: int, bot_username: str, s
             # Determine token limit
             max_tokens = 350 # Default for detailed
             if is_casual_chat and not is_detailed_query:
-                max_tokens = 40 # Very short for casual chat
+                max_tokens = 55 # Short casual reply, just enough headroom to finish the sentence cleanly
             elif not is_detailed_query:
-                max_tokens = 70 # Short-ish for general statements (increased from 60 to 70)
+                max_tokens = 90 # Short-ish for general statements, with headroom so it doesn't clip
             # --- END NEW LOGIC ---
             
             response = chat_session.send_message(
@@ -643,7 +651,22 @@ async def get_bot_response(user_message: str, chat_id: int, bot_username: str, s
                     temperature=0.8,
                 )
             )
-            return response.text
+            reply_text = response.text
+
+            # --- Safety trim: if the model got cut off mid-sentence (hit the token limit),
+            # trim back to the last complete sentence so the user never sees a half-finished line. ---
+            try:
+                finish_reason = response.candidates[0].finish_reason
+                truncated = str(finish_reason).upper().find("MAX_TOKENS") != -1
+            except Exception:
+                truncated = False
+
+            if truncated and reply_text:
+                last_end = max(reply_text.rfind('.'), reply_text.rfind('!'), reply_text.rfind('?'), reply_text.rfind('\n'))
+                if last_end >= 20:  # only trim if we still keep a reasonably complete reply
+                    reply_text = reply_text[:last_end + 1].strip()
+
+            return reply_text
         except genai.types.BlockedPromptException as e:
             logger.warning(f"[{chat_id}] Gemini blocked prompt with key ...{api_key[-5:]}: {e}")
             return "Apologies, I can't discuss that topic."
@@ -2963,7 +2986,7 @@ async def process_message(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     if not global_bot_enabled or (not is_private_chat and not chat_enabled):
         return
     
-    bot_username = (await context.bot.get_me()).username
+    bot_username = await get_cached_bot_username(context.bot)
     user_message = message.text or message.caption
     user_id = update.effective_user.id
     user_full_name = update.effective_user.full_name
@@ -3077,7 +3100,7 @@ async def handle_voice_message(update: Update, context: ContextTypes.DEFAULT_TYP
 
         # 4. Process the transcribed text like a regular message
         if transcribed_text:
-            bot_username = (await context.bot.get_me()).username
+            bot_username = await get_cached_bot_username(context.bot)
             # We treat voice messages as direct mentions to the bot
             response_text = await get_bot_response(transcribed_text, chat_id, bot_username, should_use_ai=True, update=update)
             if response_text:
