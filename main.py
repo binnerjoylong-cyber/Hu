@@ -42,7 +42,7 @@ import waifu_handlers
 from trivia_manager import TriviaGame
 from summary_manager import SummaryManager
 import duo_game
-from anon_chat import AnonChat
+import chameleon_game
 # Agar file ka naam yt_bypass.py hai toh:
 # main.py ke top par
 from yt_bypass import social_media_handler, youtube_command
@@ -3536,7 +3536,6 @@ def check_sudo_wrapper(handler):
 # --- Global variables (initialized properly inside main()/post_init) ---
 trivia_bot = None
 summary_bot = None
-anon_chat_bot = None
 
 async def post_init(application: Application) -> None:
     """Starts background tasks in the correct event loop, once the bot is fully initialized."""
@@ -3559,7 +3558,7 @@ async def post_init(application: Application) -> None:
 
 # --- Main function ---
 def main() -> None:
-    global trivia_bot, summary_bot, anon_chat_bot
+    global trivia_bot, summary_bot
 
     # A. PEHLE: Data load karein
     client, error = get_google_sheet_connection()
@@ -3581,21 +3580,8 @@ def main() -> None:
     # Yahan 'asyncio.create_task' init se hatakar hum manually call karenge niche
     trivia_bot = TriviaGame(application, known_users, mongo_db=summary_bot.db)
 
-    # Anonymous random chat (/pair) — reuses the same Mongo client as summary_bot
-    anon_chat_bot = AnonChat(application, mongo_client=summary_bot.client)
-
     # C. HANDLERS (Order is perfect)
-
-    # --- Anonymous Chat relay (Group -1: must run BEFORE AI chat / summary logging) ---
-    # If the sender is currently paired via /pair, this relays their message to the
-    # partner and stops propagation. Unpaired users fall through untouched.
-    application.add_handler(MessageHandler(
-        filters.ChatType.PRIVATE & ~filters.COMMAND &
-        (filters.TEXT | filters.CAPTION | filters.Sticker.ALL | filters.PHOTO |
-         filters.VIDEO | filters.VOICE | filters.Document.ALL | filters.ANIMATION),
-        lambda u, c: anon_chat_bot.relay_message(u, c) if anon_chat_bot else None
-    ), group=-1)
-
+    
     # Trivia buttons (Lambda is important here)
     
     # Summary recording (Group 1)
@@ -3701,6 +3687,16 @@ def main() -> None:
     application.add_handler(CommandHandler("quitgame", duo_game.quit_game))
     application.add_handler(CallbackQueryHandler(duo_game.duo_callback, pattern="^duo_"))
 
+    # --- The Chameleon (group party game) ---
+    application.add_handler(CommandHandler("chameleon", chameleon_game.chameleon_command))
+    application.add_handler(CommandHandler("endchameleon", chameleon_game.end_chameleon_command))
+    application.add_handler(CallbackQueryHandler(chameleon_game.chameleon_callback, pattern="^cham_"))
+    # Passive listener for in-game clues; group=2 so it never blocks other message handlers
+    application.add_handler(MessageHandler(
+        filters.TEXT & ~filters.COMMAND,
+        chameleon_game.handle_message
+    ), group=2)
+
     # --- Admin Commands (Group Admin required) ---
     application.add_handler(CommandHandler("on", on_command))
     application.add_handler(CommandHandler("off", off_command))
@@ -3751,12 +3747,6 @@ def main() -> None:
     # --- File ID Finder ---
     application.add_handler(CommandHandler("getfileid", get_file_id_command))
     application.add_handler(CommandHandler("fid", get_file_id_command))  # short alias
-
-    # --- Anonymous Random Chat (DM-only) ---
-    application.add_handler(CommandHandler("pair", lambda u, c: anon_chat_bot.pair_command(u, c) if anon_chat_bot else None))
-    application.add_handler(CommandHandler("unpair", lambda u, c: anon_chat_bot.unpair_command(u, c) if anon_chat_bot else None))
-    application.add_handler(CommandHandler("skip", lambda u, c: anon_chat_bot.skip_command(u, c) if anon_chat_bot else None))
-    application.add_handler(CommandHandler("anonstats", check_sudo_wrapper(lambda u, c: anon_chat_bot.anonstats_command(u, c) if anon_chat_bot else None)))
 
     # --- XOXO / Tic-Tac-Toe ---
     application.add_handler(CommandHandler("xoxo", xoxo_command))
