@@ -37,8 +37,7 @@ import glob
 import threading
 # --- NEW: IMPORT THE GAME MODULE ---
 import game
-import game_logic
-import waifu_handlers
+import waifu_catcher
 from trivia_manager import TriviaGame
 from summary_manager import SummaryManager
 import duo_game
@@ -86,9 +85,6 @@ TINYURL_API_KEY = os.getenv("TINYURL_API_KEY") # From tinyurl.com
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")# From openrouter.ai
 
 INVIDIOUS_BASE_URL = os.getenv("INVIDIOUS_BASE_URL")
-
-# --- NEW: Waifu Collection Game (Postgres via asyncpg) ---
-DATABASE_URL = os.getenv("DATABASE_URL")
 
 # --- Global Stats Variables ---
 start_time = datetime.now()
@@ -2999,10 +2995,10 @@ async def process_message(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     if not is_private_chat:
         chat_members[chat_id][user_id] = user_full_name
 
-    # --- NEW: Occasionally spawn a waifu character to /claim (group chats only) ---
+    # --- Occasionally spawn a waifu/husbando character to /guess (group chats only) ---
     if not is_private_chat:
         try:
-            await waifu_handlers.maybe_auto_spawn(update, context)
+            await waifu_catcher.maybe_auto_spawn(update, context)
         except Exception as e:
             logger.debug(f"[{chat_id}] Waifu auto-spawn skipped: {e}")
 
@@ -3639,11 +3635,15 @@ GAMES_CATALOG = {
     },
     "waifu": {
         "emoji": "💞",
-        "title": "Waifu Collection",
-        "desc": "Waifus randomly spawn in active groups — be the fastest to claim them.",
+        "title": "Waifu/Husbando Catcher",
+        "desc": "Characters randomly spawn in active groups — be the fastest to /guess their name.",
         "commands": [
-            ("/claim", "Claim the waifu that just spawned"),
-            ("/harem", "View your collected waifus (alias: /mywaifus)"),
+            ("/guess <name>", "Guess the spawned character (aliases: /claim, /catch, /grab, /hunt, /collect)"),
+            ("/harem", "View your collected characters (alias: /mywaifus)"),
+            ("/fav <id>", "Set a favorite to show on your /harem card"),
+            ("/ctop", "Top guessers in this group"),
+            ("/gtop", "Top groups globally"),
+            ("/chartop", "Top collectors globally"),
         ],
         "scope": "Group chats",
     },
@@ -3747,15 +3747,14 @@ async def post_init(application: Application) -> None:
     if trivia_bot:
         asyncio.create_task(trivia_bot.start_loop())
 
-    # --- Boot the waifu collection game's Postgres pool (optional feature) ---
-    if DATABASE_URL:
-        try:
-            await game_logic.initialize_db(DATABASE_URL)
-            logger.info("💞 Waifu collection game database connected.")
-        except Exception as e:
-            logger.error(f"⚠️ Could not initialize waifu game database: {e}")
-    else:
-        logger.info("ℹ️ DATABASE_URL not set — waifu collection game (/claim, /harem) is disabled.")
+    # --- Boot the waifu catcher game (reuses the same Mongo client as SummaryManager) ---
+    try:
+        waifu_catcher.init(
+            summary_bot.client if summary_bot else None,
+            is_sudo_fn=lambda uid: str(uid) == str(BROADCAST_ADMIN_ID) or str(uid) in sudo_users,
+        )
+    except Exception as e:
+        logger.error(f"⚠️ Could not initialize waifu catcher database: {e}")
 
     logger.info("🚀 All background tasks started!")
 
@@ -3880,11 +3879,23 @@ def main() -> None:
     application.add_handler(CommandHandler("disown", game.handle_disown))
     application.add_handler(CommandHandler("runaway", game.handle_runaway))
 
-    # --- Waifu Collection Game (spawns in groups, /claim to grab, /harem to view) ---
-    application.add_handler(CommandHandler("claim", waifu_handlers.claim_command))
-    application.add_handler(CommandHandler("harem", waifu_handlers.harem_command))
-    application.add_handler(CommandHandler("mywaifus", waifu_handlers.harem_command))
-    application.add_handler(CommandHandler("spawn", check_sudo_wrapper(waifu_handlers.force_spawn_command)))
+    # --- Waifu/Husbando Catcher Game (spawns in groups, /guess to grab, /harem to view) ---
+    application.add_handler(CommandHandler(["guess", "claim", "catch", "grab", "hunt", "collect"], waifu_catcher.guess_command))
+    application.add_handler(CommandHandler(["harem", "mywaifus", "collection"], waifu_catcher.harem_command))
+    application.add_handler(CallbackQueryHandler(waifu_catcher.harem_callback, pattern="^whrm"))
+    application.add_handler(CommandHandler("fav", waifu_catcher.fav_command))
+    application.add_handler(CommandHandler("spawn", check_sudo_wrapper(waifu_catcher.force_spawn_command)))
+    application.add_handler(CommandHandler("upload", check_sudo_wrapper(waifu_catcher.upload_command)))
+    application.add_handler(CommandHandler("delete", check_sudo_wrapper(waifu_catcher.delete_command)))
+    application.add_handler(CommandHandler("wedit", check_sudo_wrapper(waifu_catcher.update_command)))
+    application.add_handler(CommandHandler("ctop", waifu_catcher.ctop_command))
+    application.add_handler(CommandHandler("gtop", waifu_catcher.gtop_command))
+    application.add_handler(CommandHandler("chartop", waifu_catcher.chartop_command))
+    application.add_handler(CommandHandler("wstats", check_sudo_wrapper(waifu_catcher.wstats_command)))
+    # Post a photo + "Name | Anime | Rarity" caption into the group set as
+    # WAIFU_SOURCE_CHAT_ID to auto-add a character (own handler group so it
+    # never interferes with other photo handlers).
+    application.add_handler(MessageHandler(filters.PHOTO, waifu_catcher.handle_source_photo), group=5)
 
     # --- Duo Match & Chat Commands ---
     application.add_handler(CommandHandler("host", duo_game.host_game))
